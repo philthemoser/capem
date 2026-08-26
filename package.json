@@ -1,0 +1,20 @@
+{
+  "name": "capem",
+  "version": "0.1.0",
+  "description": "Open concept prototype for coordinating improvised disaster support centres",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "check": "node tools/check-i18n.js && node tools/smoke.js && node tools/flow.js && node tools/a11y.js",
+    "check:i18n": "node tools/check-i18n.js",
+    "check:screens": "node tools/smoke.js",
+    "check:flow": "node tools/flow.js",
+    "check:a11y": "node tools/a11y.js",
+    "shots": "node tools/shots.js"
+  },
+  "devDependencies": {
+    "axe-core": "^4.10.0",
+    "playwright": "^1.49.0"
+  }
+}

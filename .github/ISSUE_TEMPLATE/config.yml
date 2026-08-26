@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Open questions
+    url: https://github.com/philthemoser/capem/blob/main/docs/open-questions.md
+    about: The eight decisions we cannot make from a desk. Start here if you are not sure what would help.

@@ -1,0 +1,30 @@
+name: Factual correction
+description: A claim in docs/research.md or in the prototype is wrong, misattributed or out of date.
+title: "[research] "
+labels: ["research"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We have marked our own weak evidence as weak, but we will have missed things.
+        Write in English, Español or Português.
+  - type: input
+    id: where
+    attributes:
+      label: Where the claim appears
+      placeholder: "docs/research.md §1, or the screen at #/donor/donor-needs"
+    validations:
+      required: true
+  - type: textarea
+    id: claim
+    attributes:
+      label: What it currently says
+    validations:
+      required: true
+  - type: textarea
+    id: correction
+    attributes:
+      label: What is actually the case, and how you know
+      description: A source is ideal. Direct experience is also a source — say which it is.
+    validations:
+      required: true

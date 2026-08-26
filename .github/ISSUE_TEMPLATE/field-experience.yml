@@ -1,0 +1,36 @@
+name: Field experience — this does not match what I saw
+description: You have worked in disaster response and something here is wrong. The most valuable kind of issue.
+title: "[field] "
+labels: ["field-experience"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in **English, Español or Português** — whichever you would rather use.
+        Nothing below is required. A plain description of what you saw is more useful than a well-formatted one.
+  - type: textarea
+    id: context
+    attributes:
+      label: What you did, and where
+      description: Role, kind of centre, roughly when and where. Enough for us to weigh it — no more.
+      placeholder: "Coordinated a parish collection point during flooding, ~2024, southern Brazil."
+  - type: textarea
+    id: mismatch
+    attributes:
+      label: What CAPEM gets wrong
+      description: Which screen or assumption, and what actually happens.
+    validations:
+      required: true
+  - type: textarea
+    id: instead
+    attributes:
+      label: What happened instead, in practice
+      description: Including the messy version. "We kept it on paper because the phone died" is a finding.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How wrong is it?
+      options:
+        - A detail — would annoy people but the design survives
+        - Significant — this part would not be used as designed
+        - Fundamental — the underlying assumption does not hold

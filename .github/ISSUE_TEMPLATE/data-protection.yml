@@ -1,0 +1,27 @@
+name: Data protection concern
+description: The handling of people's data is legally or practically wrong.
+title: "[data] "
+labels: ["data-protection"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the part of the design where being wrong causes real harm to people
+        who are not in a position to complain. Please do not assume we already know.
+  - type: input
+    id: jurisdiction
+    attributes:
+      label: Jurisdiction
+      placeholder: "Brazil (LGPD), Colombia, EU, other"
+  - type: textarea
+    id: concern
+    attributes:
+      label: The concern
+      description: What is collected, retained, shared or displayed that should not be — or what is missing.
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: What it should be instead
+      description: Including the legal basis, if that is the issue.

@@ -406,7 +406,10 @@ input:focus, select:focus { border-color: var(--accent); }
 .inert-mark { opacity: .5; margin-left: 3px; }
 
 /* ---------- Tables ------------------------------------------------------- */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -15px; padding: 0 15px; }
+/* position: relative makes this the containing block for the visually-hidden
+   labels inside the table. Without it they resolve against the viewport,
+   escape the scroll container's clipping, and stretch the document sideways. */
+.table-wrap { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -15px; padding: 0 15px; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 480px; }
 caption { text-align: left; font-size: 12.5px; color: var(--muted); padding-bottom: 8px; }
 th {
@@ -422,6 +425,9 @@ td .sub { font-size: 12px; color: var(--muted); }
 .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--muted); }
 .col-bar { min-width: 130px; }
 .col-actions { white-space: nowrap; }
+.col-edit { min-width: 118px; }
+.cell-input { padding: 6px 8px; min-height: 36px; font-size: 13px; }
+td .cell-input[type=number] { max-width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
 .col-actions .btn { margin: 2px 2px 2px 0; }
 
 /* ---------- Landing ------------------------------------------------------ */
@@ -1575,10 +1581,14 @@ const STRINGS = {
 'needs.colPriority': ['Priority', 'Prioridad', 'Prioridade'],
 'needs.colIncoming': ['Incoming', 'En camino', 'A caminho'],
 'needs.colPublished': ['Published', 'Publicado', 'Publicado'],
-'needs.colActions': ['Actions', 'Acciones', 'Ações'],
+'needs.colTarget': ['Quantity needed', 'Cantidad necesaria', 'Quantidade necessária'],
+'needs.targetLabel': ['Quantity needed of {item}', 'Cantidad necesaria de {item}', 'Quantidade necessária de {item}'],
+'needs.priorityLabel': ['Priority of {item}', 'Prioridad de {item}', 'Prioridade de {item}'],
+'needs.editHint': [
+  'Quantity and priority are editable here. Changing either updates the coverage bar, what the matching engine reports as short, and the figures in the next WhatsApp message — there is nowhere else to remember to update.',
+  'La cantidad y la prioridad se editan aquí. Cambiar cualquiera actualiza la barra de cobertura, lo que el motor de asignación reporta como faltante, y las cifras del próximo mensaje de WhatsApp — no hay ningún otro sitio que recordar actualizar.',
+  'A quantidade e a prioridade são editáveis aqui. Alterar qualquer uma atualiza a barra de cobertura, o que o motor de alocação reporta como em falta, e os números da próxima mensagem de WhatsApp — não há outro lugar para lembrar de atualizar.'],
 'needs.publishedLabel': ['Publish {item} to donors', 'Publicar {item} a los donantes', 'Publicar {item} aos doadores'],
-'needs.raise': ['Raise to critical', 'Subir a crítico', 'Elevar a crítico'],
-'needs.pause': ['Pause intake', 'Pausar recepción', 'Pausar recepção'],
 'needs.tableCaption': ['Needs published by {site}', 'Necesidades publicadas por {site}', 'Necessidades publicadas por {site}'],
 'needs.whyTitle': ['The two mistakes that cost most', 'Los dos errores que más cuestan', 'Os dois erros que mais custam'],
 'needs.why1t': ['Leaving a covered need published.', 'Dejar publicada una necesidad ya cubierta.', 'Deixar publicada uma necessidade já coberta.'],
@@ -2986,6 +2996,19 @@ const Store = (function () {
     });
   }
 
+  /**
+   * The published quantity. This is the number a coordinator revises most
+   * often — an early estimate is nearly always wrong — and it is load-bearing:
+   * it drives the coverage bar, what the matching engine reports as short, and
+   * the figures in the next WhatsApp message.
+   */
+  function setNeedTarget(siteId, item, target) {
+    update(s => {
+      const n = s.data.needs.find(x => x.site === siteId && x.item === item);
+      if (n) n.target = Math.max(0, Math.round(target) || 0);
+    });
+  }
+
   function nowClock() {
     const d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -2994,7 +3017,7 @@ const Store = (function () {
   return {
     get, subscribe, update, setScenario, setLang, setOnline, sync,
     receiveStock, issueVoucher, fulfilVoucher, registerFamily,
-    setNeedPriority, setNeedPublished, logEvent, nowClock, queueOrApply
+    setNeedPriority, setNeedPublished, setNeedTarget, logEvent, nowClock, queueOrApply
   };
 })();
 
@@ -4812,24 +4835,36 @@ function renderCoordNeeds() {
   const site = Sel.site(s.siteId);
   const list = Sel.needs({ site: s.siteId });
 
+  // The three things a coordinator actually changes — how many, how urgent,
+  // and whether the public can see it — are all editable in place. An earlier
+  // version offered only "raise to critical" and a publish switch, so the
+  // quantity, which is the figure most often revised, could not be corrected
+  // at all.
   const rows = list.map(n => `
     <td><b>${esc(Sel.itemName(n.item))}</b><div class="sub">${esc(n.item)}</div></td>
     <td class="col-bar">${bar(n.pct, n.status, Sel.itemName(n.item))}
-      <span class="bar-num">${num(n.have)}/${num(n.target)}</span></td>
-    <td>${priorityPill(n.priority)}</td>
+      <span class="bar-num">${num(n.have)} / ${num(n.target)} ${esc(Sel.itemUnit(n.item))}</span></td>
+    <td class="col-edit">
+      <label class="sr-only" for="tg-${n.site}-${n.item}">${esc(t('needs.targetLabel', { item: Sel.itemName(n.item) }))}</label>
+      <input class="cell-input" id="tg-${n.site}-${n.item}" type="number" min="0" step="1"
+        value="${n.target}" onchange="Store.setNeedTarget('${n.site}','${n.item}', this.valueAsNumber)"></td>
+    <td class="col-edit">
+      <label class="sr-only" for="pr-${n.site}-${n.item}">${esc(t('needs.priorityLabel', { item: Sel.itemName(n.item) }))}</label>
+      <select class="cell-input" id="pr-${n.site}-${n.item}"
+        onchange="Store.setNeedPriority('${n.site}','${n.item}', this.value)">
+        ${['critical', 'high', 'medium', 'low'].map(p =>
+          `<option value="${p}"${p === n.priority ? ' selected' : ''}>${esc(t('priority.' + p))}</option>`).join('')}
+      </select></td>
     <td class="num">${n.incoming ? '+' + num(n.incoming) : '—'}</td>
     <td>${toggleSwitch(n.published, `Store.setNeedPublished('${n.site}','${n.item}',${!n.published})`,
-        t('needs.publishedLabel', { item: Sel.itemName(n.item) }))}</td>
-    <td class="col-actions">
-      ${n.priority !== 'critical' ? btn(t('needs.raise'), `Store.setNeedPriority('${n.site}','${n.item}','critical')`, { small: true }) : ''}
-      ${n.pct >= 95 && n.published ? btn(t('needs.pause'), `Store.setNeedPublished('${n.site}','${n.item}',false)`, { small: true }) : ''}
-    </td>`);
+        t('needs.publishedLabel', { item: Sel.itemName(n.item) }))}</td>`);
 
   return screenHead(t('crumb.coordNeeds', { site: site.name }), t('needs.curateTitle'), t('needs.curateLede'))
     + card(null, table([
-        t('needs.colNeed'), t('needs.colProgress'), t('needs.colPriority'),
-        { label: t('needs.colIncoming'), num: true }, t('needs.colPublished'), t('needs.colActions')
-      ], rows, { caption: t('needs.tableCaption', { site: site.name }) }))
+        t('needs.colNeed'), t('needs.colProgress'), { label: t('needs.colTarget'), num: true },
+        t('needs.colPriority'), { label: t('needs.colIncoming'), num: true }, t('needs.colPublished')
+      ], rows, { caption: t('needs.tableCaption', { site: site.name }) })
+      + `<p class="card-note">${esc(t('needs.editHint'))}</p>`)
     + `<div class="two-col-wide">`
     + why(t('needs.whyTitle'), [
         `<b>${esc(t('needs.why1t'))}</b> ${esc(t('needs.why1'))}`,

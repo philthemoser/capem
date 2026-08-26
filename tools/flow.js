@@ -142,6 +142,45 @@ const check = (name, ok, detail) => {
   const pubAfter = await ev(() => Sel.needs({site:'libano', publishedOnly:true}).length);
   check('unpublishing a need removes it from the public board', pubAfter === pubBefore - 1, `${pubBefore} -> ${pubAfter}`);
 
+  // --- 11b. Editing a need target propagates everywhere -------------------
+  await go('coord','coord-needs');
+  const edited = await ev(() => {
+    Store.setNeedPublished('libano','BLK-STD', true);
+    const before = Sel.needs({site:'libano'}).find(n=>n.item==='BLK-STD');
+    const covBefore = Sel.coverage('libano');
+    const shortBefore = (Match.plan('libano').unmet.find(u=>u.item==='BLK-STD')||{qty:0}).qty;
+    Store.setNeedTarget('libano','BLK-STD', 40);      // far below what is on hand
+    const after = Sel.needs({site:'libano'}).find(n=>n.item==='BLK-STD');
+    const covAfter = Sel.coverage('libano');
+    // Split the broadcast at the "do NOT bring" line to see which side the
+    // item sits on. A covered need should move sections, not vanish.
+    const wa = buildBroadcast(Sel.site('libano'));
+    const cut = wa.indexOf(t('wa.noLonger'));
+    const name = Sel.itemName('BLK-STD');
+    Store.setNeedTarget('libano','BLK-STD', before.target);   // restore
+    return { beforeTarget: before.target, afterTarget: after.target,
+             beforePct: before.pct, afterPct: after.pct,
+             covBefore, covAfter, shortBefore,
+             inUrgent: wa.slice(0, cut).includes(name),
+             inDoNotBring: wa.slice(cut).includes(name) };
+  });
+  check('need target is editable', edited.afterTarget === 40, `${edited.beforeTarget} -> ${edited.afterTarget}`);
+  check('editing the target moves the coverage bar',
+        edited.afterPct > edited.beforePct, `${edited.beforePct}% -> ${edited.afterPct}%`);
+  check('editing the target moves centre-wide coverage',
+        edited.covAfter > edited.covBefore, `${edited.covBefore}% -> ${edited.covAfter}%`);
+  check('a covered need moves from "urgent" to "do not bring" in the broadcast',
+        !edited.inUrgent && edited.inDoNotBring,
+        `urgent=${edited.inUrgent}, doNotBring=${edited.inDoNotBring}`);
+
+  const prio = await ev(() => {
+    Store.setNeedPriority('libano','HYG-STD','low');
+    const lowered = Sel.needs({site:'libano'}).find(n=>n.item==='HYG-STD').priority;
+    Store.setNeedPriority('libano','HYG-STD','high');
+    return lowered;
+  });
+  check('priority can be lowered, not only raised', prio === 'low', prio);
+
   // --- 12. WhatsApp broadcast reflects live board -------------------------
   const waHas = await ev(() => {
     Store.setNeedPublished('libano','BBF-400', true);

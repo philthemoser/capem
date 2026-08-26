@@ -88,6 +88,25 @@ const check=(n,ok,d)=>{ok?pass++:fail++; console.log((ok?'OK   ':'FAIL ')+n+(d?'
   const bg = await dk.evaluate(()=>getComputedStyle(document.body).backgroundColor);
   check('light theme even when the OS asks for dark', bg==='rgb(247, 247, 245)', bg);
 
+  // Horizontal overflow is the classic mobile regression; check it everywhere.
+  const widths=[360,390,414,1280];
+  const routes=['coord/coord-needs','coord/coord-match','inv/inv-stock','vm/vm-roster',
+                'config/config','network/network','donor/donor-give','intake/intake-scan',
+                'setup/setup','about/about-questions'];
+  const over=[];
+  for (const w of widths) {
+    const pg = await b.newPage({ viewport:{width:w,height:800} });
+    await pg.goto(url); await pg.waitForTimeout(220);
+    for (const r of routes) {
+      await pg.evaluate(x=>location.hash='#/'+x, r); await pg.waitForTimeout(150);
+      const v = await pg.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth);
+      if (v > 1) over.push(`${w}px ${r} (+${v})`);
+    }
+    await pg.close();
+  }
+  check('no horizontal overflow on any screen at any width', over.length===0,
+        over.length ? over.slice(0,4).join(', ') : `${widths.length}×${routes.length} combinations`);
+
   check('no runtime errors', errs.length===0, errs.slice(0,2).join(' | '));
   await b.close();
   console.log(`\n${pass} passed, ${fail} failed`);

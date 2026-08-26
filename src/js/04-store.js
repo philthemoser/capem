@@ -181,6 +181,19 @@ const Store = (function () {
     });
   }
 
+  /**
+   * The published quantity. This is the number a coordinator revises most
+   * often — an early estimate is nearly always wrong — and it is load-bearing:
+   * it drives the coverage bar, what the matching engine reports as short, and
+   * the figures in the next WhatsApp message.
+   */
+  function setNeedTarget(siteId, item, target) {
+    update(s => {
+      const n = s.data.needs.find(x => x.site === siteId && x.item === item);
+      if (n) n.target = Math.max(0, Math.round(target) || 0);
+    });
+  }
+
   function nowClock() {
     const d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -189,7 +202,7 @@ const Store = (function () {
   return {
     get, subscribe, update, setScenario, setLang, setOnline, sync,
     receiveStock, issueVoucher, fulfilVoucher, registerFamily,
-    setNeedPriority, setNeedPublished, logEvent, nowClock, queueOrApply
+    setNeedPriority, setNeedPublished, setNeedTarget, logEvent, nowClock, queueOrApply
   };
 })();
 

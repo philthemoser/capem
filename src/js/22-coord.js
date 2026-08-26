@@ -176,24 +176,36 @@ function renderCoordNeeds() {
   const site = Sel.site(s.siteId);
   const list = Sel.needs({ site: s.siteId });
 
+  // The three things a coordinator actually changes — how many, how urgent,
+  // and whether the public can see it — are all editable in place. An earlier
+  // version offered only "raise to critical" and a publish switch, so the
+  // quantity, which is the figure most often revised, could not be corrected
+  // at all.
   const rows = list.map(n => `
     <td><b>${esc(Sel.itemName(n.item))}</b><div class="sub">${esc(n.item)}</div></td>
     <td class="col-bar">${bar(n.pct, n.status, Sel.itemName(n.item))}
-      <span class="bar-num">${num(n.have)}/${num(n.target)}</span></td>
-    <td>${priorityPill(n.priority)}</td>
+      <span class="bar-num">${num(n.have)} / ${num(n.target)} ${esc(Sel.itemUnit(n.item))}</span></td>
+    <td class="col-edit">
+      <label class="sr-only" for="tg-${n.site}-${n.item}">${esc(t('needs.targetLabel', { item: Sel.itemName(n.item) }))}</label>
+      <input class="cell-input" id="tg-${n.site}-${n.item}" type="number" min="0" step="1"
+        value="${n.target}" onchange="Store.setNeedTarget('${n.site}','${n.item}', this.valueAsNumber)"></td>
+    <td class="col-edit">
+      <label class="sr-only" for="pr-${n.site}-${n.item}">${esc(t('needs.priorityLabel', { item: Sel.itemName(n.item) }))}</label>
+      <select class="cell-input" id="pr-${n.site}-${n.item}"
+        onchange="Store.setNeedPriority('${n.site}','${n.item}', this.value)">
+        ${['critical', 'high', 'medium', 'low'].map(p =>
+          `<option value="${p}"${p === n.priority ? ' selected' : ''}>${esc(t('priority.' + p))}</option>`).join('')}
+      </select></td>
     <td class="num">${n.incoming ? '+' + num(n.incoming) : '—'}</td>
     <td>${toggleSwitch(n.published, `Store.setNeedPublished('${n.site}','${n.item}',${!n.published})`,
-        t('needs.publishedLabel', { item: Sel.itemName(n.item) }))}</td>
-    <td class="col-actions">
-      ${n.priority !== 'critical' ? btn(t('needs.raise'), `Store.setNeedPriority('${n.site}','${n.item}','critical')`, { small: true }) : ''}
-      ${n.pct >= 95 && n.published ? btn(t('needs.pause'), `Store.setNeedPublished('${n.site}','${n.item}',false)`, { small: true }) : ''}
-    </td>`);
+        t('needs.publishedLabel', { item: Sel.itemName(n.item) }))}</td>`);
 
   return screenHead(t('crumb.coordNeeds', { site: site.name }), t('needs.curateTitle'), t('needs.curateLede'))
     + card(null, table([
-        t('needs.colNeed'), t('needs.colProgress'), t('needs.colPriority'),
-        { label: t('needs.colIncoming'), num: true }, t('needs.colPublished'), t('needs.colActions')
-      ], rows, { caption: t('needs.tableCaption', { site: site.name }) }))
+        t('needs.colNeed'), t('needs.colProgress'), { label: t('needs.colTarget'), num: true },
+        t('needs.colPriority'), { label: t('needs.colIncoming'), num: true }, t('needs.colPublished')
+      ], rows, { caption: t('needs.tableCaption', { site: site.name }) })
+      + `<p class="card-note">${esc(t('needs.editHint'))}</p>`)
     + `<div class="two-col-wide">`
     + why(t('needs.whyTitle'), [
         `<b>${esc(t('needs.why1t'))}</b> ${esc(t('needs.why1'))}`,

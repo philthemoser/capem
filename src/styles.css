@@ -396,7 +396,10 @@ input:focus, select:focus { border-color: var(--accent); }
 .inert-mark { opacity: .5; margin-left: 3px; }
 
 /* ---------- Tables ------------------------------------------------------- */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -15px; padding: 0 15px; }
+/* position: relative makes this the containing block for the visually-hidden
+   labels inside the table. Without it they resolve against the viewport,
+   escape the scroll container's clipping, and stretch the document sideways. */
+.table-wrap { position: relative; overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -15px; padding: 0 15px; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 480px; }
 caption { text-align: left; font-size: 12.5px; color: var(--muted); padding-bottom: 8px; }
 th {
@@ -412,6 +415,9 @@ td .sub { font-size: 12px; color: var(--muted); }
 .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--muted); }
 .col-bar { min-width: 130px; }
 .col-actions { white-space: nowrap; }
+.col-edit { min-width: 118px; }
+.cell-input { padding: 6px 8px; min-height: 36px; font-size: 13px; }
+td .cell-input[type=number] { max-width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
 .col-actions .btn { margin: 2px 2px 2px 0; }
 
 /* ---------- Landing ------------------------------------------------------ */

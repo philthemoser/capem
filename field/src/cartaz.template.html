@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gerador de cartaz — CAPEM</title>
+<meta name="description" content="Gera o cartaz de necessidades de um ponto de arrecadação ou abrigo. Funciona sem internet.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='5' fill='%231f5fa8'/><path d='M12 6.5v11M6.5 12h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/></svg>">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <h1>Gerador de cartaz</h1>
+  <p>Preencha, gere a imagem, mande no grupo. Funciona sem internet.</p>
+</header>
+
+<div class="tela">
+  <div class="colunas">
+
+    <form onsubmit="return false;">
+      <section class="bloco">
+        <h2>O centro</h2>
+        <p class="dica">Só o nome é obrigatório.</p>
+        <label class="campo" for="f-nome">Nome do centro</label>
+        <input id="f-nome" type="text" placeholder="Paróquia São José" autocomplete="off">
+        <label class="campo" for="f-tipo">O que é</label>
+        <select id="f-tipo">
+          <option>Ponto de arrecadação</option>
+          <option>Abrigo</option>
+          <option>Abrigo e ponto de arrecadação</option>
+          <option>Cozinha comunitária</option>
+          <option>Centro de distribuição</option>
+        </select>
+        <div class="dois">
+          <div>
+            <label class="campo" for="f-endereco">Endereço</label>
+            <input id="f-endereco" type="text" placeholder="Rua das Acácias, 240" autocomplete="off">
+          </div>
+          <div>
+            <label class="campo" for="f-horario">Horário</label>
+            <input id="f-horario" type="text" placeholder="Todos os dias, 8h às 20h" autocomplete="off">
+          </div>
+        </div>
+        <label class="campo" for="f-contato">Contato (opcional)</label>
+        <input id="f-contato" type="text" placeholder="(51) 99999-0000" autocomplete="off">
+        <label class="campo" for="f-link">Link da lista atualizada (opcional)</label>
+        <input id="f-link" type="text" placeholder="deixe em branco por enquanto" autocomplete="off" inputmode="url">
+        <p class="ajuda">Se você colocar um link aqui, o cartaz ganha um QR code. Isso vale a pena
+          quando a página de necessidades estiver no ar — aí o cartaz impresso nunca fica velho.</p>
+      </section>
+
+      <section class="bloco">
+        <h2>Precisamos hoje</h2>
+        <p class="dica">Toque para escolher. Coloque o mais urgente em primeiro — só os 10 primeiros entram no cartaz.</p>
+        <div id="grupos"></div>
+        <div class="linha-add">
+          <label class="sr-only" for="f-livre">Outro item</label>
+          <input id="f-livre" type="text" placeholder="Outro item…" autocomplete="off">
+          <button type="button" onclick="addLivre()">Adicionar</button>
+        </div>
+        <ol class="escolhidos" id="lista-precisa"></ol>
+        <div class="aviso" id="aviso-itens" hidden>
+          Você escolheu <b id="n-itens">0</b> itens. O cartaz mostra os 10 primeiros —
+          uma lista longa demais ninguém lê de longe.
+        </div>
+      </section>
+
+      <section class="bloco">
+        <h2>Por favor, não traga</h2>
+        <p class="dica">Esta é a parte mais valiosa do cartaz. Já vem preenchida com o que costuma
+          afogar um centro — tire ou acrescente conforme a sua realidade.</p>
+        <ul class="escolhidos" id="lista-nao"></ul>
+        <div class="linha-add">
+          <label class="sr-only" for="f-nao-livre">Outro item que não deve ser trazido</label>
+          <input id="f-nao-livre" type="text" placeholder="Outro item…" autocomplete="off">
+          <button type="button" onclick="addNao()">Adicionar</button>
+        </div>
+        <div class="acoes-secundarias">
+          <button type="button" class="btn-txt" onclick="limparTudo()">Apagar tudo e recomeçar</button>
+        </div>
+      </section>
+    </form>
+
+    <div class="painel">
+      <div class="acoes">
+        <button class="btn btn-primario" onclick="compartilhar(this)">Gerar imagem e compartilhar</button>
+        <div class="duplo">
+          <button class="btn" onclick="baixar(this)">Baixar imagem</button>
+          <button class="btn" onclick="imprimir()">Imprimir A4</button>
+        </div>
+        <button class="btn btn-wa" onclick="abrirWhatsApp()">Abrir no WhatsApp com o texto</button>
+        <div class="duplo">
+          <button class="btn" onclick="copiarTexto(this)">Copiar o texto</button>
+          <button class="btn" onclick="verTexto()">Ver o texto</button>
+        </div>
+        <pre class="previa-texto" id="previa-texto" hidden></pre>
+      </div>
+
+      <p class="rotulo-previa">Prévia do cartaz</p>
+      <div class="moldura">
+        <div class="cartaz" id="cartaz"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="rodape">
+    <p><b>Nada sai deste aparelho.</b> Não há cadastro, servidor nem internet envolvidos.
+      O que você escreve fica salvo só aqui, para não precisar redigitar amanhã.</p>
+    <p style="margin-top:6px;">CAPEM · ferramenta livre · <a href="https://github.com/philthemoser/capem">github.com/philthemoser/capem</a></p>
+  </footer>
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+<noscript>
+  <div style="padding:24px;max-width:620px;margin:0 auto;">
+    <h2>Esta página precisa de JavaScript</h2>
+    <p>Tudo roda no seu aparelho — não há servidor. Sem JavaScript não dá para gerar o cartaz.</p>
+  </div>
+</noscript>
+
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

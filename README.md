@@ -86,6 +86,8 @@ What that does **not** solve — an official asking for the list, what happens t
 
 ```
 index.html              the prototype, self-contained and committed — open it directly
+field/                  FIELD TOOLS — not a demo, meant to be used
+  cartaz.html           poster generator (Portuguese, offline, no server) — ready
 build.js                concatenates src/ into index.html (node build.js, no dependencies)
 src/
   styles.css

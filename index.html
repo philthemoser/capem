@@ -4449,7 +4449,7 @@ function renderIntakeWalkin() {
 function matchCatalog(query) {
   const q = query.toLowerCase().trim();
   if (!q) return [];
-  const norm = str => str.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const norm = str => str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const nq = norm(q);
   return CATALOG.filter(c =>
     c.aliases.some(a => norm(a).includes(nq) || nq.includes(norm(a)))

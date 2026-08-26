@@ -95,7 +95,7 @@ These numbers are invented. See [open-questions.md](open-questions.md) §2.
 
 ## 5. Why one file
 
-`index.html` is 366 KB, self-contained, and committed to the repository.
+`index.html` is about 370 KB, self-contained, and committed to the repository.
 
 The deployment context decides this. A coordinator opens it on a phone on a bad connection, or from a USB stick in a building with none. One file works in both cases, opens from `file://`, survives being emailed, and will still run in fifteen years. A build step that reviewers must execute before they can look at anything is a barrier placed in front of exactly the people whose time is worth most here.
 
@@ -108,7 +108,9 @@ The trade is real: no module system, no tree-shaking, global scope, and a bundle
 ## 6. Accessibility and language
 
 - **Colour never carries meaning alone.** Every status has an icon and a written label, so it survives greyscale printing, colour-blind readers, and a cracked screen in direct sunlight. All three are ordinary field conditions.
-- **Mobile-first.** Built and tested at 360px. The desktop sidebar is replaced by a bottom bar rather than removed — the previous prototype hid its navigation below 900px, making every sub-screen unreachable on a phone, on a product aimed at phones.
+- **Navigation does not move under you.** The role list is in a fixed order and never reorders; only the current role's screens expand beneath it. An earlier version promoted the active role to the top and pushed the rest into an "other roles" group, so the menu rearranged itself on every click and nobody could learn where anything was.
+- **Mobile-first.** Built and tested at 360px. Below 900px the sidebar becomes a bar naming where you are, which opens a slide-up sheet containing the same tree — eleven roles do not fit in a row of tabs, and the version before that hid navigation entirely, making every sub-screen unreachable on a phone.
+- **One theme, light.** A dark variant was dropped. It doubles the surface to verify for a prototype whose job is to be read and argued with, and the field reality it was serving — a phone in bad light — is better served by high contrast than by a dark palette.
 - **Verified, not asserted:** `tools/a11y.js` runs axe-core against WCAG 2.1 A/AA across 16 screens in light and dark. Current result: zero violations.
 - **All strings are `[en, es, pt]` triples** in one file, so a translator sees source and both targets on one line. Currency and number formatting follow the scenario's locale — COP in Colombia, BRL in Brazil. `tools/check-i18n.js` proves no key is missing and no row lacks a language.
 

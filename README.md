@@ -114,11 +114,12 @@ node build.js              # rebuild index.html from src/
 node tools/check-i18n.js   # every key used exists; every row has all three languages
 node tools/smoke.js        # all 24 screens render in 3 languages × 2 scenarios (144 renders)
 node tools/flow.js         # 21 end-to-end assertions: does state actually propagate?
-node tools/a11y.js         # axe-core, WCAG 2.1 A/AA, light and dark
+node tools/nav.js          # navigation: stable order, expand-in-place, mobile sheet
+node tools/a11y.js         # axe-core, WCAG 2.1 A/AA
 node tools/verify-qr.js tools/qr-tests.json > /tmp/o.json && python3 tools/verify-qr.py /tmp/o.json
 ```
 
-Current status: i18n complete · 144/144 renders · 21/21 flow assertions · 0 WCAG A/AA violations · 6/6 QR codes decode.
+Current status: i18n complete · 144/144 renders · 21/21 flow assertions · 13/13 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode.
 
 ## How to tell us we are wrong
 

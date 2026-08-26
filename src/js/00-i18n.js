@@ -32,8 +32,9 @@ const STRINGS = {
 'shell.scenario': ['Scenario', 'Escenario', 'Cenário'],
 'shell.site': ['Centre', 'Centro', 'Centro'],
 'shell.language': ['Language', 'Idioma', 'Idioma'],
-'shell.otherRoles': ['Other roles', 'Otros roles', 'Outros papéis'],
-'shell.allRoles': ['All roles', 'Todos los roles', 'Todos os papéis'],
+'shell.menu': ['Menu', 'Menú', 'Menu'],
+'shell.openMenu': ['Open the navigation menu', 'Abrir el menú de navegación', 'Abrir o menu de navegação'],
+'shell.closeMenu': ['Close the menu', 'Cerrar el menú', 'Fechar o menu'],
 
 /* ---- Roles ------------------------------------------------------------- */
 'role.donor': ['Donor', 'Donante', 'Doador'],

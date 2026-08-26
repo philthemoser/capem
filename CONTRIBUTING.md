@@ -35,7 +35,8 @@ node build.js              # regenerates index.html
 node tools/check-i18n.js   # every key exists, every row has all three languages
 node tools/smoke.js        # 24 screens × 3 languages × 2 scenarios
 node tools/flow.js         # 21 end-to-end assertions
-node tools/a11y.js         # axe-core WCAG 2.1 A/AA, light and dark
+node tools/nav.js          # navigation behaviour, desktop and mobile
+node tools/a11y.js         # axe-core WCAG 2.1 A/AA
 ```
 
 `index.html` is generated and committed. Rebuild it and include it in your change, so anyone can open the repository and see the result without running anything.

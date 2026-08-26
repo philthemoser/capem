@@ -10,6 +10,7 @@ const ICON_CASH = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="
 const ICON_BAG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"><path d="M5 8h14l-1.2 12H6.2L5 8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 8V6a3 3 0 016 0v2" stroke="currentColor" stroke-width="2"/></svg>';
 const ICON_CHECK = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_IN = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_MENU = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const BRAND_MARK = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2 3 6.5v5.8c0 5 3.8 9.2 9 9.7 5.2-.5 9-4.7 9-9.7V6.5L12 2z" fill="currentColor" opacity=".18"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 const BRAND_MARK_SM = BRAND_MARK.replace('width="18" height="18"', 'width="15" height="15"');
 
@@ -109,25 +110,99 @@ function renderTopbar() {
     </div>`;
 }
 
+/**
+ * Navigation markup, shared by the desktop sidebar and the mobile sheet.
+ *
+ * The role list is in a FIXED order and never reorders. Only the current
+ * role's screens expand underneath it. An earlier version promoted the active
+ * role to the top and pushed the rest into an "other roles" group, which meant
+ * the menu rearranged itself under the reader's cursor on every click — you
+ * could never learn where anything was.
+ */
+function navMarkup() {
+  const s = Store.get();
+  return `<ul class="nav-list">` + Object.keys(ROLES).map(role => {
+    const isActive = role === s.role;
+    const screens = ROLES[role].screens;
+    const hasChildren = screens.length > 1;
+    const target = '#/' + role + '/' + screens[0][0];
+
+    // A single-screen role is its own destination; no disclosure to expand.
+    const head = `<a class="nav-role${isActive ? ' active' : ''}" href="${esc(target)}"`
+      + (hasChildren ? ` aria-expanded="${isActive}"` : '')
+      + (isActive && !hasChildren ? ' aria-current="page"' : '')
+      + `>${esc(t('role.' + role))}`
+      + (hasChildren ? `<span class="nav-caret" aria-hidden="true"></span>` : '')
+      + `</a>`;
+
+    const kids = (hasChildren && isActive)
+      ? `<ul class="nav-sub">` + screens.map(([id]) =>
+          `<li><a class="nav-sub-item${id === s.screen ? ' active' : ''}" href="#/${role}/${id}"`
+          + (id === s.screen ? ' aria-current="page"' : '') + `>${esc(t('screen.' + id))}</a></li>`
+        ).join('') + `</ul>`
+      : '';
+
+    return `<li class="nav-group${isActive ? ' open' : ''}">${head}${kids}</li>`;
+  }).join('') + `</ul>`;
+}
+
 function renderNav() {
   const s = Store.get();
-  const items = ROLES[s.role].screens.map(([id]) =>
-    `<a class="navitem${id === s.screen ? ' active' : ''}" href="#/${s.role}/${id}"
-      ${id === s.screen ? 'aria-current="page"' : ''}>${esc(t('screen.' + id))}</a>`).join('');
+  document.getElementById('sidebar').innerHTML = navMarkup();
+  document.getElementById('sheetNav').innerHTML = navMarkup();
 
-  document.getElementById('sidebar').innerHTML =
-    `<p class="side-role">${esc(t('role.' + s.role))}</p>${items}
-     <p class="side-role side-role-2">${esc(t('shell.otherRoles'))}</p>
-     ${Object.keys(ROLES).filter(r => r !== s.role).map(r =>
-        `<a class="navitem navitem-alt" href="#/${r}/">${esc(t('role.' + r))}</a>`).join('')}`;
+  // Mobile: a single bar showing where you are, which opens the sheet.
+  const bar = document.getElementById('menubar');
+  bar.innerHTML = `<span class="mb-where">
+      <span class="mb-role">${esc(t('role.' + s.role))}</span>
+      <span class="mb-screen">${esc(t('screen.' + s.screen))}</span>
+    </span>
+    <span class="mb-cta">${ICON_MENU}<span>${esc(t('shell.menu'))}</span></span>`;
+  bar.setAttribute('aria-label', t('shell.openMenu'));
+  document.getElementById('sheetClose').setAttribute('aria-label', t('shell.closeMenu'));
+}
 
-  // Mobile: the sidebar disappears under 900px, so the current role's screens
-  // move into a bottom bar. The previous prototype simply hid the nav, which
-  // made every sub-screen unreachable on a phone.
-  document.getElementById('bottomnav').innerHTML = ROLES[s.role].screens.map(([id]) =>
-    `<a class="bn-item${id === s.screen ? ' active' : ''}" href="#/${s.role}/${id}"
-      ${id === s.screen ? 'aria-current="page"' : ''}>${esc(t('screen.' + id))}</a>`).join('')
-    + `<button class="bn-item bn-more" onclick="location.hash='#/'">${esc(t('shell.allRoles'))}</button>`;
+/* ---- Mobile navigation sheet -------------------------------------------- */
+let sheetLastFocus = null;
+
+function openSheet() {
+  const sheet = document.getElementById('sheet');
+  const back = document.getElementById('sheetBackdrop');
+  sheetLastFocus = document.activeElement;
+  back.hidden = false;
+  sheet.hidden = false;
+  document.body.classList.add('sheet-open');
+  // Next frame, so the transition has a start state to animate from.
+  requestAnimationFrame(() => {
+    back.classList.add('shown');
+    sheet.classList.add('shown');
+    const first = sheet.querySelector('.nav-role.active') || sheet.querySelector('a, button');
+    if (first) first.focus();
+  });
+}
+
+function closeSheet() {
+  const sheet = document.getElementById('sheet');
+  const back = document.getElementById('sheetBackdrop');
+  if (sheet.hidden) return;
+  sheet.classList.remove('shown');
+  back.classList.remove('shown');
+  document.body.classList.remove('sheet-open');
+  setTimeout(() => { sheet.hidden = true; back.hidden = true; }, 220);
+  if (sheetLastFocus && sheetLastFocus.focus) sheetLastFocus.focus();
+}
+
+function initSheet() {
+  document.getElementById('menubar').addEventListener('click', openSheet);
+  document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
+  document.getElementById('sheetClose').addEventListener('click', closeSheet);
+  // Choosing a destination closes the sheet.
+  document.getElementById('sheetNav').addEventListener('click', e => {
+    if (e.target.closest('a')) closeSheet();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSheet();
+  });
 }
 
 /* ---- Landing ------------------------------------------------------------*/
@@ -196,8 +271,9 @@ function boot() {
     if (saved && LANG_INDEX[saved] != null) { Store.get().lang = saved; Store.get().langPinned = true; }
   } catch (e) { /* private browsing */ }
 
+  initSheet();
   Store.subscribe(scheduleRender);
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => { closeSheet(); route(); });
   route();
 }
 

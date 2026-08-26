@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CAPEM — Centros de Apoyo en Emergencias</title>
 <meta name="description" content="An open concept prototype for coordinating improvised disaster support centres. Fictional scenarios; not production software.">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='5' fill='%231f5fa8'/><path d='M12 6.5v11M6.5 12h11' stroke='white' stroke-width='2.4' stroke-linecap='round'/></svg>">
 <style>
 /* ============================================================================
@@ -21,6 +21,7 @@
  * ==========================================================================*/
 
 :root {
+  color-scheme: light;
   --page: #f7f7f5;
   --surface: #ffffff;
   --surface-2: #f2f2ef;
@@ -50,31 +51,12 @@
   --maxw: 1160px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #14140f;
-    --surface: #1c1c16;
-    --surface-2: #24241d;
-    --ink: #f2f1e9;
-    --ink-2: #c8c6ba;
-    --muted: #9d9b90;
-    --hairline: #34332b;
-    --border: rgba(242, 241, 233, 0.14);
-
-    --accent: #6ea8e8;
-    --accent-deep: #9cc4f0;
-    --accent-tint: #16283c;
-    --accent-line: #29405c;
-
-    --good: #63c07f;  --good-bg: #16301f;
-    --warning: #d9a838; --warning-bg: #332a12;
-    --serious: #e08a5c; --serious-bg: #352114;
-    --critical: #ef7a74; --critical-bg: #351917;
-    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
-  }
-}
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* The hidden attribute must beat any later display rule. Without this, the
+   sheet backdrop's `display: block` inside a media query wins on specificity
+   and leaves a transparent full-screen overlay swallowing every tap. */
+[hidden] { display: none !important; }
 
 html { -webkit-text-size-adjust: 100%; }
 
@@ -153,45 +135,114 @@ input, select, textarea { font: inherit; color: inherit; }
   border-right: 1px solid var(--hairline);
   position: sticky; top: 49px; max-height: calc(100vh - 49px); overflow-y: auto;
 }
-.side-role {
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted); padding: 4px 10px 8px;
+.nav-list, .nav-sub { list-style: none; }
+.nav-group { margin-bottom: 1px; }
+
+/* The role list never reorders. Only the active role expands. */
+.nav-role {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 10px; border-radius: 8px;
+  color: var(--ink-2); font-size: 14px; font-weight: 600;
+  text-decoration: none;
 }
-.side-role-2 { margin-top: 14px; border-top: 1px solid var(--hairline); padding-top: 12px; }
-.navitem {
-  display: block; padding: 8px 10px; border-radius: 8px;
-  color: var(--ink-2); font-size: 14px; font-weight: 550;
-  text-decoration: none; margin-bottom: 2px;
+.nav-role:hover { background: var(--surface-2); }
+.nav-role.active { background: var(--accent-tint); color: var(--accent-deep); }
+.nav-caret {
+  width: 8px; height: 8px; flex: none; border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor; opacity: .5;
+  transform: rotate(-45deg); transition: transform .15s;
 }
-.navitem:hover { background: var(--surface-2); }
-.navitem.active { background: var(--accent-tint); color: var(--accent-deep); font-weight: 650; }
-.navitem-alt { font-size: 13px; color: var(--muted); font-weight: 500; }
+.nav-group.open > .nav-role .nav-caret { transform: rotate(45deg); opacity: .8; }
+
+.nav-sub { margin: 2px 0 6px; padding-left: 10px; border-left: 2px solid var(--hairline); }
+.nav-sub-item {
+  display: block; padding: 7px 10px; border-radius: 7px;
+  color: var(--ink-2); font-size: 13.5px; font-weight: 500; text-decoration: none;
+}
+.nav-sub-item:hover { background: var(--surface-2); color: var(--ink); }
+.nav-sub-item.active {
+  color: var(--accent-deep); font-weight: 650; background: var(--surface-2);
+  box-shadow: inset 2px 0 0 var(--accent); border-radius: 0 7px 7px 0;
+}
 
 .main { flex: 1; min-width: 0; padding: 20px 20px 90px; max-width: var(--maxw); }
 
-.bottomnav { display: none; }
+.menubar { display: none; }
+.sheet, .sheet-backdrop { display: none; }
 
 @media (max-width: 900px) {
   .sidebar { display: none; }
-  .main { padding: 16px 14px 84px; }
-  /* The previous prototype hid the sidebar and offered nothing in its place,
-     which made every sub-screen unreachable on a phone. */
-  .bottomnav {
-    display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
-    background: var(--surface); border-top: 1px solid var(--hairline);
-    overflow-x: auto; -webkit-overflow-scrolling: touch;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  .bn-item {
-    flex: 1 0 auto; text-align: center; padding: 11px 13px;
-    font-size: 12.5px; font-weight: 600; color: var(--muted);
-    text-decoration: none; white-space: nowrap;
-    border: none; background: none; border-top: 2.5px solid transparent;
-  }
-  .bn-item.active { color: var(--accent-deep); border-top-color: var(--accent); background: var(--accent-tint); }
+  .main { padding: 16px 14px 88px; }
   .topbar { padding: 7px 11px; gap: 7px; }
   .event-pill { order: 3; width: 100%; justify-content: center; }
   .topbar-right select { max-width: 130px; font-size: 12px; }
+
+  /* A row of tabs cannot hold eleven roles, so the bar says where you are and
+     opens a sheet holding the whole tree — the same tree as the sidebar. */
+  .menubar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 45;
+    background: var(--surface); border: none; border-top: 1px solid var(--hairline);
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    text-align: left; box-shadow: 0 -2px 12px rgba(22,22,15,.06);
+  }
+  .mb-where { min-width: 0; }
+  .mb-role {
+    display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .mb-screen {
+    display: block; font-size: 14.5px; font-weight: 650; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mb-cta {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    background: var(--accent-tint); color: var(--accent-deep);
+    border: 1px solid var(--accent-line); border-radius: 99px;
+    padding: 7px 13px; font-size: 13px; font-weight: 650;
+  }
+
+  .sheet-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(22, 22, 15, .38); opacity: 0; transition: opacity .2s ease;
+  }
+  .sheet-backdrop.shown { opacity: 1; }
+
+  .sheet {
+    display: flex; flex-direction: column;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 56;
+    max-height: 82vh;
+    background: var(--surface);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 40px rgba(22, 22, 15, .22);
+    transform: translateY(100%);
+    transition: transform .24s cubic-bezier(.32, .72, 0, 1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sheet.shown { transform: translateY(0); }
+  .sheet-grip {
+    width: 38px; height: 4px; border-radius: 99px; background: var(--hairline);
+    margin: 9px auto 2px; flex: none;
+  }
+  .sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 14px 10px; border-bottom: 1px solid var(--hairline); flex: none;
+  }
+  .sheet-head h2 { font-size: 15px; }
+  .sheet-close {
+    border: 1px solid var(--hairline); background: var(--surface);
+    border-radius: 8px; width: 36px; height: 36px; font-size: 14px; color: var(--ink-2);
+  }
+  .sheet-body { overflow-y: auto; padding: 10px 12px 18px; -webkit-overflow-scrolling: touch; }
+  .sheet-body .nav-role { padding: 12px 12px; font-size: 15px; }
+  .sheet-body .nav-sub-item { padding: 11px 12px; font-size: 14px; }
+
+  body.sheet-open { overflow: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { transition: none; }
+  .sheet-backdrop { transition: none; }
 }
 
 /* ---------- Screen furniture -------------------------------------------- */
@@ -309,7 +360,6 @@ blockquote cite { display: block; margin-top: 7px; font-size: 12px; color: var(-
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--accent-deep); border-color: var(--accent-deep); }
-@media (prefers-color-scheme: dark) { .btn-primary { color: #10202f; } }
 .btn-sm { padding: 6px 11px; font-size: 12.5px; min-height: 33px; }
 .btn-ghost { border-color: transparent; background: none; color: var(--accent-deep); }
 .btn-block { width: 100%; }
@@ -438,7 +488,6 @@ td .sub { font-size: 12px; color: var(--muted); }
   border: 1px solid var(--border); border-radius: 20px; overflow: hidden; box-shadow: var(--shadow);
 }
 .phone-head { background: var(--accent); color: #fff; padding: 14px 16px 12px; }
-@media (prefers-color-scheme: dark) { .phone-head { color: #0f1e2c; } }
 .ph-brand { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 15px; margin-bottom: 8px; }
 .ph-event { font-size: 12.5px; opacity: .95; }
 .ph-region { font-size: 11.5px; opacity: .8; }
@@ -643,14 +692,11 @@ td .sub { font-size: 12px; color: var(--muted); }
 .wa-head b { font-size: 13.5px; display: block; }
 .wa-head span { font-size: 11.5px; opacity: .85; }
 .wa-body { background: #e6ddd4; padding: 13px; min-height: 340px; }
-@media (prefers-color-scheme: dark) { .wa-body { background: #0d1a17; } }
 .wa-msg {
   background: #fff; color: #111; border-radius: 0 10px 10px 10px; padding: 9px 11px;
   font-size: 12.5px; max-width: 94%; box-shadow: 0 1px 1px rgba(0,0,0,.1); white-space: pre-line;
 }
-@media (prefers-color-scheme: dark) { .wa-msg { background: #1f2c26; color: #e8e6dd; } }
 .wa-sender { color: #075e54; font-weight: 700; font-size: 11.5px; display: block; margin-bottom: 3px; }
-@media (prefers-color-scheme: dark) { .wa-sender { color: #6fd8b8; } }
 .wa-time { display: block; text-align: right; font-size: 10.5px; color: #8c8c8c; margin-top: 4px; }
 
 /* ---------- Offline log -------------------------------------------------- */
@@ -697,12 +743,11 @@ td .sub { font-size: 12px; color: var(--muted); }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 13px; box-shadow: 0 18px 50px rgba(0,0,0,.25);
 }
-@media (max-width: 900px) { .coach.open { bottom: 62px; } }
+@media (max-width: 900px) { .coach.open { bottom: 78px; } }
 .coach-head {
   background: var(--accent); color: #fff; padding: 10px 13px;
   display: flex; align-items: center; gap: 9px; position: sticky; top: 0;
 }
-@media (prefers-color-scheme: dark) { .coach-head { color: #0f1e2c; } }
 .coach-head b { font-size: 13px; flex: 1; }
 .coach-step { font-size: 11.5px; opacity: .9; font-variant-numeric: tabular-nums; }
 .coach-x { border: none; background: rgba(255,255,255,.22); color: inherit; border-radius: 6px; width: 24px; height: 24px; font-size: 12px; line-height: 1; }
@@ -731,7 +776,7 @@ td .sub { font-size: 12px; color: var(--muted); }
 
 /* ---------- Print -------------------------------------------------------- */
 @media print {
-  .topbar, .sidebar, .bottomnav, .coach, .row-actions, .toolbar { display: none !important; }
+  .topbar, .sidebar, .menubar, .sheet, .sheet-backdrop, .coach, .row-actions, .toolbar { display: none !important; }
   body { background: #fff; color: #000; font-size: 11pt; }
   .card, .why, .tile { break-inside: avoid; border: 1px solid #ccc; }
   .main { padding: 0; max-width: none; }
@@ -753,7 +798,17 @@ td .sub { font-size: 12px; color: var(--muted); }
   <main class="main" id="main" tabindex="-1"></main>
 </div>
 
-<nav class="bottomnav" id="bottomnav" aria-label="Sections"></nav>
+<button class="menubar" id="menubar" type="button" aria-haspopup="dialog"></button>
+
+<div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-grip" aria-hidden="true"></div>
+  <div class="sheet-head">
+    <h2 id="sheetTitle">CAPEM</h2>
+    <button class="sheet-close" id="sheetClose" type="button" aria-label="Close">&#10005;</button>
+  </div>
+  <nav class="sheet-body" id="sheetNav" aria-label="Sections"></nav>
+</div>
 
 <div class="coach" id="coach" role="dialog" aria-label="Training course"></div>
 
@@ -804,8 +859,9 @@ const STRINGS = {
 'shell.scenario': ['Scenario', 'Escenario', 'Cenário'],
 'shell.site': ['Centre', 'Centro', 'Centro'],
 'shell.language': ['Language', 'Idioma', 'Idioma'],
-'shell.otherRoles': ['Other roles', 'Otros roles', 'Outros papéis'],
-'shell.allRoles': ['All roles', 'Todos los roles', 'Todos os papéis'],
+'shell.menu': ['Menu', 'Menú', 'Menu'],
+'shell.openMenu': ['Open the navigation menu', 'Abrir el menú de navegación', 'Abrir o menu de navegação'],
+'shell.closeMenu': ['Close the menu', 'Cerrar el menú', 'Fechar o menu'],
 
 /* ---- Roles ------------------------------------------------------------- */
 'role.donor': ['Donor', 'Donante', 'Doador'],
@@ -5468,6 +5524,7 @@ const ICON_CASH = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="
 const ICON_BAG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none"><path d="M5 8h14l-1.2 12H6.2L5 8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 8V6a3 3 0 016 0v2" stroke="currentColor" stroke-width="2"/></svg>';
 const ICON_CHECK = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 12l5 5L20 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_IN = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_MENU = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" fill="none"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const BRAND_MARK = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2 3 6.5v5.8c0 5 3.8 9.2 9 9.7 5.2-.5 9-4.7 9-9.7V6.5L12 2z" fill="currentColor" opacity=".18"/><path d="M12 7.5v9M7.5 12h9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 const BRAND_MARK_SM = BRAND_MARK.replace('width="18" height="18"', 'width="15" height="15"');
 
@@ -5567,25 +5624,99 @@ function renderTopbar() {
     </div>`;
 }
 
+/**
+ * Navigation markup, shared by the desktop sidebar and the mobile sheet.
+ *
+ * The role list is in a FIXED order and never reorders. Only the current
+ * role's screens expand underneath it. An earlier version promoted the active
+ * role to the top and pushed the rest into an "other roles" group, which meant
+ * the menu rearranged itself under the reader's cursor on every click — you
+ * could never learn where anything was.
+ */
+function navMarkup() {
+  const s = Store.get();
+  return `<ul class="nav-list">` + Object.keys(ROLES).map(role => {
+    const isActive = role === s.role;
+    const screens = ROLES[role].screens;
+    const hasChildren = screens.length > 1;
+    const target = '#/' + role + '/' + screens[0][0];
+
+    // A single-screen role is its own destination; no disclosure to expand.
+    const head = `<a class="nav-role${isActive ? ' active' : ''}" href="${esc(target)}"`
+      + (hasChildren ? ` aria-expanded="${isActive}"` : '')
+      + (isActive && !hasChildren ? ' aria-current="page"' : '')
+      + `>${esc(t('role.' + role))}`
+      + (hasChildren ? `<span class="nav-caret" aria-hidden="true"></span>` : '')
+      + `</a>`;
+
+    const kids = (hasChildren && isActive)
+      ? `<ul class="nav-sub">` + screens.map(([id]) =>
+          `<li><a class="nav-sub-item${id === s.screen ? ' active' : ''}" href="#/${role}/${id}"`
+          + (id === s.screen ? ' aria-current="page"' : '') + `>${esc(t('screen.' + id))}</a></li>`
+        ).join('') + `</ul>`
+      : '';
+
+    return `<li class="nav-group${isActive ? ' open' : ''}">${head}${kids}</li>`;
+  }).join('') + `</ul>`;
+}
+
 function renderNav() {
   const s = Store.get();
-  const items = ROLES[s.role].screens.map(([id]) =>
-    `<a class="navitem${id === s.screen ? ' active' : ''}" href="#/${s.role}/${id}"
-      ${id === s.screen ? 'aria-current="page"' : ''}>${esc(t('screen.' + id))}</a>`).join('');
+  document.getElementById('sidebar').innerHTML = navMarkup();
+  document.getElementById('sheetNav').innerHTML = navMarkup();
 
-  document.getElementById('sidebar').innerHTML =
-    `<p class="side-role">${esc(t('role.' + s.role))}</p>${items}
-     <p class="side-role side-role-2">${esc(t('shell.otherRoles'))}</p>
-     ${Object.keys(ROLES).filter(r => r !== s.role).map(r =>
-        `<a class="navitem navitem-alt" href="#/${r}/">${esc(t('role.' + r))}</a>`).join('')}`;
+  // Mobile: a single bar showing where you are, which opens the sheet.
+  const bar = document.getElementById('menubar');
+  bar.innerHTML = `<span class="mb-where">
+      <span class="mb-role">${esc(t('role.' + s.role))}</span>
+      <span class="mb-screen">${esc(t('screen.' + s.screen))}</span>
+    </span>
+    <span class="mb-cta">${ICON_MENU}<span>${esc(t('shell.menu'))}</span></span>`;
+  bar.setAttribute('aria-label', t('shell.openMenu'));
+  document.getElementById('sheetClose').setAttribute('aria-label', t('shell.closeMenu'));
+}
 
-  // Mobile: the sidebar disappears under 900px, so the current role's screens
-  // move into a bottom bar. The previous prototype simply hid the nav, which
-  // made every sub-screen unreachable on a phone.
-  document.getElementById('bottomnav').innerHTML = ROLES[s.role].screens.map(([id]) =>
-    `<a class="bn-item${id === s.screen ? ' active' : ''}" href="#/${s.role}/${id}"
-      ${id === s.screen ? 'aria-current="page"' : ''}>${esc(t('screen.' + id))}</a>`).join('')
-    + `<button class="bn-item bn-more" onclick="location.hash='#/'">${esc(t('shell.allRoles'))}</button>`;
+/* ---- Mobile navigation sheet -------------------------------------------- */
+let sheetLastFocus = null;
+
+function openSheet() {
+  const sheet = document.getElementById('sheet');
+  const back = document.getElementById('sheetBackdrop');
+  sheetLastFocus = document.activeElement;
+  back.hidden = false;
+  sheet.hidden = false;
+  document.body.classList.add('sheet-open');
+  // Next frame, so the transition has a start state to animate from.
+  requestAnimationFrame(() => {
+    back.classList.add('shown');
+    sheet.classList.add('shown');
+    const first = sheet.querySelector('.nav-role.active') || sheet.querySelector('a, button');
+    if (first) first.focus();
+  });
+}
+
+function closeSheet() {
+  const sheet = document.getElementById('sheet');
+  const back = document.getElementById('sheetBackdrop');
+  if (sheet.hidden) return;
+  sheet.classList.remove('shown');
+  back.classList.remove('shown');
+  document.body.classList.remove('sheet-open');
+  setTimeout(() => { sheet.hidden = true; back.hidden = true; }, 220);
+  if (sheetLastFocus && sheetLastFocus.focus) sheetLastFocus.focus();
+}
+
+function initSheet() {
+  document.getElementById('menubar').addEventListener('click', openSheet);
+  document.getElementById('sheetBackdrop').addEventListener('click', closeSheet);
+  document.getElementById('sheetClose').addEventListener('click', closeSheet);
+  // Choosing a destination closes the sheet.
+  document.getElementById('sheetNav').addEventListener('click', e => {
+    if (e.target.closest('a')) closeSheet();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeSheet();
+  });
 }
 
 /* ---- Landing ------------------------------------------------------------*/
@@ -5654,8 +5785,9 @@ function boot() {
     if (saved && LANG_INDEX[saved] != null) { Store.get().lang = saved; Store.get().langPinned = true; }
   } catch (e) { /* private browsing */ }
 
+  initSheet();
   Store.subscribe(scheduleRender);
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => { closeSheet(); route(); });
   route();
 }
 

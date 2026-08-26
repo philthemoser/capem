@@ -36,7 +36,7 @@ const SCREENS = [['donor','donor-give'],['donor','donor-needs'],['intake','intak
   }
   await browser.close();
   const keys = Object.keys(all);
-  if (!keys.length) { console.log('PASS — no WCAG 2.1 A/AA violations across 16 screens, light and dark'); process.exit(0); }
+  if (!keys.length) { console.log('PASS — no WCAG 2.1 A/AA violations across 16 screens, at both OS colour-scheme settings'); process.exit(0); }
   keys.sort();
   for (const k of keys) {
     console.log(`\n${k}  ${all[k].desc}`);

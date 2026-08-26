@@ -101,6 +101,7 @@ docs/
   concept.md            the full design argument
   architecture.md       data model, module boundaries, why single-file
   production.md         what a real build would take, and what is missing entirely
+  running-costs.md      infrastructure cost, nonprofit credits, and sustainability models
   roadmap.md            phases, and what would have to be true to proceed
   naming.md             why "CAPEM", and the trademark screening behind it
 tools/                  i18n completeness, QR correctness, accessibility, end-to-end flow tests
@@ -138,6 +139,6 @@ Most valuable, roughly in order:
 
 Concept prototype. Not production software, not piloted, not validated. No efficiency claim in this repository is a measured result; they are all hypotheses.
 
-If you are wondering what a real build would involve, [docs/production.md](docs/production.md) sets out the architecture, the requirements, and the considerably longer list of what is missing — including the parts that are not engineering problems at all.
+If you are wondering what a real build would involve, [docs/production.md](docs/production.md) sets out the architecture, the requirements, and the considerably longer list of what is missing — including the parts that are not engineering problems at all. [docs/running-costs.md](docs/running-costs.md) prices the infrastructure (about $25 a month, which is not the problem) and looks at how comparable humanitarian software actually sustains itself.
 
 Licensed under [Apache 2.0](LICENSE). "CAPEM" is a working name — see [docs/naming.md](docs/naming.md) for the screening and the remaining trademark risk.

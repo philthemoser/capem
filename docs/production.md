@@ -268,7 +268,9 @@ Planning estimates, not quotes. Every phase is gated on the previous one produci
 
 **To something pilotable: about 5 months.** To a system defensible with real caseload data: **14–18 months.**
 
-Cost, at Latin American remote rates, roughly **USD 150–250k/year** for a team of this size; European rates are two to three times that. Running costs are modest — hosting on the order of USD 150–600 per month per country — with the variable risk in SMS and WhatsApp per-message fees, which scale with the size of the emergency and are therefore highest exactly when funds are most constrained.
+Cost, at Latin American remote rates, roughly **USD 150–250k/year** for a team of this size; European rates are two to three times that.
+
+Infrastructure is negligible by comparison — around **US$25–30 a month**, and plausibly free once nonprofit cloud credits are counted. The variable risk is messaging: routing SMS through an international carrier rather than a local aggregator can cost tens of thousands of dollars per surge, which is why the WhatsApp copy-to-clipboard path matters commercially as well as practically. Priced in full in [running-costs.md](running-costs.md).
 
 Legal and data-protection work runs in parallel with Phase 1 and must complete before Phase 2 begins. It is not a line item to compress.
 
@@ -281,6 +283,8 @@ Not the technical risks. Those are ordinary.
 **1. Donors do not pre-register.** The whole design rests on a stranger doing sixty seconds of unpaid administration before an act of generosity. Testable in a month. **Do that first, before anything in this document.**
 
 **2. Nobody pays for it.** The customer is a parish with no budget. The beneficiary is a displaced family with less. The funder, whoever they are, is a third party with different incentives from both. Every project in this category has died here, and there is a reasonable chance it is what ended NDMN — which nobody has yet told us.
+
+Note that this is *not* a hosting-cost problem: servers are about $25 a month. It is a staffing and institutional-subsidy problem, and there is a close precedent for how it fails. When UN OCHA stopped subsidising the humanitarian KoboToolbox server in 2023, free users dropped from 25,000 submissions a month to 5,000. See [running-costs.md](running-costs.md) §5.
 
 **3. It is unmaintained when the next disaster arrives.** Disaster software has long idle periods. A system that quietly rots between events is worse than no system, because centres will have let their paper practice lapse in the meantime. This is the strongest argument for the design's "works on an ordinary donation drive" property, and for an established NGO owning it rather than a small independent team.
 

@@ -2,6 +2,8 @@
 
 Written as conditions rather than dates, because every phase after the first depends on an answer we do not have.
 
+For what each phase would take to build — architecture, technical requirements, effort and cost — see [production.md](production.md).
+
 ---
 
 ## Phase 0 — Now: get argued with

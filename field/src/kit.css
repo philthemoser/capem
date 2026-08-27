@@ -174,80 +174,170 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   border-left: 5px solid var(--proibido); background: var(--papel);
   font: 500 13px/1.5 var(--fonte);
 }
+/* A caixa da pausa é o único controlo do formulário que muda o que a peça
+   diz, e não só como se lê — por isso tem moldura própria. */
+.pausa-caixa {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 11px 12px; margin-top: 4px;
+  background: var(--papel); border: 2px solid var(--tinta);
+}
+.pausa-caixa input { width: 20px; height: 20px; flex: none; margin: 1px 0 0; accent-color: var(--tinta); }
+.pausa-caixa label { font: 600 13.5px/1.4 var(--fonte); cursor: pointer; }
+.pausa-caixa label small { display: block; margin-top: 3px; font-weight: 500; color: var(--texto-2); }
+.esmaecido { opacity: .45; }
+
 .btn-txt {
   padding: 0; margin-top: 10px; background: none; border: 0;
   font: 600 13px/1 var(--fonte); color: var(--proibido);
   text-decoration: underline; cursor: pointer;
 }
 
-/* --- painel das peças --- */
-.painel { padding: 20px 18px 0; min-width: 0; }
+/* --- painel das peças ----------------------------------------------------
+ *
+ * O painel é uma galeria de provas de impressão, não uma lista de ficheiros.
+ * Três regras dão-lhe ordem:
+ *
+ *   1. A primeira peça de cada família é maior e mostra-se ao lado do seu
+ *      texto. É a que se imprime se só se imprimir uma, e o tamanho tem de
+ *      dizer isso sem ser preciso lê-lo.
+ *   2. Uma folha nunca flutua sobre o fundo: tem sempre uma moldura de papel
+ *      com um fio de tinta à volta, como uma folha pousada numa mesa.
+ *   3. As peças mais largas do que A4 retrato ocupam a linha toda — encolhidas
+ *      numa coluna estreita ninguém as revê antes de gastar papel.
+ * ----------------------------------------------------------------------- */
+.painel { padding: 0 18px 0; min-width: 0; }
 
 .barra {
+  position: sticky; top: 0; z-index: 20;
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-  padding-bottom: 16px; margin-bottom: 18px;
+  padding: 14px 0;
+  margin-bottom: 22px;
+  background: var(--fundo);
   border-bottom: 2px solid var(--tinta);
 }
 .btn {
-  padding: 11px 14px;
-  font: 700 13.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .05em;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 13px;
+  font: 700 12.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .05em;
   background: var(--papel); color: var(--tinta);
   border: 2px solid var(--tinta); cursor: pointer;
 }
+.btn:hover { background: var(--claro); }
 .btn-primario { background: var(--tinta); color: var(--papel); }
+.btn-primario:hover { background: #2c2822; }
 .btn[aria-pressed=true] { background: var(--tinta); color: var(--papel); }
+/* Um interruptor lê-se como estado; um botão preto lê-se como acção. Estes
+   dois são estado, por isso trazem o seu próprio indicador. */
+.btn .luz {
+  width: 10px; height: 10px; flex: none;
+  border: 2px solid currentColor; border-radius: 50%;
+}
+.btn[aria-pressed=true] .luz { background: currentColor; }
 .barra .espaco { flex: 1; }
 
-.familia { margin: 0 0 30px; }
+/* --- porque é assim (a explicação, dobrada) --- */
+.porque-assim {
+  margin: 0 0 26px;
+  background: var(--papel);
+  border: 2px solid var(--tinta);
+}
+.porque-assim > summary {
+  padding: 13px 16px; cursor: pointer;
+  font: 700 12.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .1em;
+  list-style: none;
+}
+.porque-assim > summary::-webkit-details-marker { display: none; }
+.porque-assim > summary::after { content: ' +'; font-family: var(--mono); }
+.porque-assim[open] > summary { border-bottom: 2px solid var(--tinta); }
+.porque-assim[open] > summary::after { content: ' –'; }
+.porque-assim .corpo {
+  padding: 18px 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px 26px;
+}
+.porque-assim h4 {
+  margin: 0 0 5px; font: 700 13px/1.3 var(--fonte);
+}
+.porque-assim p { margin: 0; font: 500 13px/1.55 var(--fonte); color: var(--texto-2); }
+
+.familia { margin: 0 0 38px; }
 .familia > h2 {
   display: flex; align-items: center; gap: 14px;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font: 700 12px/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em;
 }
-.familia > h2::after { content: ''; flex: 1; height: 2px; background: var(--tinta); }
-.familia > p { margin: -6px 0 16px; font: 500 13.5px/1.5 var(--fonte); color: var(--texto-2); max-width: 68ch; }
+.familia > h2::after { content: ''; flex: 1; height: 2px; background: var(--tinta); order: 3; }
+.familia > h2 .conta {
+  font: 600 11px/1 var(--mono); letter-spacing: 0;
+  padding: 4px 6px; background: var(--tinta); color: var(--papel);
+}
+.familia > p { margin: 0 0 18px; font: 500 13.5px/1.55 var(--fonte); color: var(--texto-2); max-width: 68ch; }
 
-.pecas { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; align-items: start; }
-/* Uma peça mais larga do que A4 retrato encolhida numa coluna estreita fica
-   ilegível no ecrã e ninguém a revê antes de gastar papel. Ocupa a linha. */
-.peca.larga { grid-column: 1 / -1; }
-.peca.larga .moldura { max-width: 900px; }
+.pecas {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px; align-items: start;
+}
 
 .peca { min-width: 0; }
-.peca > header {
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 7px;
-}
-.peca > header h3 {
-  margin: 0; font: 700 13px/1.2 var(--fonte);
-}
-.peca > header .fmt { font: 500 11px/1 var(--mono); color: var(--texto-2); }
-.peca > header .acao {
-  margin-left: auto; padding: 5px 9px;
-  font: 700 11px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
-  background: var(--tinta); color: var(--papel); border: 0; cursor: pointer;
-}
-.peca > p {
-  margin: 7px 0 0; font: 500 12.5px/1.5 var(--fonte); color: var(--texto-2);
-}
+.peca-corpo { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
-/* O andaime que encolhe a peça para o ecrã sem lhe tocar nas medidas. */
 .moldura {
   background: var(--papel);
-  box-shadow: 0 2px 14px rgba(0,0,0,.16);
-  overflow: hidden;
+  border: 1.5px solid var(--tinta);
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
 }
-.folha-wrap { position: relative; overflow: hidden; }
+.folha-wrap { position: relative; overflow: hidden; min-width: 0; }
 .folha {
   transform-origin: top left;
   transform: scale(var(--escala, 1));
   background: var(--papel);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 0 0 1px var(--tenue);
 }
 
+/* Só a primeira folha aparece no ecrã; na impressão aparecem todas. */
+.moldura .folha-wrap:not(:first-child) { display: none; }
+.mais-folhas {
+  font: 600 11px/1.3 var(--mono); color: var(--texto-2);
+  padding: 2px 2px 0; text-align: center;
+}
+
+.peca-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.peca-txt header { display: flex; flex-direction: column; gap: 3px; }
+.peca-txt h3 { margin: 0; font: 700 14px/1.25 var(--fonte); }
+.peca-txt .fmt { font: 500 11px/1.3 var(--mono); color: var(--texto-2); }
+.peca-txt p { margin: 0; font: 500 12.5px/1.5 var(--fonte); color: var(--texto-2); }
+.peca-acoes { margin-top: 2px; }
+.acao {
+  padding: 8px 12px;
+  font: 700 11.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
+  background: var(--tinta); color: var(--papel); border: 2px solid var(--tinta);
+  cursor: pointer;
+}
+.acao:hover { background: var(--papel); color: var(--tinta); }
+
+/* A peça em destaque: folha à esquerda, texto à direita, ambos maiores. */
+.peca.destaque { margin: 0 0 24px; }
+.peca.destaque .peca-txt h3 { font-size: 19px; }
+.peca.destaque .peca-txt p { font-size: 14px; max-width: 52ch; }
+.peca.destaque .acao { padding: 11px 16px; font-size: 12.5px; }
+@media (min-width: 760px) {
+  .peca.destaque .peca-corpo {
+    flex-direction: row; align-items: flex-start; gap: 24px;
+  }
+  .peca.destaque .moldura { flex: none; width: 300px; }
+  .peca.destaque .peca-txt { flex: 1; min-width: 0; padding-top: 4px; }
+}
+/* Peças mais largas do que A4 retrato: a folha por cima, o texto por baixo. */
+.peca.larga { grid-column: 1 / -1; }
+.peca.larga .moldura { max-width: 780px; }
+.peca.destaque.larga .peca-corpo { flex-direction: column; }
+.peca.destaque.larga .moldura { width: auto; max-width: 780px; }
+
 .rodape {
-  padding: 26px 18px 0; margin-top: 20px;
+  padding: 26px 18px 0; margin-top: 24px;
   border-top: 2px solid var(--tinta);
   font: 500 13px/1.6 var(--fonte); color: var(--texto-2); max-width: 74ch;
 }
@@ -282,6 +372,18 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 
 .cabeca { display: flex; align-items: center; gap: 4mm; flex: none; }
 
+/* ---- O carimbo de data -------------------------------------------------- */
+/* Discreto mas nunca ausente. Em mono não muda nada, porque nunca dependeu
+   da cor. */
+.carimbo {
+  font: 600 3.2mm/1.2 var(--mono);
+  color: var(--texto-2);
+  letter-spacing: .02em;
+}
+.carimbo.grande { font-size: 5mm; }
+.carimbo.mini { font-size: 2.6mm; }
+.carimbo.wa { font-size: 20px; line-height: 1.3; text-align: right; }
+
 /* ---- A4 retrato: cartaz de porta ---------------------------------------- */
 .f-cartaz {
   width: 210mm; height: 297mm; padding: 10mm;
@@ -301,6 +403,17 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .f-cartaz .horas span { font: 800 7mm/1 var(--fonte); text-transform: uppercase; }
 
 .f-cartaz .sec-precisa { display: flex; flex-direction: column; gap: 3mm; padding: 5mm 0 4mm; flex: 1.9; min-height: 0; }
+/* Estado "não estamos recebendo".
+   Um centro cheio que não consegue dizer que pare continua a receber. Este
+   bloco substitui a lista inteira em vez de a acompanhar: uma lista de
+   necessidades ao lado de um aviso de pausa é uma contradição na porta. */
+.f-cartaz .sec-pausa {
+  display: flex; align-items: center; gap: 6mm;
+  padding: 6mm 0; flex: 1.9; min-height: 0;
+}
+.f-cartaz .sec-pausa svg { width: 50mm; height: 50mm; flex: none; }
+.f-cartaz .sec-pausa .h { font: 400 14mm/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-cartaz .sec-pausa .porque { margin-top: 2mm; font: 500 5.5mm/1.3 var(--fonte); color: var(--texto-2); }
 .f-cartaz .sec-nao { display: flex; flex-direction: column; gap: 3mm; padding: 4mm 0; border-top: 1.6mm solid var(--tinta); flex: 1; min-height: 0; }
 .f-cartaz .cabeca svg { width: 13mm; height: 13mm; flex: none; }
 .f-cartaz .cabeca .h { font: 400 12mm/0.95 var(--preta); letter-spacing: -0.02em; }
@@ -525,6 +638,36 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .cortes i.cruz-h { height: .4mm; width: 8mm; transform: translate(-50%, -50%); }
 .sem-cortes .cortes { display: none; }
 
+/* ---- A folha de instruções, A4 retrato ---------------------------------- */
+.f-instr { width: 210mm; height: 297mm; padding: 10mm; display: flex; flex-direction: column; gap: 4mm; }
+.f-instr .topo-c { flex: none; display: flex; flex-direction: column; gap: 1.5mm; padding-bottom: 3mm; border-bottom: 1.6mm solid var(--tinta); }
+.f-instr .tipo { font: 700 4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .18em; color: var(--texto-2); }
+.f-instr .nome { font: 400 14mm/0.95 var(--preta); letter-spacing: -0.025em; }
+.f-instr .sub { font: 500 4.4mm/1.3 var(--fonte); color: var(--texto-2); }
+.f-instr .h { font: 400 6mm/1 var(--preta); letter-spacing: -0.01em; margin-bottom: 2.5mm; }
+.f-instr .bloco-i { min-width: 0; }
+/* O bloco dos passos absorve a folga da folha. Sem isto sobra um vão morto
+   antes da caixa de destaque e a folha parece por acabar. */
+.f-instr > .bloco-i:first-of-type { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.f-instr .passos { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 2.5mm; }
+.f-instr .passos li { display: flex; align-items: flex-start; gap: 4mm; }
+.f-instr .passos svg { width: 11mm; height: 11mm; flex: none; }
+.f-instr .passos b { display: block; font: 800 4.6mm/1.2 var(--fonte); text-transform: uppercase; letter-spacing: .02em; }
+.f-instr .passos span { display: block; margin-top: 0.6mm; font: 500 4.2mm/1.3 var(--fonte); color: var(--texto-2); }
+.f-instr .dois-i { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6mm; padding-top: 3mm; border-top: 1.2mm solid var(--tinta); }
+.f-instr .rotina { margin: 0; padding-left: 5mm; display: flex; flex-direction: column; gap: 2mm; }
+.f-instr .rotina li { font: 500 4.2mm/1.3 var(--fonte); color: var(--texto-2); }
+.f-instr .obs { margin: 0 0 2.5mm; font: 500 4.2mm/1.35 var(--fonte); color: var(--texto-2); }
+.f-instr .obs b { color: var(--tinta); }
+.f-instr .destaque {
+  flex: none; display: flex; align-items: flex-start; gap: 5mm;
+  padding: 4mm; border: 1.2mm solid var(--tinta);
+}
+.f-instr .destaque svg { width: 16mm; height: 16mm; flex: none; }
+.f-instr .destaque b { display: block; font: 800 5mm/1.25 var(--fonte); }
+.f-instr .destaque span { display: block; margin-top: 1.5mm; font: 500 4mm/1.35 var(--fonte); color: var(--texto-2); }
+.f-instr .pe { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; padding-top: 3mm; border-top: 1.2mm solid var(--tinta); font: 400 3.4mm/1 var(--mono); color: var(--texto-2); }
+
 /* ---- Peças de ecrã: WhatsApp -------------------------------------------- */
 .f-wa { padding: 64px; display: flex; flex-direction: column; background: var(--papel); }
 .f-wa-post { width: 1080px; height: 1350px; }
@@ -548,6 +691,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .f-wa .pe .end { font: 700 28px/1.2 var(--fonte); }
 .f-wa .pe .tel { font: 800 44px/1 var(--fonte); }
 .f-wa .pe .link { font: 400 20px/1.3 var(--mono); color: var(--texto-2); text-align: right; word-break: break-all; }
+.f-wa .pe-dir { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .f-wa-status .nome { font-size: 120px; line-height: .9; }
 .f-wa-status .horas { font-size: 46px; }
 .f-wa-status .topo-c { border-bottom-width: 12px; gap: 10px; padding-bottom: 26px; }
@@ -584,5 +728,14 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   /* Só a peça escolhida existe. */
   body.imprimindo .peca { display: none; }
   body.imprimindo .peca.a-imprimir { display: block; }
+  .peca-txt, .porque-assim { display: none !important; }
+  .moldura { border: 0; padding: 0; }
+  .moldura .folha-wrap:not(:first-child) { display: block; }
+  .mais-folhas { display: none; }
+  .folha { box-shadow: none; }
+  /* Cada folha começa a sua própria página. Sem isto, um conjunto de quatro
+     peças sai com duas a partilhar uma folha e cortadas ao meio. */
+  .folha-wrap { break-after: page; }
+  .peca.a-imprimir:last-of-type .folha-wrap:last-child { break-after: auto; }
   .peca { break-inside: avoid; }
 }

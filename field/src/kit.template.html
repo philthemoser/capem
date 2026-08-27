@@ -16,9 +16,8 @@
 
 <header class="topo">
   <h1>Kit de material impresso</h1>
-  <p>Preencha uma vez. Saem catorze peças prontas — cartaz de porta, placa de rua,
-     panfletos, etiquetas de caixa, sinal da mesa de triagem, cartões, crachás.
-     Tudo em A4 comum, tudo legível a preto e branco, tudo sem internet.</p>
+  <p>Preencha uma vez. Saem quinze peças prontas, em A4 comum, legíveis a preto
+     e branco, sem internet e sem cadastro.</p>
 </header>
 
 <div class="tela">
@@ -47,6 +46,20 @@
       </section>
 
       <section class="bloco">
+        <h2>Estamos recebendo?</h2>
+        <div class="pausa-caixa">
+          <input type="checkbox" id="f-pausado">
+          <label for="f-pausado">Não estamos recebendo agora
+            <small>O cartaz passa a dizer isso em vez da lista. Um centro cheio que
+              não consegue pedir para parar continua a receber.</small></label>
+        </div>
+        <div id="linha-motivo" hidden>
+          <label class="campo" for="f-motivo">Porquê</label>
+          <input id="f-motivo" type="text" placeholder="Estamos cheios. Ligue antes de vir." autocomplete="off">
+        </div>
+      </section>
+
+      <section class="bloco" id="bloco-precisa">
         <h2>Precisamos hoje</h2>
         <p class="dica">Toque para escolher. O mais urgente primeiro — os três primeiros vão
           para a placa de rua, os oito primeiros para os panfletos, os dez primeiros para o cartaz.</p>
@@ -100,11 +113,54 @@
 
     <main class="painel">
       <div class="barra">
-        <button type="button" class="btn" id="b-mono" aria-pressed="false">Ver a preto e branco</button>
-        <button type="button" class="btn" id="b-cortes" aria-pressed="true">Marcas de corte</button>
+        <button type="button" class="btn btn-primario" id="b-conjunto">Imprimir o conjunto inicial</button>
+        <button type="button" class="btn" id="b-mono" aria-pressed="false"><span class="luz"></span>Preto e branco</button>
+        <button type="button" class="btn" id="b-cortes" aria-pressed="true"><span class="luz"></span>Marcas de corte</button>
         <span class="espaco"></span>
-        <button type="button" class="btn btn-primario" id="b-texto">Copiar texto para o grupo</button>
+        <button type="button" class="btn" id="b-texto">Copiar texto para o grupo</button>
       </div>
+
+      <details class="porque-assim">
+        <summary>Porque é que estas peças são assim</summary>
+        <div class="corpo">
+          <div>
+            <h4>Funcionam com o texto ignorado</h4>
+            <p>Vinte e oito marcas desenhadas, uma por item. Quem não lê português
+              — e o sul do Brasil tem comunidades venezuelanas, haitianas e
+              bolivianas, e chegam socorristas de fora — percebe na mesma.</p>
+          </div>
+          <div>
+            <h4>Funcionam sem toner de cor</h4>
+            <p>O preto e branco é o desenho principal e a cor é uma camada por
+              cima. Proibido é <em>anel mais barra</em>, permitido é <em>anel mais
+              visto</em>: são formas, não cores. Carregue no botão e veja.</p>
+          </div>
+          <div>
+            <h4>Funcionam molhadas</h4>
+            <p>Traços grossos, contraste alto, nada de fios finos nem texto pequeno
+              em negativo — é o que desaparece primeiro em papel húmido ou dentro
+              de um plástico.</p>
+          </div>
+          <div>
+            <h4>O “não traga” pesa tanto como o “precisamos”</h4>
+            <p>Em 2024, roupa usada chegou a 70% de tudo o que foi arrecadado no
+              país. Mas são pessoas a tentar ajudar, por isso a peça agradece
+              antes de recusar.</p>
+          </div>
+          <div>
+            <h4>Nenhuma peça depende do QR</h4>
+            <p>Endereço, horário e telefone estão sempre escritos. Numa enchente a
+              bateria acaba e o telemóvel molha-se; o papel continua.</p>
+          </div>
+          <div>
+            <h4>A data está lá para denunciar</h4>
+            <p>Cada peça que envelhece leva a data da lista. Se o papel ficar duas
+              semanas na porta, é a data que avisa quem passa — e é isso que se
+              quer.</p>
+          </div>
+        </div>
+      </details>
+
       <div id="pecas"></div>
     </main>
 

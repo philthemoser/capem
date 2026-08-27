@@ -57,6 +57,7 @@ const vazio = () => ({
   naoTraga: RECUSAS.slice(),
   setaTexto: 'DOAÇÕES', setaDir: 'direita',
   fechadoTexto: 'Fechado agora — abrimos amanhã',
+  pausado: false, motivoPausa: 'Estamos cheios. Ligue antes de vir.',
   mono: false, cortes: true,
   atualizado: ''
 });
@@ -107,6 +108,30 @@ function agora() {
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)} às ${p(d.getHours())}h${p(d.getMinutes())}`;
+}
+
+/* ---------------------------------------------------------------------------
+ * O carimbo de data.
+ *
+ * Um cartaz colado numa porta é indistinguível de um cartaz colado há três
+ * semanas. Sem data, um vizinho que passa não tem como saber se a lista ainda
+ * vale, e o centro recebe hoje aquilo de que precisava no dia 4.
+ *
+ * A data também é honesta ao contrário: se o papel ficar duas semanas na
+ * porta, é a data que denuncia. É isso que se quer — "esta lista é do dia 14,
+ * ligue antes de vir" é uma informação útil, e o silêncio não é.
+ *
+ * É a versão barata da página de necessidades. Enquanto ela não existir, é o
+ * que há; quando existir, o QR passa a fazer o mesmo em tempo real.
+ * -------------------------------------------------------------------------*/
+function dataCurta() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** O carimbo, para as peças que envelhecem. `classe` afina o tamanho. */
+function carimbo(classe) {
+  return `<div class="carimbo ${classe || ''}">Lista de ${dataCurta()}</div>`;
 }
 
 const esc = s => String(s == null ? '' : s)
@@ -161,7 +186,87 @@ function cortes(xs, ys, cruz) {
  * Cada uma declara o seu tamanho real e devolve o seu HTML. Quem lê isto a
  * seguir: as medidas vêm do sistema desenhado e não são para afinar a olho.
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * A folha de instruções.
+ *
+ * Vem antes de tudo o resto de propósito. Quem monta um centro não está a
+ * olhar para um ecrã: está com fita-cola na mão, no meio de um ginásio, a
+ * decidir onde pregar o quê. Uma página de ajuda no site é lida uma vez e
+ * esquecida; uma folha pregada na parede do fundo continua a responder à
+ * pergunta durante duas semanas, e ao turno seguinte, e ao voluntário que
+ * chegou hoje.
+ *
+ * Por isso a explicação deste kit é ela própria uma peça impressa.
+ * -------------------------------------------------------------------------*/
+const PASSOS = [
+  { ic: 'cartaz', t: 'Cartaz de porta',
+    d: 'Cole na entrada, à altura dos olhos. É a peça que faz mais diferença — se só imprimir uma, imprima esta.' },
+  { ic: 'aberto', t: 'Sinal da mesa de triagem',
+    d: 'Em cima da mesa onde recebe as doações, virado para quem chega. É ele que dá cobertura a quem tem de recusar.' },
+  { ic: 'caixa', t: 'Etiquetas de caixa',
+    d: 'Uma por caixa, colada de fora. A partir daí um voluntário novo separa sozinho, sem perguntar nada a ninguém.' },
+  { ic: 'pessoa', t: 'Crachás e faixas de braço',
+    d: 'Um por pessoa, no início do turno. O nome escreve-se à mão.' },
+  { ic: 'seta', t: 'Setas e panfletos',
+    d: 'Setas onde as pessoas se enganam no caminho. Panfletos para entregar na rua — uma folha dá quatro.' }
+];
+
+const ROTINA = [
+  'Atualize a lista do dia e reimprima o cartaz de porta. A data no rodapé é o que diz ao vizinho se a lista ainda vale.',
+  'Mande o post no grupo do WhatsApp. É por aí que a lista chega mais longe.',
+  'Se o centro encher, marque “não estamos recebendo” e reimprima. Dizer que pare é mais útil do que não dizer nada.'
+];
+
 const PECAS = [
+
+  /* ===== A FOLHA DE INSTRUÇÕES ========================================== */
+  {
+    id: 'instrucoes', fam: 0, titulo: 'Folha de instruções', fmt: 'A4 retrato · para a parede do fundo',
+    w: 210, h: 297, un: 'mm',
+    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipa passa — não é para o doador, é para quem está a trabalhar.',
+    html: () => `<div class="folha f-instr">
+      <div class="topo-c">
+        <div class="tipo">${esc(V.nome())}</div>
+        <div class="nome preta">COMO USAR ESTE KIT</div>
+        <div class="sub">Pregue esta folha onde a equipa passa. Não é para o doador.</div>
+      </div>
+
+      <div class="bloco-i">
+        <div class="h preta">1 · IMPRIMA E PREGUE</div>
+        <ol class="passos">
+          ${PASSOS.map(x => `<li>
+            ${svgIcone(x.ic)}
+            <div><b>${esc(x.t)}</b><span>${esc(x.d)}</span></div>
+          </li>`).join('')}
+        </ol>
+      </div>
+
+      <div class="dois-i">
+        <div class="bloco-i">
+          <div class="h preta">2 · TODOS OS DIAS</div>
+          <ul class="rotina">${ROTINA.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+        </div>
+        <div class="bloco-i">
+          <div class="h preta">3 · SE FALTAR TINTA</div>
+          <p class="obs">Ligue <b>“ver a preto e branco”</b> antes de imprimir. Nada se perde: o proibido continua a ser o anel com a barra, o permitido continua a ser o visto. A cor nunca carrega sozinha o significado.</p>
+          <p class="obs">Antes de imprimir cem folhas, imprima uma e leia-a a dois metros.</p>
+        </div>
+      </div>
+
+      <div class="destaque">
+        ${svgAnel()}
+        <div>
+          <b>A lista do “não traga” evita mais transtorno do que a do “precisamos” resolve.</b>
+          <span>Nas enchentes de 2024 no Rio Grande do Sul, roupa usada chegou a 70% de tudo o que foi arrecadado no país. Mas são pessoas a tentar ajudar — por isso as peças agradecem antes de recusar.</span>
+        </div>
+      </div>
+
+      <div class="pe">
+        <div>CAPEM · ferramenta livre · github.com/philthemoser/capem</div>
+        ${carimbo()}
+      </div>
+    </div>`
+  },
 
   /* ===== FAMÍLIA 1 — ANUNCIAR (para fora) ================================ */
   {
@@ -174,12 +279,20 @@ const PECAS = [
         <div class="topo-c">
           <div class="tipo">${esc(V.tipo())}</div>
           <div class="nome preta">${esc(V.nome())}</div>
-          ${V.hor() ? `<div class="horas">${svgIcone('aberto')}<span>${esc(V.hor())}</span></div>` : ''}
+          ${V.hor() ? `<div class="horas">${svgIcone(S.pausado ? 'fechado' : 'aberto')}<span>${esc(V.hor())}</span></div>` : ''}
         </div>
+        ${S.pausado ? `
+        <div class="sec-pausa">
+          ${svgIcone('fechado')}
+          <div>
+            <div class="h preta">NÃO ESTAMOS RECEBENDO AGORA</div>
+            <div class="porque">${esc(S.motivoPausa || '')}</div>
+          </div>
+        </div>` : `
         <div class="sec-precisa">
           <div class="cabeca">${svgIcone('aberto', 'color:var(--permitido)')}<div class="h preta">PRECISAMOS HOJE</div></div>
           <div class="grade-precisa">${V.precisaCartaz().map(i => mi(i)).join('')}</div>
-        </div>
+        </div>`}
         <div class="sec-nao">
           <div class="cabeca">
             ${svgAnel()}
@@ -195,6 +308,7 @@ const PECAS = [
             ${V.end() ? `<div class="lin">${svgIcone('pino')}<div class="end">${esc(V.end())}</div></div>` : ''}
             ${V.tel() ? `<div class="lin">${svgIcone('telefone')}<div class="tel">${esc(V.tel())}</div></div>` : ''}
             ${l ? `<div class="link">${esc(l)}</div>` : ''}
+            ${carimbo()}
           </div>
           ${l ? `<div class="qr-bloco">${qr()}<div class="leg">extra, nunca essencial</div></div>` : ''}
         </div>
@@ -218,7 +332,10 @@ const PECAS = [
           ${V.end() ? `<div class="end">${esc(V.end())}</div>` : ''}
           ${V.hor() ? `<div class="hor">${esc(V.hor())}</div>` : ''}
         </div>
-        ${V.tel() ? `<div class="tel preta">${esc(V.tel())}</div>` : ''}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2mm">
+          ${V.tel() ? `<div class="tel preta">${esc(V.tel())}</div>` : ''}
+          ${carimbo('grande')}
+        </div>
       </div>
     </div>`
   },
@@ -260,6 +377,7 @@ const PECAS = [
           <div class="dados">
             ${V.end() ? `<div class="end">${esc(V.end())}</div>` : ''}
             ${V.tel() ? `<div class="tel">${esc(V.tel())}</div>` : ''}
+            ${carimbo('mini')}
           </div>
           ${qr()}
         </div>
@@ -301,7 +419,10 @@ const PECAS = [
     html: () => `<div class="folha f-mesa">
       <div class="topo-c">
         <div class="titulo preta">MESA DE TRIAGEM</div>
-        <div class="centro">${esc(V.nome())}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1mm;min-width:0">
+          <div class="centro">${esc(V.nome())}</div>
+          ${carimbo()}
+        </div>
       </div>
       <div class="duas">
         <div class="lado lado-sim">
@@ -395,7 +516,7 @@ const PECAS = [
         <div class="h preta">PRECISAMOS HOJE</div>
         <div class="g4">${V.precisa8().map(i => mi(i)).join('')}</div>
       </div>
-      <div class="leve"><b>Leve o contacto</b><span>corte as tiras antes de afixar</span></div>
+      <div class="leve"><b>Leve o contacto</b>${carimbo()}</div>
       <div class="tiras">${Array.from({ length: 8 }, () =>
         `<div class="tira"><span>${esc(V.tel() || V.nome())}</span></div>`).join('')}</div>
     </div>`
@@ -465,6 +586,7 @@ const PECAS = [
 ];
 
 const FAMILIAS = [
+  { n: 0, nome: 'Comece por aqui', desc: 'Uma folha que explica o resto. Imprima-a primeiro e pregue-a na parede do fundo.' },
   { n: 1, nome: 'Família 1 · Anunciar', desc: 'Virado para fora. Se só imprimir uma coisa, imprima o cartaz de porta.' },
   { n: 2, nome: 'Família 2 · Operar', desc: 'Dentro do centro. Ninguém faz estas peças, e separar doações é o gargalo verdadeiro.' },
   { n: 3, nome: 'Família 3 · Levar', desc: 'Sai com a pessoa e volta amanhã sabendo o que trazer.' },
@@ -496,7 +618,10 @@ function waHTML(qual) {
         ${V.end() ? `<div class="end">${esc(V.end())}</div>` : ''}
         ${V.tel() ? `<div class="tel">${esc(V.tel())}</div>` : ''}
       </div>
-      ${!st && V.link() ? `<div class="link">${esc(V.link())}</div>` : ''}
+      <div class="pe-dir">
+        ${!st && V.link() ? `<div class="link">${esc(V.link())}</div>` : ''}
+        ${carimbo('wa')}
+      </div>
     </div>
   </div>`;
 }
@@ -799,6 +924,11 @@ function montarForm() {
 
   document.getElementById('b-mono').setAttribute('aria-pressed', String(!!S.mono));
   document.getElementById('b-cortes').setAttribute('aria-pressed', String(!!S.cortes));
+
+  const pausa = document.getElementById('f-pausado');
+  pausa.checked = !!S.pausado;
+  document.getElementById('linha-motivo').hidden = !S.pausado;
+  document.getElementById('bloco-precisa').classList.toggle('esmaecido', !!S.pausado);
 }
 
 /* ---------------------------------------------------------------------------
@@ -806,12 +936,18 @@ function montarForm() {
  * -------------------------------------------------------------------------*/
 function render() {
   const raiz = document.getElementById('pecas');
-  raiz.innerHTML = FAMILIAS.map(f => `
-    <section class="familia">
-      <h2>${esc(f.nome)}</h2>
+  raiz.innerHTML = FAMILIAS.map(f => {
+    const lista = PECAS.filter(p => p.fam === f.n);
+    /* A primeira peça de cada família manda: é a que se imprime se só se
+       imprimir uma. Dar-lhe o mesmo tamanho das outras seria esconder isso. */
+    const [primeira, ...resto] = lista;
+    return `<section class="familia">
+      <h2>${esc(f.nome)} <span class="conta">${lista.length}</span></h2>
       <p>${esc(f.desc)}</p>
-      <div class="pecas">${PECAS.filter(p => p.fam === f.n).map(cartao).join('')}</div>
-    </section>`).join('');
+      ${primeira ? cartao(primeira, true) : ''}
+      ${resto.length ? `<div class="pecas">${resto.map(p => cartao(p)).join('')}</div>` : ''}
+    </section>`;
+  }).join('');
 
   document.body.classList.toggle('mono', !!S.mono);
   document.body.classList.toggle('sem-cortes', !S.cortes);
@@ -865,18 +1001,43 @@ function ajustarCartaz() {
   }
 }
 
-function cartao(p) {
+function cartao(p, destaque) {
   const folhas = p.folhas ? p.folhas() : [p.html()];
-  return `<article class="peca${p.w > 210 ? ' larga' : ''}" id="peca-${p.id}" data-peca="${p.id}">
-    <header>
-      <h3>${esc(p.titulo)}</h3>
-      <span class="fmt">${esc(p.fmt)}</span>
-      ${p.ecra
-        ? `<button type="button" class="acao" data-img="${p.id}">Imagem</button>`
-        : `<button type="button" class="acao" data-print="${p.id}">Imprimir</button>`}
-    </header>
-    ${folhas.map(h => `<div class="moldura"><div class="folha-wrap" data-w="${p.w}" data-h="${p.h}" data-un="${p.un}">${h}</div></div>`).join('')}
-    <p>${esc(p.nota)}${folhas.length > 1 ? ` <b>${folhas.length} folhas.</b>` : ''}</p>
+  const classes = ['peca'];
+  if (destaque) classes.push('destaque');
+  /* "Larga" é sobre papel, não sobre píxeis: uma peça de papel mais larga do
+     que A4 retrato fica ilegível numa coluna estreita e ocupa a linha toda.
+     As peças de WhatsApp são altas e estreitas e cabem na grelha normal. */
+  if (p.un === 'mm' && p.w > 210) classes.push('larga');
+
+  const acao = p.ecra
+    ? `<button type="button" class="acao" data-img="${p.id}">Gerar imagem</button>`
+    : `<button type="button" class="acao" data-print="${p.id}">Imprimir</button>`;
+
+  /* Uma peça multi-folha — dez etiquetas de caixa são cinco folhas — mostra
+     só a primeira. Todas ficam no DOM porque todas têm de sair na impressão;
+     o que não pode acontecer é a galeria virar um rolo de dois metros por
+     causa de uma peça que é sempre a mesma folha com outro item. */
+  const chapas = folhas.map(h =>
+    `<div class="folha-wrap" data-w="${p.w}" data-h="${p.h}" data-un="${p.un}">${h}</div>`).join('') +
+    (folhas.length > 1
+      ? `<div class="mais-folhas">${folhas.length - 1 === 1
+          ? '+1 folha igual'
+          : `+${folhas.length - 1} folhas iguais`}, com os outros itens</div>`
+      : '');
+
+  return `<article class="${classes.join(' ')}" id="peca-${p.id}" data-peca="${p.id}">
+    <div class="peca-corpo">
+      <div class="moldura">${chapas}</div>
+      <div class="peca-txt">
+        <header>
+          <h3>${esc(p.titulo)}</h3>
+          <span class="fmt">${esc(p.fmt)}${folhas.length > 1 ? ` · ${folhas.length} folhas` : ''}</span>
+        </header>
+        <p>${esc(p.nota)}</p>
+        <div class="peca-acoes">${acao}</div>
+      </div>
+    </div>
   </article>`;
 }
 
@@ -904,22 +1065,37 @@ function escalar() {
  * páginas nomeadas não é de confiança fora do Chrome — e este ficheiro tem
  * de sair certo do telemóvel de alguém sem saber qual é.
  * -------------------------------------------------------------------------*/
-function imprimir(id) {
-  const p = PECAS.find(x => x.id === id);
-  if (!p) return;
-  if (!validar()) return;
+function imprimir(id) { imprimirVarias([id]); }
+
+/* O conjunto inicial: o que um centro tem de ter na parede na primeira hora.
+   Todas A4 retrato, por isso saem num único trabalho de impressão — o sinal
+   da mesa é paisagem e por isso tem o seu próprio botão. */
+const CONJUNTO_INICIAL = ['instrucoes', 'cartaz', 'etiqueta', 'panfleto'];
+
+function imprimirVarias(ids) {
+  const pecas = ids.map(id => PECAS.find(x => x.id === id)).filter(Boolean);
+  if (!pecas.length || !validar()) return;
+
+  /* Um trabalho de impressão tem um tamanho de página só. Misturar retrato e
+     paisagem aqui daria uma peça cortada, e uma peça cortada é papel gasto. */
+  const { w, h } = pecas[0];
+  const misturado = pecas.some(p => p.w !== w || p.h !== h);
+  if (misturado) {
+    alert('Estas peças têm tamanhos de papel diferentes. Imprima-as uma a uma.');
+    return;
+  }
 
   let st = document.getElementById('pagina-css');
   if (!st) { st = document.createElement('style'); st.id = 'pagina-css'; document.head.appendChild(st); }
-  st.textContent = `@page { size: ${p.w}mm ${p.h}mm; margin: 0 }`;
+  st.textContent = `@page { size: ${w}mm ${h}mm; margin: 0 }`;
 
   document.querySelectorAll('.peca').forEach(el => el.classList.remove('a-imprimir'));
-  document.getElementById('peca-' + id).classList.add('a-imprimir');
+  pecas.forEach(p => document.getElementById('peca-' + p.id).classList.add('a-imprimir'));
   document.body.classList.add('imprimindo');
 
   const limpar = () => {
     document.body.classList.remove('imprimindo');
-    document.getElementById('peca-' + id).classList.remove('a-imprimir');
+    document.querySelectorAll('.a-imprimir').forEach(el => el.classList.remove('a-imprimir'));
     window.removeEventListener('afterprint', limpar);
   };
   window.addEventListener('afterprint', limpar);
@@ -1057,7 +1233,8 @@ function iniciar() {
 
   [['f-nome', 'nome'], ['f-tipo', 'tipo'], ['f-endereco', 'endereco'],
    ['f-horario', 'horario'], ['f-contato', 'contato'], ['f-link', 'link'],
-   ['f-seta-texto', 'setaTexto'], ['f-seta-dir', 'setaDir'], ['f-fechado', 'fechadoTexto']
+   ['f-seta-texto', 'setaTexto'], ['f-seta-dir', 'setaDir'], ['f-fechado', 'fechadoTexto'],
+   ['f-motivo', 'motivoPausa']
   ].forEach(([id, k]) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { S[k] = el.value; salvar(); });
@@ -1077,6 +1254,10 @@ function iniciar() {
   document.getElementById('b-add-nao').addEventListener('click', () => addLivre('f-nao-livre', 'naoTraga'));
   document.getElementById('b-limpar').addEventListener('click', limparTudo);
   document.getElementById('b-texto').addEventListener('click', e => copiarTexto(e.currentTarget));
+  document.getElementById('f-pausado').addEventListener('change', e => {
+    S.pausado = e.currentTarget.checked; salvar(); montarForm();
+  });
+  document.getElementById('b-conjunto').addEventListener('click', () => imprimirVarias(CONJUNTO_INICIAL));
   document.getElementById('b-mono').addEventListener('click', () => { S.mono = !S.mono; salvar(); montarForm(); });
   document.getElementById('b-cortes').addEventListener('click', () => { S.cortes = !S.cortes; salvar(); montarForm(); });
 

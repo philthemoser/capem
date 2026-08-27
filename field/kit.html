@@ -191,80 +191,170 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   border-left: 5px solid var(--proibido); background: var(--papel);
   font: 500 13px/1.5 var(--fonte);
 }
+/* A caixa da pausa é o único controlo do formulário que muda o que a peça
+   diz, e não só como se lê — por isso tem moldura própria. */
+.pausa-caixa {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 11px 12px; margin-top: 4px;
+  background: var(--papel); border: 2px solid var(--tinta);
+}
+.pausa-caixa input { width: 20px; height: 20px; flex: none; margin: 1px 0 0; accent-color: var(--tinta); }
+.pausa-caixa label { font: 600 13.5px/1.4 var(--fonte); cursor: pointer; }
+.pausa-caixa label small { display: block; margin-top: 3px; font-weight: 500; color: var(--texto-2); }
+.esmaecido { opacity: .45; }
+
 .btn-txt {
   padding: 0; margin-top: 10px; background: none; border: 0;
   font: 600 13px/1 var(--fonte); color: var(--proibido);
   text-decoration: underline; cursor: pointer;
 }
 
-/* --- painel das peças --- */
-.painel { padding: 20px 18px 0; min-width: 0; }
+/* --- painel das peças ----------------------------------------------------
+ *
+ * O painel é uma galeria de provas de impressão, não uma lista de ficheiros.
+ * Três regras dão-lhe ordem:
+ *
+ *   1. A primeira peça de cada família é maior e mostra-se ao lado do seu
+ *      texto. É a que se imprime se só se imprimir uma, e o tamanho tem de
+ *      dizer isso sem ser preciso lê-lo.
+ *   2. Uma folha nunca flutua sobre o fundo: tem sempre uma moldura de papel
+ *      com um fio de tinta à volta, como uma folha pousada numa mesa.
+ *   3. As peças mais largas do que A4 retrato ocupam a linha toda — encolhidas
+ *      numa coluna estreita ninguém as revê antes de gastar papel.
+ * ----------------------------------------------------------------------- */
+.painel { padding: 0 18px 0; min-width: 0; }
 
 .barra {
+  position: sticky; top: 0; z-index: 20;
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
-  padding-bottom: 16px; margin-bottom: 18px;
+  padding: 14px 0;
+  margin-bottom: 22px;
+  background: var(--fundo);
   border-bottom: 2px solid var(--tinta);
 }
 .btn {
-  padding: 11px 14px;
-  font: 700 13.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .05em;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 13px;
+  font: 700 12.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .05em;
   background: var(--papel); color: var(--tinta);
   border: 2px solid var(--tinta); cursor: pointer;
 }
+.btn:hover { background: var(--claro); }
 .btn-primario { background: var(--tinta); color: var(--papel); }
+.btn-primario:hover { background: #2c2822; }
 .btn[aria-pressed=true] { background: var(--tinta); color: var(--papel); }
+/* Um interruptor lê-se como estado; um botão preto lê-se como acção. Estes
+   dois são estado, por isso trazem o seu próprio indicador. */
+.btn .luz {
+  width: 10px; height: 10px; flex: none;
+  border: 2px solid currentColor; border-radius: 50%;
+}
+.btn[aria-pressed=true] .luz { background: currentColor; }
 .barra .espaco { flex: 1; }
 
-.familia { margin: 0 0 30px; }
+/* --- porque é assim (a explicação, dobrada) --- */
+.porque-assim {
+  margin: 0 0 26px;
+  background: var(--papel);
+  border: 2px solid var(--tinta);
+}
+.porque-assim > summary {
+  padding: 13px 16px; cursor: pointer;
+  font: 700 12.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .1em;
+  list-style: none;
+}
+.porque-assim > summary::-webkit-details-marker { display: none; }
+.porque-assim > summary::after { content: ' +'; font-family: var(--mono); }
+.porque-assim[open] > summary { border-bottom: 2px solid var(--tinta); }
+.porque-assim[open] > summary::after { content: ' –'; }
+.porque-assim .corpo {
+  padding: 18px 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px 26px;
+}
+.porque-assim h4 {
+  margin: 0 0 5px; font: 700 13px/1.3 var(--fonte);
+}
+.porque-assim p { margin: 0; font: 500 13px/1.55 var(--fonte); color: var(--texto-2); }
+
+.familia { margin: 0 0 38px; }
 .familia > h2 {
   display: flex; align-items: center; gap: 14px;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font: 700 12px/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em;
 }
-.familia > h2::after { content: ''; flex: 1; height: 2px; background: var(--tinta); }
-.familia > p { margin: -6px 0 16px; font: 500 13.5px/1.5 var(--fonte); color: var(--texto-2); max-width: 68ch; }
+.familia > h2::after { content: ''; flex: 1; height: 2px; background: var(--tinta); order: 3; }
+.familia > h2 .conta {
+  font: 600 11px/1 var(--mono); letter-spacing: 0;
+  padding: 4px 6px; background: var(--tinta); color: var(--papel);
+}
+.familia > p { margin: 0 0 18px; font: 500 13.5px/1.55 var(--fonte); color: var(--texto-2); max-width: 68ch; }
 
-.pecas { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; align-items: start; }
-/* Uma peça mais larga do que A4 retrato encolhida numa coluna estreita fica
-   ilegível no ecrã e ninguém a revê antes de gastar papel. Ocupa a linha. */
-.peca.larga { grid-column: 1 / -1; }
-.peca.larga .moldura { max-width: 900px; }
+.pecas {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px; align-items: start;
+}
 
 .peca { min-width: 0; }
-.peca > header {
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 7px;
-}
-.peca > header h3 {
-  margin: 0; font: 700 13px/1.2 var(--fonte);
-}
-.peca > header .fmt { font: 500 11px/1 var(--mono); color: var(--texto-2); }
-.peca > header .acao {
-  margin-left: auto; padding: 5px 9px;
-  font: 700 11px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
-  background: var(--tinta); color: var(--papel); border: 0; cursor: pointer;
-}
-.peca > p {
-  margin: 7px 0 0; font: 500 12.5px/1.5 var(--fonte); color: var(--texto-2);
-}
+.peca-corpo { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
-/* O andaime que encolhe a peça para o ecrã sem lhe tocar nas medidas. */
 .moldura {
   background: var(--papel);
-  box-shadow: 0 2px 14px rgba(0,0,0,.16);
-  overflow: hidden;
+  border: 1.5px solid var(--tinta);
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0;
 }
-.folha-wrap { position: relative; overflow: hidden; }
+.folha-wrap { position: relative; overflow: hidden; min-width: 0; }
 .folha {
   transform-origin: top left;
   transform: scale(var(--escala, 1));
   background: var(--papel);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 0 0 1px var(--tenue);
 }
 
+/* Só a primeira folha aparece no ecrã; na impressão aparecem todas. */
+.moldura .folha-wrap:not(:first-child) { display: none; }
+.mais-folhas {
+  font: 600 11px/1.3 var(--mono); color: var(--texto-2);
+  padding: 2px 2px 0; text-align: center;
+}
+
+.peca-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.peca-txt header { display: flex; flex-direction: column; gap: 3px; }
+.peca-txt h3 { margin: 0; font: 700 14px/1.25 var(--fonte); }
+.peca-txt .fmt { font: 500 11px/1.3 var(--mono); color: var(--texto-2); }
+.peca-txt p { margin: 0; font: 500 12.5px/1.5 var(--fonte); color: var(--texto-2); }
+.peca-acoes { margin-top: 2px; }
+.acao {
+  padding: 8px 12px;
+  font: 700 11.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
+  background: var(--tinta); color: var(--papel); border: 2px solid var(--tinta);
+  cursor: pointer;
+}
+.acao:hover { background: var(--papel); color: var(--tinta); }
+
+/* A peça em destaque: folha à esquerda, texto à direita, ambos maiores. */
+.peca.destaque { margin: 0 0 24px; }
+.peca.destaque .peca-txt h3 { font-size: 19px; }
+.peca.destaque .peca-txt p { font-size: 14px; max-width: 52ch; }
+.peca.destaque .acao { padding: 11px 16px; font-size: 12.5px; }
+@media (min-width: 760px) {
+  .peca.destaque .peca-corpo {
+    flex-direction: row; align-items: flex-start; gap: 24px;
+  }
+  .peca.destaque .moldura { flex: none; width: 300px; }
+  .peca.destaque .peca-txt { flex: 1; min-width: 0; padding-top: 4px; }
+}
+/* Peças mais largas do que A4 retrato: a folha por cima, o texto por baixo. */
+.peca.larga { grid-column: 1 / -1; }
+.peca.larga .moldura { max-width: 780px; }
+.peca.destaque.larga .peca-corpo { flex-direction: column; }
+.peca.destaque.larga .moldura { width: auto; max-width: 780px; }
+
 .rodape {
-  padding: 26px 18px 0; margin-top: 20px;
+  padding: 26px 18px 0; margin-top: 24px;
   border-top: 2px solid var(--tinta);
   font: 500 13px/1.6 var(--fonte); color: var(--texto-2); max-width: 74ch;
 }
@@ -299,6 +389,18 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 
 .cabeca { display: flex; align-items: center; gap: 4mm; flex: none; }
 
+/* ---- O carimbo de data -------------------------------------------------- */
+/* Discreto mas nunca ausente. Em mono não muda nada, porque nunca dependeu
+   da cor. */
+.carimbo {
+  font: 600 3.2mm/1.2 var(--mono);
+  color: var(--texto-2);
+  letter-spacing: .02em;
+}
+.carimbo.grande { font-size: 5mm; }
+.carimbo.mini { font-size: 2.6mm; }
+.carimbo.wa { font-size: 20px; line-height: 1.3; text-align: right; }
+
 /* ---- A4 retrato: cartaz de porta ---------------------------------------- */
 .f-cartaz {
   width: 210mm; height: 297mm; padding: 10mm;
@@ -318,6 +420,17 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .f-cartaz .horas span { font: 800 7mm/1 var(--fonte); text-transform: uppercase; }
 
 .f-cartaz .sec-precisa { display: flex; flex-direction: column; gap: 3mm; padding: 5mm 0 4mm; flex: 1.9; min-height: 0; }
+/* Estado "não estamos recebendo".
+   Um centro cheio que não consegue dizer que pare continua a receber. Este
+   bloco substitui a lista inteira em vez de a acompanhar: uma lista de
+   necessidades ao lado de um aviso de pausa é uma contradição na porta. */
+.f-cartaz .sec-pausa {
+  display: flex; align-items: center; gap: 6mm;
+  padding: 6mm 0; flex: 1.9; min-height: 0;
+}
+.f-cartaz .sec-pausa svg { width: 50mm; height: 50mm; flex: none; }
+.f-cartaz .sec-pausa .h { font: 400 14mm/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-cartaz .sec-pausa .porque { margin-top: 2mm; font: 500 5.5mm/1.3 var(--fonte); color: var(--texto-2); }
 .f-cartaz .sec-nao { display: flex; flex-direction: column; gap: 3mm; padding: 4mm 0; border-top: 1.6mm solid var(--tinta); flex: 1; min-height: 0; }
 .f-cartaz .cabeca svg { width: 13mm; height: 13mm; flex: none; }
 .f-cartaz .cabeca .h { font: 400 12mm/0.95 var(--preta); letter-spacing: -0.02em; }
@@ -542,6 +655,36 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .cortes i.cruz-h { height: .4mm; width: 8mm; transform: translate(-50%, -50%); }
 .sem-cortes .cortes { display: none; }
 
+/* ---- A folha de instruções, A4 retrato ---------------------------------- */
+.f-instr { width: 210mm; height: 297mm; padding: 10mm; display: flex; flex-direction: column; gap: 4mm; }
+.f-instr .topo-c { flex: none; display: flex; flex-direction: column; gap: 1.5mm; padding-bottom: 3mm; border-bottom: 1.6mm solid var(--tinta); }
+.f-instr .tipo { font: 700 4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .18em; color: var(--texto-2); }
+.f-instr .nome { font: 400 14mm/0.95 var(--preta); letter-spacing: -0.025em; }
+.f-instr .sub { font: 500 4.4mm/1.3 var(--fonte); color: var(--texto-2); }
+.f-instr .h { font: 400 6mm/1 var(--preta); letter-spacing: -0.01em; margin-bottom: 2.5mm; }
+.f-instr .bloco-i { min-width: 0; }
+/* O bloco dos passos absorve a folga da folha. Sem isto sobra um vão morto
+   antes da caixa de destaque e a folha parece por acabar. */
+.f-instr > .bloco-i:first-of-type { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.f-instr .passos { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 2.5mm; }
+.f-instr .passos li { display: flex; align-items: flex-start; gap: 4mm; }
+.f-instr .passos svg { width: 11mm; height: 11mm; flex: none; }
+.f-instr .passos b { display: block; font: 800 4.6mm/1.2 var(--fonte); text-transform: uppercase; letter-spacing: .02em; }
+.f-instr .passos span { display: block; margin-top: 0.6mm; font: 500 4.2mm/1.3 var(--fonte); color: var(--texto-2); }
+.f-instr .dois-i { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6mm; padding-top: 3mm; border-top: 1.2mm solid var(--tinta); }
+.f-instr .rotina { margin: 0; padding-left: 5mm; display: flex; flex-direction: column; gap: 2mm; }
+.f-instr .rotina li { font: 500 4.2mm/1.3 var(--fonte); color: var(--texto-2); }
+.f-instr .obs { margin: 0 0 2.5mm; font: 500 4.2mm/1.35 var(--fonte); color: var(--texto-2); }
+.f-instr .obs b { color: var(--tinta); }
+.f-instr .destaque {
+  flex: none; display: flex; align-items: flex-start; gap: 5mm;
+  padding: 4mm; border: 1.2mm solid var(--tinta);
+}
+.f-instr .destaque svg { width: 16mm; height: 16mm; flex: none; }
+.f-instr .destaque b { display: block; font: 800 5mm/1.25 var(--fonte); }
+.f-instr .destaque span { display: block; margin-top: 1.5mm; font: 500 4mm/1.35 var(--fonte); color: var(--texto-2); }
+.f-instr .pe { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; padding-top: 3mm; border-top: 1.2mm solid var(--tinta); font: 400 3.4mm/1 var(--mono); color: var(--texto-2); }
+
 /* ---- Peças de ecrã: WhatsApp -------------------------------------------- */
 .f-wa { padding: 64px; display: flex; flex-direction: column; background: var(--papel); }
 .f-wa-post { width: 1080px; height: 1350px; }
@@ -565,6 +708,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .f-wa .pe .end { font: 700 28px/1.2 var(--fonte); }
 .f-wa .pe .tel { font: 800 44px/1 var(--fonte); }
 .f-wa .pe .link { font: 400 20px/1.3 var(--mono); color: var(--texto-2); text-align: right; word-break: break-all; }
+.f-wa .pe-dir { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .f-wa-status .nome { font-size: 120px; line-height: .9; }
 .f-wa-status .horas { font-size: 46px; }
 .f-wa-status .topo-c { border-bottom-width: 12px; gap: 10px; padding-bottom: 26px; }
@@ -601,6 +745,15 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   /* Só a peça escolhida existe. */
   body.imprimindo .peca { display: none; }
   body.imprimindo .peca.a-imprimir { display: block; }
+  .peca-txt, .porque-assim { display: none !important; }
+  .moldura { border: 0; padding: 0; }
+  .moldura .folha-wrap:not(:first-child) { display: block; }
+  .mais-folhas { display: none; }
+  .folha { box-shadow: none; }
+  /* Cada folha começa a sua própria página. Sem isto, um conjunto de quatro
+     peças sai com duas a partilhar uma folha e cortadas ao meio. */
+  .folha-wrap { break-after: page; }
+  .peca.a-imprimir:last-of-type .folha-wrap:last-child { break-after: auto; }
   .peca { break-inside: avoid; }
 }
 
@@ -610,9 +763,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 
 <header class="topo">
   <h1>Kit de material impresso</h1>
-  <p>Preencha uma vez. Saem catorze peças prontas — cartaz de porta, placa de rua,
-     panfletos, etiquetas de caixa, sinal da mesa de triagem, cartões, crachás.
-     Tudo em A4 comum, tudo legível a preto e branco, tudo sem internet.</p>
+  <p>Preencha uma vez. Saem quinze peças prontas, em A4 comum, legíveis a preto
+     e branco, sem internet e sem cadastro.</p>
 </header>
 
 <div class="tela">
@@ -641,6 +793,20 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
       </section>
 
       <section class="bloco">
+        <h2>Estamos recebendo?</h2>
+        <div class="pausa-caixa">
+          <input type="checkbox" id="f-pausado">
+          <label for="f-pausado">Não estamos recebendo agora
+            <small>O cartaz passa a dizer isso em vez da lista. Um centro cheio que
+              não consegue pedir para parar continua a receber.</small></label>
+        </div>
+        <div id="linha-motivo" hidden>
+          <label class="campo" for="f-motivo">Porquê</label>
+          <input id="f-motivo" type="text" placeholder="Estamos cheios. Ligue antes de vir." autocomplete="off">
+        </div>
+      </section>
+
+      <section class="bloco" id="bloco-precisa">
         <h2>Precisamos hoje</h2>
         <p class="dica">Toque para escolher. O mais urgente primeiro — os três primeiros vão
           para a placa de rua, os oito primeiros para os panfletos, os dez primeiros para o cartaz.</p>
@@ -694,11 +860,54 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 
     <main class="painel">
       <div class="barra">
-        <button type="button" class="btn" id="b-mono" aria-pressed="false">Ver a preto e branco</button>
-        <button type="button" class="btn" id="b-cortes" aria-pressed="true">Marcas de corte</button>
+        <button type="button" class="btn btn-primario" id="b-conjunto">Imprimir o conjunto inicial</button>
+        <button type="button" class="btn" id="b-mono" aria-pressed="false"><span class="luz"></span>Preto e branco</button>
+        <button type="button" class="btn" id="b-cortes" aria-pressed="true"><span class="luz"></span>Marcas de corte</button>
         <span class="espaco"></span>
-        <button type="button" class="btn btn-primario" id="b-texto">Copiar texto para o grupo</button>
+        <button type="button" class="btn" id="b-texto">Copiar texto para o grupo</button>
       </div>
+
+      <details class="porque-assim">
+        <summary>Porque é que estas peças são assim</summary>
+        <div class="corpo">
+          <div>
+            <h4>Funcionam com o texto ignorado</h4>
+            <p>Vinte e oito marcas desenhadas, uma por item. Quem não lê português
+              — e o sul do Brasil tem comunidades venezuelanas, haitianas e
+              bolivianas, e chegam socorristas de fora — percebe na mesma.</p>
+          </div>
+          <div>
+            <h4>Funcionam sem toner de cor</h4>
+            <p>O preto e branco é o desenho principal e a cor é uma camada por
+              cima. Proibido é <em>anel mais barra</em>, permitido é <em>anel mais
+              visto</em>: são formas, não cores. Carregue no botão e veja.</p>
+          </div>
+          <div>
+            <h4>Funcionam molhadas</h4>
+            <p>Traços grossos, contraste alto, nada de fios finos nem texto pequeno
+              em negativo — é o que desaparece primeiro em papel húmido ou dentro
+              de um plástico.</p>
+          </div>
+          <div>
+            <h4>O “não traga” pesa tanto como o “precisamos”</h4>
+            <p>Em 2024, roupa usada chegou a 70% de tudo o que foi arrecadado no
+              país. Mas são pessoas a tentar ajudar, por isso a peça agradece
+              antes de recusar.</p>
+          </div>
+          <div>
+            <h4>Nenhuma peça depende do QR</h4>
+            <p>Endereço, horário e telefone estão sempre escritos. Numa enchente a
+              bateria acaba e o telemóvel molha-se; o papel continua.</p>
+          </div>
+          <div>
+            <h4>A data está lá para denunciar</h4>
+            <p>Cada peça que envelhece leva a data da lista. Se o papel ficar duas
+              semanas na porta, é a data que avisa quem passa — e é isso que se
+              quer.</p>
+          </div>
+        </div>
+      </details>
+
       <div id="pecas"></div>
     </main>
 
@@ -1127,7 +1336,7 @@ const QR = (function () {
 
 /* ==== ícones ==== */
 /* ============================================================================
- * CONJUNTO DE ÍCONES — 28 marcas
+ * CONJUNTO DE ÍCONES — 29 marcas
  *
  * Regras do sistema (não invente uma exceção, o conjunto perde a unidade):
  *   · viewBox 64×64, um único <path>, fill-rule="evenodd", currentColor
@@ -1190,7 +1399,7 @@ const ICONES = [
   { id: 'moveis', rotulo: 'Móveis', cat: 'refuse',
     d: 'M12 10 H52 V30 H12 Z M6 32 H58 V44 H6 Z M10 46 H18 V58 H10 Z M46 46 H54 V58 H46 Z' },
 
-  /* ---- 8 marcas utilitárias ---- */
+  /* ---- 9 marcas utilitárias ---- */
   { id: 'seta', rotulo: 'Seta', cat: 'util',
     d: 'M32 4 L58 34 H44 V60 H20 V34 H6 Z' },
   { id: 'relogio', rotulo: 'Relógio', cat: 'util',
@@ -1206,7 +1415,14 @@ const ICONES = [
   { id: 'pessoa', rotulo: 'Pessoa', cat: 'util',
     d: C(32, 16, 10) + ' M11 58 C11 42 20 33 32 33 C44 33 53 42 53 58 Z' },
   { id: 'caixa', rotulo: 'Caixa', cat: 'util',
-    d: 'M6 14 H58 V24 H6 Z M10 26 H54 V58 H10 Z M28 30 H36 V44 H28 Z' }
+    d: 'M6 14 H58 V24 H6 Z M10 26 H54 V58 H10 Z M28 30 H36 V44 H28 Z' },
+  /* Acrescentada depois do conjunto original, seguindo as mesmas seis regras.
+     A folha de instruções precisava de apontar para uma peça impressa, e
+     emprestar a marca de "caixa" para dizer "cartaz" gastava o significado da
+     caixa. Uma linguagem só se mantém se as marcas quiserem dizer uma coisa
+     de cada vez. */
+  { id: 'cartaz', rotulo: 'Folha impressa', cat: 'util',
+    d: 'M12 4 H52 V60 H12 Z M19 13 H45 V27 H19 Z M19 34 H45 V42 H19 Z' }
 ];
 
 const POR_ID = {};
@@ -1384,6 +1600,7 @@ const vazio = () => ({
   naoTraga: RECUSAS.slice(),
   setaTexto: 'DOAÇÕES', setaDir: 'direita',
   fechadoTexto: 'Fechado agora — abrimos amanhã',
+  pausado: false, motivoPausa: 'Estamos cheios. Ligue antes de vir.',
   mono: false, cortes: true,
   atualizado: ''
 });
@@ -1434,6 +1651,30 @@ function agora() {
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
   return `${p(d.getDate())}/${p(d.getMonth() + 1)} às ${p(d.getHours())}h${p(d.getMinutes())}`;
+}
+
+/* ---------------------------------------------------------------------------
+ * O carimbo de data.
+ *
+ * Um cartaz colado numa porta é indistinguível de um cartaz colado há três
+ * semanas. Sem data, um vizinho que passa não tem como saber se a lista ainda
+ * vale, e o centro recebe hoje aquilo de que precisava no dia 4.
+ *
+ * A data também é honesta ao contrário: se o papel ficar duas semanas na
+ * porta, é a data que denuncia. É isso que se quer — "esta lista é do dia 14,
+ * ligue antes de vir" é uma informação útil, e o silêncio não é.
+ *
+ * É a versão barata da página de necessidades. Enquanto ela não existir, é o
+ * que há; quando existir, o QR passa a fazer o mesmo em tempo real.
+ * -------------------------------------------------------------------------*/
+function dataCurta() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** O carimbo, para as peças que envelhecem. `classe` afina o tamanho. */
+function carimbo(classe) {
+  return `<div class="carimbo ${classe || ''}">Lista de ${dataCurta()}</div>`;
 }
 
 const esc = s => String(s == null ? '' : s)
@@ -1488,7 +1729,87 @@ function cortes(xs, ys, cruz) {
  * Cada uma declara o seu tamanho real e devolve o seu HTML. Quem lê isto a
  * seguir: as medidas vêm do sistema desenhado e não são para afinar a olho.
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * A folha de instruções.
+ *
+ * Vem antes de tudo o resto de propósito. Quem monta um centro não está a
+ * olhar para um ecrã: está com fita-cola na mão, no meio de um ginásio, a
+ * decidir onde pregar o quê. Uma página de ajuda no site é lida uma vez e
+ * esquecida; uma folha pregada na parede do fundo continua a responder à
+ * pergunta durante duas semanas, e ao turno seguinte, e ao voluntário que
+ * chegou hoje.
+ *
+ * Por isso a explicação deste kit é ela própria uma peça impressa.
+ * -------------------------------------------------------------------------*/
+const PASSOS = [
+  { ic: 'cartaz', t: 'Cartaz de porta',
+    d: 'Cole na entrada, à altura dos olhos. É a peça que faz mais diferença — se só imprimir uma, imprima esta.' },
+  { ic: 'aberto', t: 'Sinal da mesa de triagem',
+    d: 'Em cima da mesa onde recebe as doações, virado para quem chega. É ele que dá cobertura a quem tem de recusar.' },
+  { ic: 'caixa', t: 'Etiquetas de caixa',
+    d: 'Uma por caixa, colada de fora. A partir daí um voluntário novo separa sozinho, sem perguntar nada a ninguém.' },
+  { ic: 'pessoa', t: 'Crachás e faixas de braço',
+    d: 'Um por pessoa, no início do turno. O nome escreve-se à mão.' },
+  { ic: 'seta', t: 'Setas e panfletos',
+    d: 'Setas onde as pessoas se enganam no caminho. Panfletos para entregar na rua — uma folha dá quatro.' }
+];
+
+const ROTINA = [
+  'Atualize a lista do dia e reimprima o cartaz de porta. A data no rodapé é o que diz ao vizinho se a lista ainda vale.',
+  'Mande o post no grupo do WhatsApp. É por aí que a lista chega mais longe.',
+  'Se o centro encher, marque “não estamos recebendo” e reimprima. Dizer que pare é mais útil do que não dizer nada.'
+];
+
 const PECAS = [
+
+  /* ===== A FOLHA DE INSTRUÇÕES ========================================== */
+  {
+    id: 'instrucoes', fam: 0, titulo: 'Folha de instruções', fmt: 'A4 retrato · para a parede do fundo',
+    w: 210, h: 297, un: 'mm',
+    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipa passa — não é para o doador, é para quem está a trabalhar.',
+    html: () => `<div class="folha f-instr">
+      <div class="topo-c">
+        <div class="tipo">${esc(V.nome())}</div>
+        <div class="nome preta">COMO USAR ESTE KIT</div>
+        <div class="sub">Pregue esta folha onde a equipa passa. Não é para o doador.</div>
+      </div>
+
+      <div class="bloco-i">
+        <div class="h preta">1 · IMPRIMA E PREGUE</div>
+        <ol class="passos">
+          ${PASSOS.map(x => `<li>
+            ${svgIcone(x.ic)}
+            <div><b>${esc(x.t)}</b><span>${esc(x.d)}</span></div>
+          </li>`).join('')}
+        </ol>
+      </div>
+
+      <div class="dois-i">
+        <div class="bloco-i">
+          <div class="h preta">2 · TODOS OS DIAS</div>
+          <ul class="rotina">${ROTINA.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+        </div>
+        <div class="bloco-i">
+          <div class="h preta">3 · SE FALTAR TINTA</div>
+          <p class="obs">Ligue <b>“ver a preto e branco”</b> antes de imprimir. Nada se perde: o proibido continua a ser o anel com a barra, o permitido continua a ser o visto. A cor nunca carrega sozinha o significado.</p>
+          <p class="obs">Antes de imprimir cem folhas, imprima uma e leia-a a dois metros.</p>
+        </div>
+      </div>
+
+      <div class="destaque">
+        ${svgAnel()}
+        <div>
+          <b>A lista do “não traga” evita mais transtorno do que a do “precisamos” resolve.</b>
+          <span>Nas enchentes de 2024 no Rio Grande do Sul, roupa usada chegou a 70% de tudo o que foi arrecadado no país. Mas são pessoas a tentar ajudar — por isso as peças agradecem antes de recusar.</span>
+        </div>
+      </div>
+
+      <div class="pe">
+        <div>CAPEM · ferramenta livre · github.com/philthemoser/capem</div>
+        ${carimbo()}
+      </div>
+    </div>`
+  },
 
   /* ===== FAMÍLIA 1 — ANUNCIAR (para fora) ================================ */
   {
@@ -1501,12 +1822,20 @@ const PECAS = [
         <div class="topo-c">
           <div class="tipo">${esc(V.tipo())}</div>
           <div class="nome preta">${esc(V.nome())}</div>
-          ${V.hor() ? `<div class="horas">${svgIcone('aberto')}<span>${esc(V.hor())}</span></div>` : ''}
+          ${V.hor() ? `<div class="horas">${svgIcone(S.pausado ? 'fechado' : 'aberto')}<span>${esc(V.hor())}</span></div>` : ''}
         </div>
+        ${S.pausado ? `
+        <div class="sec-pausa">
+          ${svgIcone('fechado')}
+          <div>
+            <div class="h preta">NÃO ESTAMOS RECEBENDO AGORA</div>
+            <div class="porque">${esc(S.motivoPausa || '')}</div>
+          </div>
+        </div>` : `
         <div class="sec-precisa">
           <div class="cabeca">${svgIcone('aberto', 'color:var(--permitido)')}<div class="h preta">PRECISAMOS HOJE</div></div>
           <div class="grade-precisa">${V.precisaCartaz().map(i => mi(i)).join('')}</div>
-        </div>
+        </div>`}
         <div class="sec-nao">
           <div class="cabeca">
             ${svgAnel()}
@@ -1522,6 +1851,7 @@ const PECAS = [
             ${V.end() ? `<div class="lin">${svgIcone('pino')}<div class="end">${esc(V.end())}</div></div>` : ''}
             ${V.tel() ? `<div class="lin">${svgIcone('telefone')}<div class="tel">${esc(V.tel())}</div></div>` : ''}
             ${l ? `<div class="link">${esc(l)}</div>` : ''}
+            ${carimbo()}
           </div>
           ${l ? `<div class="qr-bloco">${qr()}<div class="leg">extra, nunca essencial</div></div>` : ''}
         </div>
@@ -1545,7 +1875,10 @@ const PECAS = [
           ${V.end() ? `<div class="end">${esc(V.end())}</div>` : ''}
           ${V.hor() ? `<div class="hor">${esc(V.hor())}</div>` : ''}
         </div>
-        ${V.tel() ? `<div class="tel preta">${esc(V.tel())}</div>` : ''}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2mm">
+          ${V.tel() ? `<div class="tel preta">${esc(V.tel())}</div>` : ''}
+          ${carimbo('grande')}
+        </div>
       </div>
     </div>`
   },
@@ -1587,6 +1920,7 @@ const PECAS = [
           <div class="dados">
             ${V.end() ? `<div class="end">${esc(V.end())}</div>` : ''}
             ${V.tel() ? `<div class="tel">${esc(V.tel())}</div>` : ''}
+            ${carimbo('mini')}
           </div>
           ${qr()}
         </div>
@@ -1628,7 +1962,10 @@ const PECAS = [
     html: () => `<div class="folha f-mesa">
       <div class="topo-c">
         <div class="titulo preta">MESA DE TRIAGEM</div>
-        <div class="centro">${esc(V.nome())}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1mm;min-width:0">
+          <div class="centro">${esc(V.nome())}</div>
+          ${carimbo()}
+        </div>
       </div>
       <div class="duas">
         <div class="lado lado-sim">
@@ -1722,7 +2059,7 @@ const PECAS = [
         <div class="h preta">PRECISAMOS HOJE</div>
         <div class="g4">${V.precisa8().map(i => mi(i)).join('')}</div>
       </div>
-      <div class="leve"><b>Leve o contacto</b><span>corte as tiras antes de afixar</span></div>
+      <div class="leve"><b>Leve o contacto</b>${carimbo()}</div>
       <div class="tiras">${Array.from({ length: 8 }, () =>
         `<div class="tira"><span>${esc(V.tel() || V.nome())}</span></div>`).join('')}</div>
     </div>`
@@ -1792,6 +2129,7 @@ const PECAS = [
 ];
 
 const FAMILIAS = [
+  { n: 0, nome: 'Comece por aqui', desc: 'Uma folha que explica o resto. Imprima-a primeiro e pregue-a na parede do fundo.' },
   { n: 1, nome: 'Família 1 · Anunciar', desc: 'Virado para fora. Se só imprimir uma coisa, imprima o cartaz de porta.' },
   { n: 2, nome: 'Família 2 · Operar', desc: 'Dentro do centro. Ninguém faz estas peças, e separar doações é o gargalo verdadeiro.' },
   { n: 3, nome: 'Família 3 · Levar', desc: 'Sai com a pessoa e volta amanhã sabendo o que trazer.' },
@@ -1823,7 +2161,10 @@ function waHTML(qual) {
         ${V.end() ? `<div class="end">${esc(V.end())}</div>` : ''}
         ${V.tel() ? `<div class="tel">${esc(V.tel())}</div>` : ''}
       </div>
-      ${!st && V.link() ? `<div class="link">${esc(V.link())}</div>` : ''}
+      <div class="pe-dir">
+        ${!st && V.link() ? `<div class="link">${esc(V.link())}</div>` : ''}
+        ${carimbo('wa')}
+      </div>
     </div>
   </div>`;
 }
@@ -2126,6 +2467,11 @@ function montarForm() {
 
   document.getElementById('b-mono').setAttribute('aria-pressed', String(!!S.mono));
   document.getElementById('b-cortes').setAttribute('aria-pressed', String(!!S.cortes));
+
+  const pausa = document.getElementById('f-pausado');
+  pausa.checked = !!S.pausado;
+  document.getElementById('linha-motivo').hidden = !S.pausado;
+  document.getElementById('bloco-precisa').classList.toggle('esmaecido', !!S.pausado);
 }
 
 /* ---------------------------------------------------------------------------
@@ -2133,12 +2479,18 @@ function montarForm() {
  * -------------------------------------------------------------------------*/
 function render() {
   const raiz = document.getElementById('pecas');
-  raiz.innerHTML = FAMILIAS.map(f => `
-    <section class="familia">
-      <h2>${esc(f.nome)}</h2>
+  raiz.innerHTML = FAMILIAS.map(f => {
+    const lista = PECAS.filter(p => p.fam === f.n);
+    /* A primeira peça de cada família manda: é a que se imprime se só se
+       imprimir uma. Dar-lhe o mesmo tamanho das outras seria esconder isso. */
+    const [primeira, ...resto] = lista;
+    return `<section class="familia">
+      <h2>${esc(f.nome)} <span class="conta">${lista.length}</span></h2>
       <p>${esc(f.desc)}</p>
-      <div class="pecas">${PECAS.filter(p => p.fam === f.n).map(cartao).join('')}</div>
-    </section>`).join('');
+      ${primeira ? cartao(primeira, true) : ''}
+      ${resto.length ? `<div class="pecas">${resto.map(p => cartao(p)).join('')}</div>` : ''}
+    </section>`;
+  }).join('');
 
   document.body.classList.toggle('mono', !!S.mono);
   document.body.classList.toggle('sem-cortes', !S.cortes);
@@ -2192,18 +2544,43 @@ function ajustarCartaz() {
   }
 }
 
-function cartao(p) {
+function cartao(p, destaque) {
   const folhas = p.folhas ? p.folhas() : [p.html()];
-  return `<article class="peca${p.w > 210 ? ' larga' : ''}" id="peca-${p.id}" data-peca="${p.id}">
-    <header>
-      <h3>${esc(p.titulo)}</h3>
-      <span class="fmt">${esc(p.fmt)}</span>
-      ${p.ecra
-        ? `<button type="button" class="acao" data-img="${p.id}">Imagem</button>`
-        : `<button type="button" class="acao" data-print="${p.id}">Imprimir</button>`}
-    </header>
-    ${folhas.map(h => `<div class="moldura"><div class="folha-wrap" data-w="${p.w}" data-h="${p.h}" data-un="${p.un}">${h}</div></div>`).join('')}
-    <p>${esc(p.nota)}${folhas.length > 1 ? ` <b>${folhas.length} folhas.</b>` : ''}</p>
+  const classes = ['peca'];
+  if (destaque) classes.push('destaque');
+  /* "Larga" é sobre papel, não sobre píxeis: uma peça de papel mais larga do
+     que A4 retrato fica ilegível numa coluna estreita e ocupa a linha toda.
+     As peças de WhatsApp são altas e estreitas e cabem na grelha normal. */
+  if (p.un === 'mm' && p.w > 210) classes.push('larga');
+
+  const acao = p.ecra
+    ? `<button type="button" class="acao" data-img="${p.id}">Gerar imagem</button>`
+    : `<button type="button" class="acao" data-print="${p.id}">Imprimir</button>`;
+
+  /* Uma peça multi-folha — dez etiquetas de caixa são cinco folhas — mostra
+     só a primeira. Todas ficam no DOM porque todas têm de sair na impressão;
+     o que não pode acontecer é a galeria virar um rolo de dois metros por
+     causa de uma peça que é sempre a mesma folha com outro item. */
+  const chapas = folhas.map(h =>
+    `<div class="folha-wrap" data-w="${p.w}" data-h="${p.h}" data-un="${p.un}">${h}</div>`).join('') +
+    (folhas.length > 1
+      ? `<div class="mais-folhas">${folhas.length - 1 === 1
+          ? '+1 folha igual'
+          : `+${folhas.length - 1} folhas iguais`}, com os outros itens</div>`
+      : '');
+
+  return `<article class="${classes.join(' ')}" id="peca-${p.id}" data-peca="${p.id}">
+    <div class="peca-corpo">
+      <div class="moldura">${chapas}</div>
+      <div class="peca-txt">
+        <header>
+          <h3>${esc(p.titulo)}</h3>
+          <span class="fmt">${esc(p.fmt)}${folhas.length > 1 ? ` · ${folhas.length} folhas` : ''}</span>
+        </header>
+        <p>${esc(p.nota)}</p>
+        <div class="peca-acoes">${acao}</div>
+      </div>
+    </div>
   </article>`;
 }
 
@@ -2231,22 +2608,37 @@ function escalar() {
  * páginas nomeadas não é de confiança fora do Chrome — e este ficheiro tem
  * de sair certo do telemóvel de alguém sem saber qual é.
  * -------------------------------------------------------------------------*/
-function imprimir(id) {
-  const p = PECAS.find(x => x.id === id);
-  if (!p) return;
-  if (!validar()) return;
+function imprimir(id) { imprimirVarias([id]); }
+
+/* O conjunto inicial: o que um centro tem de ter na parede na primeira hora.
+   Todas A4 retrato, por isso saem num único trabalho de impressão — o sinal
+   da mesa é paisagem e por isso tem o seu próprio botão. */
+const CONJUNTO_INICIAL = ['instrucoes', 'cartaz', 'etiqueta', 'panfleto'];
+
+function imprimirVarias(ids) {
+  const pecas = ids.map(id => PECAS.find(x => x.id === id)).filter(Boolean);
+  if (!pecas.length || !validar()) return;
+
+  /* Um trabalho de impressão tem um tamanho de página só. Misturar retrato e
+     paisagem aqui daria uma peça cortada, e uma peça cortada é papel gasto. */
+  const { w, h } = pecas[0];
+  const misturado = pecas.some(p => p.w !== w || p.h !== h);
+  if (misturado) {
+    alert('Estas peças têm tamanhos de papel diferentes. Imprima-as uma a uma.');
+    return;
+  }
 
   let st = document.getElementById('pagina-css');
   if (!st) { st = document.createElement('style'); st.id = 'pagina-css'; document.head.appendChild(st); }
-  st.textContent = `@page { size: ${p.w}mm ${p.h}mm; margin: 0 }`;
+  st.textContent = `@page { size: ${w}mm ${h}mm; margin: 0 }`;
 
   document.querySelectorAll('.peca').forEach(el => el.classList.remove('a-imprimir'));
-  document.getElementById('peca-' + id).classList.add('a-imprimir');
+  pecas.forEach(p => document.getElementById('peca-' + p.id).classList.add('a-imprimir'));
   document.body.classList.add('imprimindo');
 
   const limpar = () => {
     document.body.classList.remove('imprimindo');
-    document.getElementById('peca-' + id).classList.remove('a-imprimir');
+    document.querySelectorAll('.a-imprimir').forEach(el => el.classList.remove('a-imprimir'));
     window.removeEventListener('afterprint', limpar);
   };
   window.addEventListener('afterprint', limpar);
@@ -2384,7 +2776,8 @@ function iniciar() {
 
   [['f-nome', 'nome'], ['f-tipo', 'tipo'], ['f-endereco', 'endereco'],
    ['f-horario', 'horario'], ['f-contato', 'contato'], ['f-link', 'link'],
-   ['f-seta-texto', 'setaTexto'], ['f-seta-dir', 'setaDir'], ['f-fechado', 'fechadoTexto']
+   ['f-seta-texto', 'setaTexto'], ['f-seta-dir', 'setaDir'], ['f-fechado', 'fechadoTexto'],
+   ['f-motivo', 'motivoPausa']
   ].forEach(([id, k]) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { S[k] = el.value; salvar(); });
@@ -2404,6 +2797,10 @@ function iniciar() {
   document.getElementById('b-add-nao').addEventListener('click', () => addLivre('f-nao-livre', 'naoTraga'));
   document.getElementById('b-limpar').addEventListener('click', limparTudo);
   document.getElementById('b-texto').addEventListener('click', e => copiarTexto(e.currentTarget));
+  document.getElementById('f-pausado').addEventListener('change', e => {
+    S.pausado = e.currentTarget.checked; salvar(); montarForm();
+  });
+  document.getElementById('b-conjunto').addEventListener('click', () => imprimirVarias(CONJUNTO_INICIAL));
   document.getElementById('b-mono').addEventListener('click', () => { S.mono = !S.mono; salvar(); montarForm(); });
   document.getElementById('b-cortes').addEventListener('click', () => { S.cortes = !S.cortes; salvar(); montarForm(); });
 

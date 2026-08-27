@@ -1,5 +1,5 @@
 /* ============================================================================
- * CONJUNTO DE ÍCONES — 28 marcas
+ * CONJUNTO DE ÍCONES — 29 marcas
  *
  * Regras do sistema (não invente uma exceção, o conjunto perde a unidade):
  *   · viewBox 64×64, um único <path>, fill-rule="evenodd", currentColor
@@ -62,7 +62,7 @@ const ICONES = [
   { id: 'moveis', rotulo: 'Móveis', cat: 'refuse',
     d: 'M12 10 H52 V30 H12 Z M6 32 H58 V44 H6 Z M10 46 H18 V58 H10 Z M46 46 H54 V58 H46 Z' },
 
-  /* ---- 8 marcas utilitárias ---- */
+  /* ---- 9 marcas utilitárias ---- */
   { id: 'seta', rotulo: 'Seta', cat: 'util',
     d: 'M32 4 L58 34 H44 V60 H20 V34 H6 Z' },
   { id: 'relogio', rotulo: 'Relógio', cat: 'util',
@@ -78,7 +78,14 @@ const ICONES = [
   { id: 'pessoa', rotulo: 'Pessoa', cat: 'util',
     d: C(32, 16, 10) + ' M11 58 C11 42 20 33 32 33 C44 33 53 42 53 58 Z' },
   { id: 'caixa', rotulo: 'Caixa', cat: 'util',
-    d: 'M6 14 H58 V24 H6 Z M10 26 H54 V58 H10 Z M28 30 H36 V44 H28 Z' }
+    d: 'M6 14 H58 V24 H6 Z M10 26 H54 V58 H10 Z M28 30 H36 V44 H28 Z' },
+  /* Acrescentada depois do conjunto original, seguindo as mesmas seis regras.
+     A folha de instruções precisava de apontar para uma peça impressa, e
+     emprestar a marca de "caixa" para dizer "cartaz" gastava o significado da
+     caixa. Uma linguagem só se mantém se as marcas quiserem dizer uma coisa
+     de cada vez. */
+  { id: 'cartaz', rotulo: 'Folha impressa', cat: 'util',
+    d: 'M12 4 H52 V60 H12 Z M19 13 H45 V27 H19 Z M19 34 H45 V42 H19 Z' }
 ];
 
 const POR_ID = {};

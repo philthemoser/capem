@@ -57,12 +57,12 @@ const CENTRO = {
             refuse: ICONES.filter(i => i.cat === 'refuse').length,
             util: ICONES.filter(i => i.cat === 'util').length }
   }));
-  ok('28 marcas', ic.n === 28, `são ${ic.n}`);
+  ok('29 marcas', ic.n === 29, `são ${ic.n}`);
   ok('ids únicos', ic.unicos === ic.n);
   ok('nenhum caminho vazio', ic.vazios.length === 0, ic.vazios.join(','));
   ok('todos os caminhos são SVG válido', ic.maus.length === 0, ic.maus.join(','));
-  ok('16 necessidades · 4 recusas · 8 utilitárias',
-    ic.cats.need === 16 && ic.cats.refuse === 4 && ic.cats.util === 8, JSON.stringify(ic.cats));
+  ok('16 necessidades · 4 recusas · 9 utilitárias',
+    ic.cats.need === 16 && ic.cats.refuse === 4 && ic.cats.util === 9, JSON.stringify(ic.cats));
 
   const semMarca = await p.evaluate(() =>
     GRUPOS.flatMap(g => g.ids).filter(id => !POR_ID[id]));
@@ -74,7 +74,8 @@ const CENTRO = {
   await p.waitForTimeout(400);
 
   const pecas = await p.$$eval('.peca', els => els.map(e => e.dataset.peca));
-  ok('14 peças', pecas.length === 14, pecas.join(' '));
+  ok('15 peças', pecas.length === 15, pecas.join(' '));
+  ok('a folha de instruções vem primeiro', pecas[0] === 'instrucoes', pecas[0]);
 
   console.log('\nmedidas reais');
   const med = await p.evaluate(MM => PECAS.map(pc => {
@@ -89,6 +90,12 @@ const CENTRO = {
   console.log('\ntransbordo (o teste que salva papel)');
   const trans = await p.evaluate(() => {
     const maus = [];
+    /* A galeria esconde as folhas 2..n de uma peça multi-folha. Elas são
+       impressas na mesma, e numa etiqueta cada folha traz itens diferentes
+       com rótulos de comprimentos diferentes — por isso o teste revela-as
+       todas antes de medir, senão passa a verificar só a primeira. */
+    const escondidas = [...document.querySelectorAll('.moldura .folha-wrap:not(:first-child)')];
+    escondidas.forEach(w => { w.style.display = 'block'; });
     document.querySelectorAll('.folha').forEach(f => {
       const id = f.closest('.peca').dataset.peca;
       /* 2 px de folga: sub-píxel de arredondamento não é transbordo. */
@@ -96,9 +103,18 @@ const CENTRO = {
         maus.push(`${id} ${f.scrollWidth}×${f.scrollHeight} > ${f.clientWidth}×${f.clientHeight}`);
       }
     });
+    escondidas.forEach(w => { w.style.display = ''; });
     return maus;
   });
   ok('nenhuma peça transborda a folha', trans.length === 0, trans.join(' · '));
+
+  const multi = await p.evaluate(() => ({
+    visiveis: document.querySelectorAll('#peca-etiqueta .folha-wrap:not([style*="none"])').length,
+    total: document.querySelectorAll('#peca-etiqueta .folha-wrap').length,
+    aviso: !!document.querySelector('#peca-etiqueta .mais-folhas')
+  }));
+  ok('peça multi-folha mostra uma folha e diz quantas há',
+    multi.total > 1 && multi.aviso, JSON.stringify(multi));
 
   console.log('\npiso do ícone');
   const NOMES = [
@@ -200,6 +216,69 @@ const CENTRO = {
   }));
   ok('item sem marca avisa', livre.aviso && livre.n === '1');
   ok('item sem marca continua a sair no cartaz', livre.noCartaz);
+
+  console.log('\ncarimbo de data');
+  const hoje = await p.evaluate(() => dataCurta());
+  const carimbos = await p.evaluate(() => {
+    /* As peças que envelhecem numa parede têm de dizer de quando é a lista.
+       As que não envelhecem — etiqueta, crachá, guião — não devem ter data,
+       ou passam a parecer velhas sem o ser. */
+    const querem = ['cartaz', 'placa', 'panfleto', 'tiras', 'mesa', 'wa-post', 'wa-status', 'instrucoes'];
+    const naoQuerem = ['etiqueta', 'cracha', 'faixa', 'guiao', 'seta', 'horario', 'cartao'];
+    return {
+      faltam: querem.filter(id => !document.querySelector(`#peca-${id} .carimbo`)),
+      aMais: naoQuerem.filter(id => document.querySelector(`#peca-${id} .carimbo`))
+    };
+  });
+  ok('as peças que envelhecem levam a data', carimbos.faltam.length === 0, carimbos.faltam.join(','));
+  ok('as que não envelhecem não levam data', carimbos.aMais.length === 0, carimbos.aMais.join(','));
+  const txtCarimbo = await p.$eval('#peca-cartaz .carimbo', e => e.textContent);
+  ok('a data é a de hoje', txtCarimbo.includes(hoje), txtCarimbo);
+
+  console.log('\nnão estamos recebendo');
+  await p.click('#f-pausado');
+  await p.waitForTimeout(350);
+  const pausa = await p.evaluate(() => ({
+    banda: !!document.querySelector('#peca-cartaz .sec-pausa'),
+    semLista: !document.querySelector('#peca-cartaz .grade-precisa'),
+    /* O "não traga" continua: é a mensagem que mais interessa quando o
+       centro está cheio. */
+    comNao: !!document.querySelector('#peca-cartaz .sec-nao'),
+    motivo: document.getElementById('linha-motivo').hidden === false,
+    /* O visto verde no cabeçalho ao lado de "não estamos recebendo" seria uma
+       contradição na mesma folha. Quando pausa, a marca do horário troca. */
+    marcaCerta: document.querySelector('#peca-cartaz .horas svg path').getAttribute('d') === POR_ID.fechado.d
+  }));
+  ok('o cartaz passa a dizer que não está recebendo', pausa.banda && pausa.semLista);
+  ok('mas mantém o "não traga"', pausa.comNao);
+  ok('e pede o motivo', pausa.motivo);
+  ok('e o cabeçalho deixa de mostrar o visto', pausa.marcaCerta);
+  await p.click('#f-pausado');
+  await p.waitForTimeout(300);
+  const voltouLista = await p.evaluate(() => !!document.querySelector('#peca-cartaz .grade-precisa'));
+  ok('desligar a pausa devolve a lista', voltouLista);
+
+  console.log('\nconjunto inicial');
+  const conj = await p.evaluate(() => {
+    window.print = () => {};
+    document.getElementById('b-conjunto').click();
+    const n = document.querySelectorAll('.peca.a-imprimir').length;
+    const css = document.getElementById('pagina-css').textContent;
+    document.body.classList.remove('imprimindo');
+    return { n, css, ids: CONJUNTO_INICIAL };
+  });
+  ok('o conjunto inicial imprime 4 peças de uma vez', conj.n === 4, String(conj.n));
+  ok('todas em A4 retrato', /size: 210mm 297mm/.test(conj.css), conj.css);
+  /* Um trabalho de impressão só tem um tamanho de página: se alguém juntar
+     ao conjunto uma peça paisagem, sai cortada. */
+  const mistura = await p.evaluate(ids => {
+    const p0 = PECAS.find(x => x.id === ids[0]);
+    return ids.every(id => {
+      const pc = PECAS.find(x => x.id === id);
+      return pc.w === p0.w && pc.h === p0.h;
+    });
+  }, conj.ids);
+  ok('o conjunto não mistura tamanhos de papel', mistura);
 
   console.log('\nQR');
   const qrs = await p.evaluate(() => ({

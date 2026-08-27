@@ -87,7 +87,7 @@ What that does **not** solve — an official asking for the list, what happens t
 ```
 index.html              the prototype, self-contained and committed — open it directly
 field/                  FIELD TOOLS — not a demo, meant to be used
-  kit.html              printed media kit: 14 pieces from one form
+  kit.html              printed media kit: 15 pieces from one form
                         (Portuguese, offline, no server, fonts embedded) — ready
   design-system.md      the design reference: tokens, icon rules, imposition
 build.js                concatenates src/ into index.html (node build.js, no dependencies)
@@ -126,7 +126,7 @@ node tools/verify-qr.js tools/qr-tests.json > /tmp/o.json && python3 tools/verif
 node tools/kit-test.js     # the printed kit: true mm sizes, overflow, mono, imposition
 ```
 
-Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 61/61 kit assertions.
+Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 75/75 kit assertions.
 
 ## How to tell us we are wrong
 

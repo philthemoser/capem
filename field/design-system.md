@@ -5,8 +5,8 @@ piece or an icon does not have to reverse-engineer the decisions from CSS.
 
 The system was designed against [`design-brief.md`](design-brief.md) and is
 implemented in `src/icones.js`, `src/kit.css` and `src/kit.js`. Where the
-implementation departs from the design, it says so below and in a comment at the
-site of the change. There are two such places.
+implementation departs from the design, or adds to it, it says so below and in a
+comment at the site of the change.
 
 ---
 
@@ -72,7 +72,7 @@ photocopy and disappears entirely on damp paper.
 | label | 4.6 mm | Item labels under marks |
 | body | 4.5 mm | Minimum printing size |
 
-## The 28 marks
+## The 29 marks
 
 One 64 × 64 viewBox, one `<path>`, `fill-rule="evenodd"`, `currentColor`. Solid
 silhouettes — no strokes, no hairlines. Minimum limb thickness 6 units (1.4 mm
@@ -81,7 +81,7 @@ Subpaths never overlap except where a hole is intended: `evenodd` XORs overlaps,
 and that rule is what lets another twenty items be added later without the set
 drifting.
 
-16 needs · 4 refusals · 8 utility marks. `tools/kit-test.js` asserts the counts,
+16 needs · 4 refusals · 9 utility marks. `tools/kit-test.js` asserts the counts,
 that every id is unique, and that every path is valid SVG — an invalid `d` does
 not throw in SVG, it silently draws nothing, so the test parses each one through
 `Path2D`.
@@ -204,6 +204,28 @@ The general rules:
 | Armband 210 × 99, 3-up | 1 × 3 | — | y = 99, 198 |
 
 ---
+
+## Added after the design
+
+**A 29th mark: `cartaz`, a printed sheet.** The instruction sheet needed to point
+at a printed piece, and borrowing the `caixa` (box) mark to mean "poster" would
+have spent the box's meaning. A visual language holds only if each mark means one
+thing at a time. It follows the same six rules as the original 28.
+
+**A date stamp on the pieces that go stale.** A poster on a door is
+indistinguishable from a poster taped up three weeks ago. `carimbo()` prints
+"Lista de DD/MM" on the door poster, street sign, handbill, tear-off poster,
+intake sign, both WhatsApp pieces and the instruction sheet — and deliberately
+*not* on the bin labels, badges, armbands, script card, arrow, hours card or
+visit card, which do not age. The date is honest in both directions: if the paper
+stays up for two weeks, the date is what tells a passer-by to call first.
+
+**A paused state.** A centre that fills up and cannot say stop keeps receiving.
+Ticking "não estamos recebendo" replaces the needs list on the door poster with a
+stop mark and a reason, keeps the "não traga" half (which matters more in that
+hour, not less), and swaps the green check beside the opening hours for the
+closed mark — a check next to "we are not accepting" would contradict itself on
+one sheet.
 
 ## Where the implementation departs from the design
 

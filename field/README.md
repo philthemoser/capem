@@ -10,13 +10,24 @@ Dá para abrir de um pen drive, mandar por e-mail ou salvar no celular.
 
 ## 1. Kit de material impresso — `kit.html` ✅ pronto
 
-Preencha os dados do centro **uma vez** e saem **catorze peças** prontas.
+Preencha os dados do centro **uma vez** e saem **quinze peças** prontas.
 
 **Como usar:** abra o arquivo no celular ou no computador, preencha o nome, o
 endereço, o horário, o telefone e o que precisa hoje. Cada peça tem um botão
 para imprimir; as duas de WhatsApp têm um botão para gerar a imagem.
 
-![cartaz, panfletos, etiquetas de caixa e crachás gerados a partir dos mesmos dados](exemplo.png)
+![folha de instruções, cartaz de porta, panfletos, etiquetas de caixa e crachás gerados a partir dos mesmos dados](exemplo.png)
+
+**Comece por aqui**
+
+| Peça | Formato |
+|---|---|
+| Folha de instruções | A4 retrato |
+
+Onde pregar o quê, e o que fazer todos os dias. É a explicação do kit, e é
+impressa de propósito: quem monta um centro está com fita-cola na mão no meio
+de um ginásio, não a ler um site. Uma folha pregada na parede do fundo
+continua a responder à pergunta ao turno seguinte.
 
 **Família 1 — anunciar (para fora)**
 
@@ -54,7 +65,7 @@ para imprimir; as duas de WhatsApp têm um botão para gerar a imagem.
 
 ### O que faz isto ser diferente de um cartaz feito à mão
 
-**Funciona com o texto ignorado.** 28 marcas desenhadas, uma por item. Quem não
+**Funciona com o texto ignorado.** 29 marcas desenhadas, uma por item. Quem não
 lê português — e o sul do Brasil tem comunidades venezuelanas, haitianas e
 bolivianas, e chegam socorristas de fora — percebe o cartaz na mesma.
 
@@ -81,6 +92,17 @@ pessoas a tentar ajudar, por isso a peça não pode soar hostil — daí a linha
 **Nenhuma peça depende do QR.** Endereço, horário e telefone estão sempre
 escritos. O QR é um extra, nunca o essencial.
 
+**Toda peça que envelhece leva a data.** Um cartaz colado numa porta é
+indistinguível de um cartaz colado há três semanas. Com a data, quem passa sabe
+se a lista ainda vale — e se o papel ficar duas semanas na porta, é a data que
+denuncia. É isso que se quer. É a versão barata da página de necessidades,
+enquanto ela não existe.
+
+**Dá para dizer que pare.** Um centro cheio que não consegue pedir para parar
+continua a receber. Marque "não estamos recebendo" e o cartaz passa a dizer
+isso em vez da lista — mantendo o "não traga", que é a mensagem que mais
+interessa nessa hora.
+
 **Nada sai do aparelho.** O que escrever fica guardado só no seu celular.
 
 > **Antes de imprimir cem folhas, imprima uma.** Ligue "ver a preto e branco",
@@ -105,7 +127,7 @@ carrega a própria lista, então funciona mesmo sem sinal.
 
 ```bash
 node build.js               # monta kit.html a partir de src/
-node ../tools/kit-test.js   # 61 verificações (precisa de Playwright)
+node ../tools/kit-test.js   # 75 verificações (precisa de Playwright)
 ```
 
 Sem dependências para usar. O `kit.html` gerado fica no repositório — quem só
@@ -113,15 +135,16 @@ quer usar não precisa instalar nada. As fontes vêm embutidas no ficheiro, para
 o sistema tipográfico não desaparecer justamente quando não há rede.
 
 O sistema de desenho — fichas, regras das marcas, medidas de cada peça, esquemas
-de imposição, e os dois sítios onde o código se afasta do desenho e porquê —
+de imposição, o que foi acrescentado depois, e onde o código se afasta do
+desenho e porquê —
 está em **[design-system.md](design-system.md)**. O pedido que o originou está em
 [design-brief.md](design-brief.md).
 
 ```
-src/icones.js    as 28 marcas, em SVG
+src/icones.js    as 29 marcas, em SVG
 src/catalogo.js  que itens existem e que marca cada um usa
 src/kit.css      fichas de design e a medida de cada peça, em milímetros reais
-src/kit.js       estado, formulário, as catorze peças, canvas para WhatsApp
+src/kit.js       estado, formulário, as quinze peças, canvas para WhatsApp
 src/fonts.css    Archivo e Archivo Black em base64 (SIL OFL)
 ```
 
@@ -130,10 +153,11 @@ src/fonts.css    Archivo e Archivo Black em base64 (SIL OFL)
 **In English:** field tools for Brazilian relief centres, in Portuguese because
 that is who uses them. Each is a single self-contained HTML file with no server,
 no build step required to use, and no data leaving the device. The printed media
-kit generates fourteen pieces — posters, handbills, bin labels, an intake-table
-sign, pocket cards, badges — from one set of details, all A4, all legible in pure
-black and white, all with a designed icon set so the pieces work with the text
-ignored entirely. The needs page and bag-code tool are next. See
+kit generates fifteen pieces — a printed instruction sheet, posters, handbills, bin
+labels, an intake-table sign, pocket cards, badges — from one set of details,
+all A4, all legible in pure black and white, all with a designed icon set so the
+pieces work with the text ignored entirely. Pieces that go stale carry the date
+of the list, and a centre that fills up can say so on the poster. The needs page and bag-code tool are next. See
 [design-system.md](design-system.md) for the design reference and
 [../docs/production.md](../docs/production.md) for how this fits the wider plan.
 

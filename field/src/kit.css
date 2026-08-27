@@ -1,0 +1,588 @@
+/* ============================================================================
+ * KIT DE MATERIAL IMPRESSO — CAPEM
+ *
+ * Duas metades que quase não se falam:
+ *
+ *   1. A APLICAÇÃO (formulário, lista de peças). Vive no ecrã, adapta-se,
+ *      usa px e rem. Desaparece por completo na impressão.
+ *
+ *   2. AS PEÇAS. Vivem em milímetros reais e nada mais. Uma peça tem o
+ *      tamanho que vai ter no papel — 210×297 mm é 210×297 mm — e o ecrã
+ *      limita-se a encolhê-la com transform:scale() para caber. Nenhuma
+ *      medida de peça é relativa ao ecrã, porque no papel não há ecrã.
+ *
+ * Se alguma vez precisar de mudar isto: a regra é que a peça não sabe que
+ * existe um browser. É por isso que o que sai da impressora é o que se viu.
+ * ==========================================================================*/
+
+/* ---------------------------------------------------------------------------
+ * Fichas de design. Vieram do sistema desenhado, não foram escolhidas aqui.
+ * -------------------------------------------------------------------------*/
+:root {
+  --tinta:      #16130F;   /* tudo o que é preto imprime a isto */
+  --proibido:   #C8102E;   /* anel ISO 7010 */
+  --permitido:  #007A33;   /* marca de visto */
+  --atencao:    #F2C500;
+  --fio:        #B8B4AE;
+  --papel:      #FFFFFF;
+  --texto-2:    #3B3831;
+  --texto-3:    #6E6A63;
+  --tenue:      #E4E2DD;
+  --fundo:      #DEDCD7;
+  --claro:      #F4F3F0;
+
+  --fonte: Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --preta: 'Archivo Black', Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+/* Mono é o desenho canónico, não a versão degradada: a cor é uma camada por
+   cima. Ligar isto tem de mudar exactamente duas coisas e mais nada. */
+.mono {
+  --proibido: var(--tinta);
+  --permitido: var(--tinta);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--fundo);
+  color: var(--tinta);
+  font-family: var(--fonte);
+  -webkit-text-size-adjust: 100%;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ============================================================================
+ * 1 · A APLICAÇÃO
+ * ==========================================================================*/
+
+.topo {
+  background: var(--tinta);
+  color: var(--papel);
+  padding: 20px 20px 22px;
+}
+.topo h1 {
+  margin: 0;
+  font: 400 clamp(26px, 6vw, 38px)/1 var(--preta);
+  letter-spacing: -0.02em;
+}
+.topo p {
+  margin: 8px 0 0;
+  font: 500 15px/1.45 var(--fonte);
+  color: #C9C6C0;
+  max-width: 62ch;
+}
+
+.tela { max-width: 1500px; margin: 0 auto; padding: 0 0 60px; }
+
+.colunas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+@media (min-width: 1080px) {
+  .colunas { grid-template-columns: 430px minmax(0, 1fr); align-items: start; }
+  form.painel-form {
+    position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
+    border-right: 2px solid var(--tinta);
+  }
+}
+
+form.painel-form { background: var(--claro); padding: 20px 18px 40px; }
+
+.bloco { margin: 0 0 26px; }
+.bloco h2 {
+  margin: 0 0 4px;
+  font: 700 13px/1 var(--fonte);
+  text-transform: uppercase; letter-spacing: .14em;
+  color: var(--texto-2);
+}
+.dica { margin: 0 0 12px; font: 500 13.5px/1.5 var(--fonte); color: var(--texto-2); max-width: 52ch; }
+.ajuda { margin: 8px 0 0; font: 400 12.5px/1.5 var(--fonte); color: var(--texto-3); max-width: 52ch; }
+
+label.campo {
+  display: block; margin: 12px 0 5px;
+  font: 700 11.5px/1 var(--fonte);
+  text-transform: uppercase; letter-spacing: .1em; color: var(--texto-2);
+}
+input[type=text], select, textarea {
+  width: 100%; padding: 11px 12px;
+  font: 500 16px/1.3 var(--fonte);
+  color: var(--tinta); background: var(--papel);
+  border: 2px solid var(--tinta); border-radius: 0;
+}
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 3px solid var(--proibido); outline-offset: 2px;
+}
+.dois { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+
+.grupo { border: 0; padding: 0; margin: 0 0 14px; min-width: 0; }
+.grupo legend {
+  padding: 0; margin: 0 0 7px;
+  font: 700 11px/1 var(--fonte);
+  text-transform: uppercase; letter-spacing: .12em; color: var(--texto-3);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 10px 7px 7px;
+  font: 600 13.5px/1 var(--fonte);
+  background: var(--papel); color: var(--tinta);
+  border: 2px solid var(--tinta); cursor: pointer;
+}
+.chip svg { width: 20px; height: 20px; flex: none; }
+.chip.on { background: var(--tinta); color: var(--papel); }
+
+.escolhidos { list-style: none; margin: 12px 0 0; padding: 0; counter-reset: n; }
+.escolhidos li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; margin-bottom: 5px;
+  background: var(--papel); border: 2px solid var(--tinta);
+  font: 600 14px/1.25 var(--fonte);
+}
+.escolhidos li svg { width: 22px; height: 22px; flex: none; }
+.escolhidos li > span:first-of-type { flex: 1; min-width: 0; }
+.escolhidos li.vazio {
+  border-style: dashed; border-color: var(--fio);
+  color: var(--texto-3); font-weight: 500; justify-content: center;
+}
+.escolhidos li.generico { border-color: var(--proibido); }
+.li-acoes { display: flex; gap: 4px; flex: none; }
+.li-acoes button {
+  width: 30px; height: 30px; padding: 0;
+  font: 600 14px/1 var(--fonte);
+  background: var(--claro); color: var(--tinta);
+  border: 1.5px solid var(--tinta); cursor: pointer;
+}
+.li-acoes button[disabled] { opacity: .3; cursor: default; }
+.li-acoes .rm { border-color: var(--proibido); color: var(--proibido); }
+
+.linha-add { display: flex; gap: 6px; margin-top: 10px; }
+.linha-add input { flex: 1; min-width: 0; }
+.linha-add button {
+  flex: none; padding: 0 14px;
+  font: 700 13px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
+  background: var(--tinta); color: var(--papel); border: 2px solid var(--tinta); cursor: pointer;
+}
+.aviso {
+  margin-top: 10px; padding: 10px 12px;
+  border-left: 5px solid var(--proibido); background: var(--papel);
+  font: 500 13px/1.5 var(--fonte);
+}
+.btn-txt {
+  padding: 0; margin-top: 10px; background: none; border: 0;
+  font: 600 13px/1 var(--fonte); color: var(--proibido);
+  text-decoration: underline; cursor: pointer;
+}
+
+/* --- painel das peças --- */
+.painel { padding: 20px 18px 0; min-width: 0; }
+
+.barra {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding-bottom: 16px; margin-bottom: 18px;
+  border-bottom: 2px solid var(--tinta);
+}
+.btn {
+  padding: 11px 14px;
+  font: 700 13.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .05em;
+  background: var(--papel); color: var(--tinta);
+  border: 2px solid var(--tinta); cursor: pointer;
+}
+.btn-primario { background: var(--tinta); color: var(--papel); }
+.btn[aria-pressed=true] { background: var(--tinta); color: var(--papel); }
+.barra .espaco { flex: 1; }
+
+.familia { margin: 0 0 30px; }
+.familia > h2 {
+  display: flex; align-items: center; gap: 14px;
+  margin: 0 0 14px;
+  font: 700 12px/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em;
+}
+.familia > h2::after { content: ''; flex: 1; height: 2px; background: var(--tinta); }
+.familia > p { margin: -6px 0 16px; font: 500 13.5px/1.5 var(--fonte); color: var(--texto-2); max-width: 68ch; }
+
+.pecas { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; align-items: start; }
+/* Uma peça mais larga do que A4 retrato encolhida numa coluna estreita fica
+   ilegível no ecrã e ninguém a revê antes de gastar papel. Ocupa a linha. */
+.peca.larga { grid-column: 1 / -1; }
+.peca.larga .moldura { max-width: 900px; }
+
+.peca { min-width: 0; }
+.peca > header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 7px;
+}
+.peca > header h3 {
+  margin: 0; font: 700 13px/1.2 var(--fonte);
+}
+.peca > header .fmt { font: 500 11px/1 var(--mono); color: var(--texto-2); }
+.peca > header .acao {
+  margin-left: auto; padding: 5px 9px;
+  font: 700 11px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
+  background: var(--tinta); color: var(--papel); border: 0; cursor: pointer;
+}
+.peca > p {
+  margin: 7px 0 0; font: 500 12.5px/1.5 var(--fonte); color: var(--texto-2);
+}
+
+/* O andaime que encolhe a peça para o ecrã sem lhe tocar nas medidas. */
+.moldura {
+  background: var(--papel);
+  box-shadow: 0 2px 14px rgba(0,0,0,.16);
+  overflow: hidden;
+}
+.folha-wrap { position: relative; overflow: hidden; }
+.folha {
+  transform-origin: top left;
+  transform: scale(var(--escala, 1));
+  background: var(--papel);
+  position: relative;
+  overflow: hidden;
+}
+
+.rodape {
+  padding: 26px 18px 0; margin-top: 20px;
+  border-top: 2px solid var(--tinta);
+  font: 500 13px/1.6 var(--fonte); color: var(--texto-2); max-width: 74ch;
+}
+/* O vermelho é o token da proibição, não um estilo de ligação: a 13 px
+   sobre o fundo da aplicação fica em 4,29:1 e falha o AA. */
+.rodape a { color: var(--tinta); }
+
+/* ============================================================================
+ * 2 · AS PEÇAS — tudo em milímetros reais
+ *
+ * Escala tipográfica: 1rem = 4.5 mm em A4 · razão 1.25 · A3 usa os mesmos
+ * valores × 1.414. Nada abaixo de 1 rem imprime; nada abaixo de peso 500
+ * imprime abaixo de 1.3 rem. Um fio nunca desce de 1.2 mm — abaixo disso
+ * desaparece numa fotocópia e some de vez em papel húmido.
+ * ==========================================================================*/
+
+.folha { color: var(--tinta); background: var(--papel); }
+.folha svg { display: block; }
+.folha .preta { font-family: var(--preta); font-weight: 400; }
+
+/* Blocos partilhados por várias peças ------------------------------------- */
+
+.marca-item {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; gap: 1.5mm; min-height: 0; min-width: 0;
+}
+.marca-item svg { flex: 1; min-height: 0; width: 100%; }
+.marca-item .rot {
+  font-weight: 700; text-align: center; text-transform: uppercase;
+  letter-spacing: .01em; text-wrap: balance; word-break: break-word;
+}
+
+.cabeca { display: flex; align-items: center; gap: 4mm; flex: none; }
+
+/* ---- A4 retrato: cartaz de porta ---------------------------------------- */
+.f-cartaz {
+  width: 210mm; height: 297mm; padding: 10mm;
+  display: flex; flex-direction: column;
+}
+.f-cartaz .topo-c {
+  flex: none; display: flex; flex-direction: column; gap: 2mm;
+  padding-bottom: 4mm; border-bottom: 1.6mm solid var(--tinta);
+}
+.f-cartaz .tipo {
+  font: 700 4.5mm/1 var(--fonte); text-transform: uppercase;
+  letter-spacing: .18em; color: var(--texto-2);
+}
+.f-cartaz .nome { font: 400 21mm/0.94 var(--preta); letter-spacing: -0.025em; text-wrap: balance; }
+.f-cartaz .horas { display: flex; align-items: center; gap: 3mm; margin-top: 1mm; }
+.f-cartaz .horas svg { width: 9mm; height: 9mm; flex: none; }
+.f-cartaz .horas span { font: 800 7mm/1 var(--fonte); text-transform: uppercase; }
+
+.f-cartaz .sec-precisa { display: flex; flex-direction: column; gap: 3mm; padding: 5mm 0 4mm; flex: 1.9; min-height: 0; }
+.f-cartaz .sec-nao { display: flex; flex-direction: column; gap: 3mm; padding: 4mm 0; border-top: 1.6mm solid var(--tinta); flex: 1; min-height: 0; }
+.f-cartaz .cabeca svg { width: 13mm; height: 13mm; flex: none; }
+.f-cartaz .cabeca .h { font: 400 12mm/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-cartaz .sec-nao .h { color: var(--proibido); }
+.f-cartaz .sec-nao .porque { font: 500 4.4mm/1.25 var(--fonte); color: var(--texto-2); }
+
+/* A adaptação de 3 a 10 itens é feita aqui e não em JavaScript: uma coluna
+   útil de 190 mm com pistas de 38 mm dá no máximo 4 colunas (4×38 + 3×5 =
+   167 ≤ 190), e as linhas dividem a altura em partes iguais. Dez itens
+   descem o ícone a ~26 mm, que é o piso testado para leitura a 2 m. */
+.grade-precisa {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(38mm, 1fr));
+  grid-auto-rows: minmax(0, 1fr); gap: 4mm 5mm;
+}
+.grade-nao {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(34mm, 1fr));
+  grid-auto-rows: minmax(0, 1fr); gap: 3mm 5mm;
+}
+.f-cartaz .marca-item .rot { font-size: 4.6mm; line-height: 1.08; }
+
+.f-cartaz .pe {
+  flex: none; display: flex; gap: 6mm; align-items: flex-end;
+  padding-top: 4mm; border-top: 1.6mm solid var(--tinta);
+}
+.f-cartaz .pe .dados { flex: 1; display: flex; flex-direction: column; gap: 1.5mm; min-width: 0; }
+.f-cartaz .pe .lin { display: flex; align-items: flex-start; gap: 2.5mm; }
+.f-cartaz .pe .lin svg { width: 6mm; height: 6mm; flex: none; }
+.f-cartaz .pe .end { font: 700 5.4mm/1.2 var(--fonte); }
+.f-cartaz .pe .tel { font: 800 8mm/1 var(--fonte); letter-spacing: -0.01em; }
+.f-cartaz .pe .link { font: 400 3.8mm/1.3 var(--mono); color: var(--texto-2); word-break: break-all; }
+.qr-bloco { display: flex; flex-direction: column; align-items: center; gap: 1.2mm; flex: none; }
+.qr-bloco svg { width: 24mm; height: 24mm; }
+.qr-bloco .leg { font: 400 2.8mm/1.1 var(--mono); color: var(--texto-3); text-align: center; max-width: 24mm; }
+
+/* ---- A3 retrato: placa de rua ------------------------------------------- */
+.f-placa {
+  width: 297mm; height: 420mm; padding: 14mm;
+  display: flex; flex-direction: column; gap: 8mm;
+}
+.f-placa .topo-c { flex: none; display: flex; flex-direction: column; gap: 2mm; padding-bottom: 5mm; border-bottom: 2.4mm solid var(--tinta); }
+.f-placa .tipo { font: 700 6mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .2em; color: var(--texto-2); }
+.f-placa .nome { font: 400 34mm/0.9 var(--preta); letter-spacing: -0.03em; text-wrap: balance; }
+.f-placa .tres { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8mm; align-items: center; }
+.f-placa .tres .marca-item svg { width: 100%; aspect-ratio: 1; flex: none; }
+.f-placa .tres .rot { font-size: 8mm; line-height: 1; font-weight: 800; }
+.f-placa .seta-caixa { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 4mm 0; }
+.f-placa .seta-caixa svg { height: 100%; max-height: 120mm; }
+.f-placa .pe { flex: none; display: flex; align-items: flex-end; gap: 8mm; padding-top: 6mm; border-top: 2.4mm solid var(--tinta); }
+.f-placa .pe .end { font: 800 9mm/1.1 var(--fonte); }
+.f-placa .pe .hor { font: 500 7mm/1.1 var(--fonte); color: var(--texto-2); }
+.f-placa .pe .tel { font: 400 13mm/1 var(--preta); letter-spacing: -0.02em; }
+
+/* ---- Panfleto A6, 4-up em A4 -------------------------------------------- */
+.f-panfleto { width: 210mm; height: 297mm; position: relative; }
+.f-panfleto .quadro { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.pf { padding: 10mm; display: flex; flex-direction: column; gap: 3mm; min-width: 0; min-height: 0; overflow: hidden; }
+.pf .topo-c { flex: none; display: flex; flex-direction: column; gap: 1mm; padding-bottom: 2mm; border-bottom: 1.2mm solid var(--tinta); }
+.pf .tipo { font: 700 3.4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em; color: var(--texto-2); }
+.pf .nome { font: 400 9mm/0.92 var(--preta); letter-spacing: -0.02em; text-wrap: balance; }
+.pf .horas { font: 800 4.6mm/1.1 var(--fonte); text-transform: uppercase; }
+.pf .h { font: 800 4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .02em; }
+.pf .h.nao { color: var(--proibido); }
+.pf .corpo { display: flex; flex-direction: column; gap: 1.5mm; flex: 1; min-height: 0; }
+.pf .g8 { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 1.5mm 2mm; }
+.pf .g8 > div { display: flex; align-items: center; justify-content: center; min-height: 0; }
+.pf .g8 svg { width: 15mm; max-width: 100%; max-height: 100%; }
+.pf .recusas { display: flex; gap: 2mm; }
+.pf .recusas svg { width: 15mm; height: 15mm; }
+.pf .pe { flex: none; display: flex; gap: 3mm; align-items: flex-end; padding-top: 2mm; border-top: 1.2mm solid var(--tinta); }
+.pf .pe .dados { flex: 1; display: flex; flex-direction: column; gap: .8mm; min-width: 0; }
+.pf .pe .end { font: 700 3.6mm/1.2 var(--fonte); }
+.pf .pe .tel { font: 800 6mm/1 var(--fonte); }
+.pf .pe svg.qr { width: 16mm; height: 16mm; flex: none; }
+
+/* ---- Etiqueta de caixa A5 paisagem, 2-up em A4 -------------------------- */
+.f-etiqueta { width: 210mm; height: 297mm; position: relative; }
+.f-etiqueta .quadro { position: absolute; inset: 0; display: grid; grid-template-rows: 1fr 1fr; }
+.et { padding: 10mm; display: flex; flex-direction: column; gap: 3mm; min-width: 0; min-height: 0; overflow: hidden; }
+.et .caixa { flex: 1; min-height: 0; min-width: 0; border: 1.2mm solid var(--tinta); display: flex; align-items: center; gap: 8mm; padding: 6mm; }
+.et .caixa svg { flex: none; width: 70mm; height: 100%; }
+.et .caixa .palavra { flex: 1; min-width: 0; font: 400 13mm/1 var(--preta); letter-spacing: -0.03em; text-transform: uppercase; text-wrap: balance; word-break: break-word; }
+.et .pe { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; }
+.et .pe .centro { font: 700 4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em; color: var(--texto-2); }
+.et .pe .nota { font: 400 3.4mm/1 var(--mono); color: var(--texto-3); }
+
+/* ---- Sinal da mesa de triagem, A4 paisagem ------------------------------ */
+.f-mesa { width: 297mm; height: 210mm; padding: 12mm; display: flex; flex-direction: column; gap: 5mm; }
+.f-mesa .topo-c { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 6mm; padding-bottom: 3mm; border-bottom: 1.6mm solid var(--tinta); }
+.f-mesa .titulo { font: 400 9mm/1 var(--preta); letter-spacing: -0.02em; }
+.f-mesa .centro { font: 700 4.4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em; color: var(--texto-2); text-align: right; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.f-mesa .duas { flex: 1; min-height: 0; display: flex; gap: 8mm; }
+.f-mesa .lado { display: flex; flex-direction: column; gap: 4mm; min-width: 0; }
+.f-mesa .lado-sim { flex: 1.4; }
+.f-mesa .lado-nao { flex: 1; }
+.f-mesa .fio-v { flex: none; width: 1.6mm; background: var(--tinta); }
+.f-mesa .cabeca svg { width: 16mm; height: 16mm; flex: none; }
+/* 10 mm e não 11: a coluna da direita tem 88 mm úteis e "NÃO PODEMOS" a
+   11 mm quebra em duas linhas. As duas cabeças mudam juntas — dar menos peso
+   ao "não podemos" seria desfazer exactamente aquilo que a peça existe para
+   fazer. */
+.f-mesa .cabeca .h { font: 400 10mm/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-mesa .lado-nao .h { color: var(--proibido); }
+.f-mesa .g3 { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 3mm 5mm; }
+.f-mesa .g2 { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 3mm 5mm; }
+.f-mesa .rot { font-size: 4.4mm; line-height: 1.05; }
+.f-mesa .protege { flex: none; padding-top: 3mm; border-top: 1.6mm solid var(--tinta); font: 500 5mm/1.3 var(--fonte); text-wrap: pretty; }
+
+/* ---- Seta de orientação, A4 retrato ------------------------------------- */
+.f-seta { width: 210mm; height: 297mm; padding: 12mm; display: flex; flex-direction: column; gap: 6mm; }
+.f-seta .palavra { flex: none; font: 400 26mm/0.9 var(--preta); letter-spacing: -0.03em; text-align: center; text-transform: uppercase; padding-bottom: 4mm; border-bottom: 1.6mm solid var(--tinta); text-wrap: balance; }
+.f-seta .caixa { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.f-seta .caixa svg { height: 100%; max-height: 150mm; }
+.f-seta .pe { flex: none; display: flex; justify-content: space-between; align-items: baseline; gap: 4mm; padding-top: 4mm; border-top: 1.6mm solid var(--tinta); }
+.f-seta .pe .centro { font: 700 4.4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em; color: var(--texto-2); }
+.f-seta .pe .nota { font: 400 3.4mm/1 var(--mono); color: var(--texto-3); }
+
+/* ---- Cartão de horário, A5 retrato -------------------------------------- */
+.f-horario { width: 148mm; height: 210mm; padding: 10mm; display: flex; flex-direction: column; gap: 5mm; }
+.f-horario .topo-c { flex: none; display: flex; flex-direction: column; gap: 1.5mm; padding-bottom: 3mm; border-bottom: 1.6mm solid var(--tinta); }
+.f-horario .tipo { font: 700 3.8mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .18em; color: var(--texto-2); }
+.f-horario .nome { font: 400 11mm/0.92 var(--preta); letter-spacing: -0.02em; text-wrap: balance; }
+.f-horario .meio { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4mm; }
+.f-horario .meio svg { width: 40mm; height: 40mm; }
+.f-horario .meio .frase { font: 400 9mm/1 var(--preta); text-align: center; text-transform: uppercase; text-wrap: balance; }
+.f-horario .pe { flex: none; display: flex; flex-direction: column; gap: 2mm; padding-top: 3mm; border-top: 1.6mm solid var(--tinta); }
+.f-horario .pe .lin { display: flex; align-items: center; gap: 3mm; }
+.f-horario .pe .lin svg { width: 7mm; height: 7mm; flex: none; }
+.f-horario .pe .hor { font: 800 7mm/1.1 var(--fonte); text-transform: uppercase; }
+.f-horario .pe .tel { font: 800 10mm/1 var(--fonte); letter-spacing: -0.01em; }
+.f-horario .pe .nota { font: 500 4.2mm/1.3 var(--fonte); color: var(--texto-2); }
+
+/* ---- Cartão de visita 85×55 mm, 10-up em A4 ----------------------------- */
+.f-cartao { width: 210mm; height: 297mm; position: relative; }
+.f-cartao .quadro {
+  position: absolute; left: 20mm; top: 11mm; width: 170mm; height: 275mm;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, 1fr);
+}
+.cv { padding: 6mm; display: flex; flex-direction: column; gap: 1.5mm; min-width: 0; min-height: 0; overflow: hidden; border-right: .2mm dashed var(--tenue); border-bottom: .2mm dashed var(--tenue); }
+.cv .nome { flex: none; font: 400 5.5mm/0.95 var(--preta); letter-spacing: -0.02em; text-wrap: balance; }
+.cv .risco { flex: none; height: .8mm; background: var(--tinta); width: 14mm; }
+.cv .meio { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: .8mm; justify-content: center; }
+.cv .end { font: 600 3.4mm/1.25 var(--fonte); }
+.cv .hor { font: 500 3.4mm/1.25 var(--fonte); color: var(--texto-2); }
+.cv .pe { flex: none; display: flex; align-items: flex-end; gap: 3mm; }
+.cv .pe .dados { flex: 1; display: flex; flex-direction: column; gap: .5mm; min-width: 0; }
+.cv .tel { font: 800 6mm/1 var(--fonte); letter-spacing: -0.01em; }
+.cv .link { font: 400 2.6mm/1 var(--mono); color: var(--texto-3); word-break: break-all; }
+.cv svg.qr { width: 12mm; height: 12mm; flex: none; }
+
+/* ---- Cartaz de tiras, A4 ------------------------------------------------ */
+.f-tiras { width: 210mm; height: 297mm; padding: 10mm; display: flex; flex-direction: column; }
+.f-tiras .topo-c { flex: none; display: flex; flex-direction: column; gap: 2mm; padding-bottom: 4mm; border-bottom: 1.6mm solid var(--tinta); }
+.f-tiras .tipo { font: 700 4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .18em; color: var(--texto-2); }
+.f-tiras .nome { font: 400 17mm/0.92 var(--preta); letter-spacing: -0.025em; text-wrap: balance; }
+.f-tiras .horas { font: 800 6mm/1.1 var(--fonte); text-transform: uppercase; }
+.f-tiras .corpo { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3mm; padding: 4mm 0; }
+.f-tiras .h { flex: none; font: 400 9mm/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-tiras .g4 { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 3mm 4mm; }
+.f-tiras .rot { font-size: 3.8mm; line-height: 1.05; }
+.f-tiras .leve { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: 4mm; padding: 3mm 0; border-top: 1.6mm solid var(--tinta); border-bottom: .4mm dashed var(--tinta); }
+.f-tiras .leve b { font: 800 5mm/1 var(--fonte); text-transform: uppercase; }
+.f-tiras .leve span { font: 400 3.4mm/1 var(--mono); color: var(--texto-3); }
+.f-tiras .tiras { flex: none; height: 60mm; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.f-tiras .tira { min-width: 0; min-height: 0; overflow: hidden; border-left: .4mm dashed var(--tinta); display: flex; align-items: center; justify-content: center; padding: 2mm 0; }
+.f-tiras .tira span { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 4.6mm/1 var(--fonte); letter-spacing: -0.01em; white-space: nowrap; }
+
+/* ---- Cartão de guião do voluntário, A6 ---------------------------------- */
+.f-guiao { width: 105mm; height: 148.5mm; padding: 10mm; display: flex; flex-direction: column; gap: 3mm; }
+.f-guiao .topo-c { flex: none; display: flex; flex-direction: column; gap: 1mm; padding-bottom: 2.5mm; border-bottom: 1.2mm solid var(--tinta); }
+.f-guiao .titulo { font: 400 7mm/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-guiao .sub { font: 500 3.6mm/1.25 var(--fonte); color: var(--texto-2); }
+.f-guiao .falas { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3mm; justify-content: center; }
+.f-guiao .fala { display: flex; gap: 2.5mm; }
+.f-guiao .fala b { font: 800 4.4mm/1.3 var(--mono); flex: none; }
+.f-guiao .fala p { margin: 0; font: 500 4.4mm/1.35 var(--fonte); }
+.f-guiao .fala:first-child p { font-weight: 600; }
+.f-guiao .pe { flex: none; padding-top: 2.5mm; border-top: 1.2mm solid var(--tinta); display: flex; flex-direction: column; gap: 1mm; }
+.f-guiao .pe b { font: 800 3.8mm/1.2 var(--fonte); text-transform: uppercase; }
+.f-guiao .pe span { font: 500 3.8mm/1.3 var(--fonte); color: var(--texto-2); }
+
+/* ---- Crachá 90×60 mm, 8-up em A4 ---------------------------------------- */
+.f-cracha { width: 210mm; height: 297mm; position: relative; }
+.f-cracha .quadro {
+  position: absolute; left: 15mm; top: 28.5mm; width: 180mm; height: 240mm;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(4, 1fr);
+}
+.cr { padding: 6mm; display: flex; gap: 4mm; min-width: 0; min-height: 0; overflow: hidden; border-right: .2mm dashed var(--tenue); border-bottom: .2mm dashed var(--tenue); }
+.cr .esq { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+/* Furo marcado a contorno. Impresso a cheio seria um disco preto por crachá
+   e oitenta discos por folha — toner gasto num buraco que se faz com um
+   furador. */
+.cr .furo { width: 4mm; height: 4mm; border: .5mm solid var(--tinta); border-radius: 50%; }
+.cr .esq svg { width: 14mm; height: 14mm; }
+.cr .dir { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2mm; }
+.cr .funcao { flex: none; border: .8mm solid var(--tinta); padding: 1mm 2mm; font: 800 4.4mm/1.1 var(--fonte); text-align: center; text-transform: uppercase; letter-spacing: .04em; }
+.cr .linha-nome { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: .8mm; }
+.cr .linha-nome .risco { height: .4mm; background: var(--tinta); }
+.cr .linha-nome span { font: 400 2.8mm/1 var(--mono); color: var(--texto-3); }
+.cr .pe { flex: none; display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; }
+.cr .pe .centro { font: 700 3.2mm/1.1 var(--fonte); text-transform: uppercase; letter-spacing: .1em; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cr .pe .turno { font: 400 2.8mm/1 var(--mono); color: var(--texto-3); flex: none; }
+
+/* ---- Faixa de braço 210×99 mm, 3-up em A4 ------------------------------- */
+.f-faixa { width: 210mm; height: 297mm; position: relative; }
+.f-faixa .quadro { position: absolute; inset: 0; display: grid; grid-template-rows: repeat(3, 1fr); }
+.fx { padding: 10mm 12mm; display: flex; align-items: center; gap: 8mm; min-width: 0; min-height: 0; overflow: hidden; border-bottom: .2mm dashed var(--tenue); }
+.fx svg { width: 30mm; height: 30mm; flex: none; }
+.fx .dir { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2mm; }
+.fx .funcao { font: 400 14mm/1.02 var(--preta); letter-spacing: -0.03em; text-wrap: balance; }
+.fx .centro { font: 700 4mm/1 var(--fonte); text-transform: uppercase; letter-spacing: .16em; color: var(--texto-2); }
+
+/* ---- Marcas de corte ---------------------------------------------------- */
+/* 0.4 mm nas bordas da folha e nunca dentro da peça: uma marca dentro da peça
+   fica no produto final, uma marca na borda desaparece com o corte. */
+.cortes { position: absolute; inset: 0; pointer-events: none; }
+.cortes i { position: absolute; display: block; background: var(--tinta); }
+.cortes i.v { width: .4mm; height: 5mm; }
+.cortes i.h { height: .4mm; width: 5mm; }
+.cortes i.cruz-v { width: .4mm; height: 8mm; transform: translate(-50%, -50%); }
+.cortes i.cruz-h { height: .4mm; width: 8mm; transform: translate(-50%, -50%); }
+.sem-cortes .cortes { display: none; }
+
+/* ---- Peças de ecrã: WhatsApp -------------------------------------------- */
+.f-wa { padding: 64px; display: flex; flex-direction: column; background: var(--papel); }
+.f-wa-post { width: 1080px; height: 1350px; }
+.f-wa-status { width: 1080px; height: 1920px; padding: 260px 72px 380px; }
+.f-wa .topo-c { flex: none; display: flex; flex-direction: column; gap: 8px; padding-bottom: 22px; border-bottom: 10px solid var(--tinta); }
+.f-wa .tipo { font: 700 24px/1 var(--fonte); text-transform: uppercase; letter-spacing: .18em; color: var(--texto-2); }
+.f-wa .nome { font: 400 104px/0.92 var(--preta); letter-spacing: -0.03em; text-wrap: balance; }
+.f-wa .horas { font: 800 40px/1.1 var(--fonte); text-transform: uppercase; }
+.f-wa .sec-precisa { flex: 1.8; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 26px 0; }
+.f-wa .sec-nao { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 22px 0; border-top: 10px solid var(--tinta); }
+.f-wa .cabeca { gap: 16px; }
+.f-wa .cabeca svg { width: 56px; height: 56px; flex: none; }
+.f-wa .cabeca .h { font: 400 56px/0.95 var(--preta); letter-spacing: -0.02em; }
+.f-wa .sec-nao .h { color: var(--proibido); }
+.f-wa .g-precisa { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 18px 22px; }
+.f-wa .g-nao { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 12px 20px; }
+.f-wa .marca-item { gap: 8px; }
+.f-wa .rot { font-size: 24px; line-height: 1.05; }
+.f-wa .pe { flex: none; display: flex; align-items: flex-end; gap: 24px; padding-top: 22px; border-top: 10px solid var(--tinta); }
+.f-wa .pe .dados { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.f-wa .pe .end { font: 700 28px/1.2 var(--fonte); }
+.f-wa .pe .tel { font: 800 44px/1 var(--fonte); }
+.f-wa .pe .link { font: 400 20px/1.3 var(--mono); color: var(--texto-2); text-align: right; word-break: break-all; }
+.f-wa-status .nome { font-size: 120px; line-height: .9; }
+.f-wa-status .horas { font-size: 46px; }
+.f-wa-status .topo-c { border-bottom-width: 12px; gap: 10px; padding-bottom: 26px; }
+.f-wa-status .sec-precisa { flex: 1.6; gap: 18px; padding: 32px 0; }
+.f-wa-status .sec-nao { gap: 18px; padding: 28px 0; border-top-width: 12px; }
+.f-wa-status .cabeca .h { font-size: 64px; }
+.f-wa-status .g-precisa { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 22px 26px; }
+.f-wa-status .g-nao { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px 24px; }
+.f-wa-status .rot { font-size: 26px; }
+.f-wa-status .pe { border-top-width: 12px; padding-top: 26px; }
+.f-wa-status .pe .end { font-size: 30px; }
+.f-wa-status .pe .tel { font-size: 52px; }
+/* As zonas que a interface do WhatsApp tapa. Marcadas só no ecrã. */
+.zona { position: absolute; left: 0; right: 0; font: 400 18px/1 var(--mono); color: var(--texto-3); padding: 0 0 8px 72px; }
+.zona-topo { top: 0; height: 260px; border-bottom: 2px dashed var(--fio); display: flex; align-items: flex-end; }
+.zona-base { bottom: 0; height: 380px; border-top: 2px dashed var(--fio); display: flex; align-items: flex-start; padding: 8px 0 0 72px; }
+
+/* ============================================================================
+ * 3 · IMPRESSÃO
+ *
+ * Imprime-se uma peça de cada vez. A alternativa — páginas nomeadas com
+ * @page name — só funciona em alguns browsers, e este ficheiro tem de sair
+ * certo do telemóvel de alguém sem saber qual é. Por isso o JavaScript
+ * escreve o tamanho da página antes de chamar window.print().
+ * ==========================================================================*/
+@media print {
+  html, body { background: #fff; }
+  .topo, form.painel-form, .barra, .rodape, .peca > header, .peca > p,
+  .familia > h2, .familia > p, .zona { display: none !important; }
+  .tela, .colunas, .painel, .familia, .pecas { display: block; padding: 0; margin: 0; max-width: none; }
+  .moldura { box-shadow: none; overflow: visible; }
+  .folha-wrap { width: auto !important; height: auto !important; overflow: visible; }
+  .folha { transform: none !important; box-shadow: none; }
+  /* Só a peça escolhida existe. */
+  body.imprimindo .peca { display: none; }
+  body.imprimindo .peca.a-imprimir { display: block; }
+  .peca { break-inside: avoid; }
+}

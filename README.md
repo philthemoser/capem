@@ -87,7 +87,9 @@ What that does **not** solve — an official asking for the list, what happens t
 ```
 index.html              the prototype, self-contained and committed — open it directly
 field/                  FIELD TOOLS — not a demo, meant to be used
-  cartaz.html           poster generator (Portuguese, offline, no server) — ready
+  kit.html              printed media kit: 14 pieces from one form
+                        (Portuguese, offline, no server, fonts embedded) — ready
+  design-system.md      the design reference: tokens, icon rules, imposition
 build.js                concatenates src/ into index.html (node build.js, no dependencies)
 src/
   styles.css
@@ -121,9 +123,10 @@ node tools/flow.js         # 21 end-to-end assertions: does state actually propa
 node tools/nav.js          # navigation: stable order, expand-in-place, mobile sheet
 node tools/a11y.js         # axe-core, WCAG 2.1 A/AA
 node tools/verify-qr.js tools/qr-tests.json > /tmp/o.json && python3 tools/verify-qr.py /tmp/o.json
+node tools/kit-test.js     # the printed kit: true mm sizes, overflow, mono, imposition
 ```
 
-Current status: i18n complete · 144/144 renders · 21/21 flow assertions · 13/13 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode.
+Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 61/61 kit assertions.
 
 ## How to tell us we are wrong
 

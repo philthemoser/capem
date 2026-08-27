@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kit de material impresso — CAPEM</title>
+<meta name="description" content="Gera o material impresso completo de um ponto de arrecadação ou abrigo: cartazes, etiquetas, panfletos, crachás. Funciona sem internet.">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%2316130F'/><path fill='white' fill-rule='evenodd' d='M6 14 H58 V24 H6 Z M10 26 H54 V58 H10 Z M28 30 H36 V44 H28 Z'/></svg>">
+<style>
+/*__FONTS__*/
+/*__CSS__*/
+</style>
+</head>
+<body>
+
+<header class="topo">
+  <h1>Kit de material impresso</h1>
+  <p>Preencha uma vez. Saem catorze peças prontas — cartaz de porta, placa de rua,
+     panfletos, etiquetas de caixa, sinal da mesa de triagem, cartões, crachás.
+     Tudo em A4 comum, tudo legível a preto e branco, tudo sem internet.</p>
+</header>
+
+<div class="tela">
+  <div class="colunas">
+
+    <form class="painel-form" onsubmit="return false;">
+      <section class="bloco">
+        <h2>O centro</h2>
+        <p class="dica">Só o nome é obrigatório. Tudo o resto melhora as peças.</p>
+        <label class="campo" for="f-nome">Nome do centro</label>
+        <input id="f-nome" type="text" placeholder="Paróquia São Sebastião" autocomplete="off">
+        <label class="campo" for="f-tipo">O que é</label>
+        <select id="f-tipo"></select>
+        <label class="campo" for="f-endereco">Endereço</label>
+        <input id="f-endereco" type="text" placeholder="R. Bento Gonçalves, 412 — Centro" autocomplete="off">
+        <label class="campo" for="f-horario">Horário</label>
+        <input id="f-horario" type="text" placeholder="Todos os dias, 8h às 20h" autocomplete="off">
+        <label class="campo" for="f-contato">Telefone</label>
+        <input id="f-contato" type="text" placeholder="(51) 99612-0044" autocomplete="off">
+        <label class="campo" for="f-link">Link da lista atualizada (opcional)</label>
+        <input id="f-link" type="text" placeholder="deixe em branco por enquanto" autocomplete="off" inputmode="url">
+        <p class="ajuda">Com um link aqui, as peças ganham um QR code de verdade. Vale a pena
+          quando a página de necessidades estiver no ar — aí o papel impresso nunca fica velho.
+          Mesmo assim, nenhuma peça depende dele: endereço, horário e telefone estão sempre
+          escritos.</p>
+      </section>
+
+      <section class="bloco">
+        <h2>Precisamos hoje</h2>
+        <p class="dica">Toque para escolher. O mais urgente primeiro — os três primeiros vão
+          para a placa de rua, os oito primeiros para os panfletos, os dez primeiros para o cartaz.</p>
+        <div id="grupos"></div>
+        <div class="linha-add">
+          <label class="sr-only" for="f-livre">Outro item</label>
+          <input id="f-livre" type="text" placeholder="Outro item…" autocomplete="off">
+          <button type="button" id="b-add-precisa">Juntar</button>
+        </div>
+        <ol class="escolhidos" id="lista-precisa"></ol>
+        <div class="aviso" id="aviso-itens" hidden>
+          Escolheu <b id="n-itens">0</b> itens. O cartaz mostra os dez primeiros — abaixo
+          disso a marca desce de 26&nbsp;mm e deixa de se ler a dois metros.
+        </div>
+        <div class="aviso" id="aviso-livres" hidden>
+          <b id="n-livres">0</b> item(ns) sem marca própria. Imprimem uma caixa genérica, que
+          não diz nada a quem não lê português — a promessa do kit é que cada peça funcione
+          com o texto ignorado. Use-os com conta.
+        </div>
+      </section>
+
+      <section class="bloco">
+        <h2>Por favor, não traga</h2>
+        <p class="dica">A parte mais valiosa e a que quase ninguém desenha. Já vem preenchida
+          com o que costuma afogar um centro.</p>
+        <ul class="escolhidos" id="lista-nao"></ul>
+        <div class="linha-add">
+          <label class="sr-only" for="f-nao-livre">Outro item que não deve ser trazido</label>
+          <input id="f-nao-livre" type="text" placeholder="Outro item…" autocomplete="off">
+          <button type="button" id="b-add-nao">Juntar</button>
+        </div>
+      </section>
+
+      <section class="bloco">
+        <h2>Peças com texto próprio</h2>
+        <div class="dois">
+          <div>
+            <label class="campo" for="f-seta-texto">Seta diz</label>
+            <input id="f-seta-texto" type="text" placeholder="DOAÇÕES" autocomplete="off">
+          </div>
+          <div>
+            <label class="campo" for="f-seta-dir">Aponta para</label>
+            <select id="f-seta-dir"></select>
+          </div>
+        </div>
+        <label class="campo" for="f-fechado">Cartão de porta fechada</label>
+        <input id="f-fechado" type="text" placeholder="Fechado agora — abrimos às 8h" autocomplete="off">
+        <button type="button" class="btn-txt" id="b-limpar">Apagar tudo e recomeçar</button>
+      </section>
+    </form>
+
+    <main class="painel">
+      <div class="barra">
+        <button type="button" class="btn" id="b-mono" aria-pressed="false">Ver a preto e branco</button>
+        <button type="button" class="btn" id="b-cortes" aria-pressed="true">Marcas de corte</button>
+        <span class="espaco"></span>
+        <button type="button" class="btn btn-primario" id="b-texto">Copiar texto para o grupo</button>
+      </div>
+      <div id="pecas"></div>
+    </main>
+
+  </div>
+
+  <footer class="rodape">
+    <p><b>Nada sai deste aparelho.</b> Não há cadastro, servidor nem internet envolvidos.
+      O que escrever fica guardado só aqui, para não ter de repetir amanhã. O ficheiro
+      funciona aberto de uma pen, sem rede.</p>
+    <p style="margin-top:8px"><b>Antes de imprimir cem folhas, imprima uma.</b>
+      Ligue “ver a preto e branco”, imprima o cartaz de porta e leia-o a dois metros.
+      É o teste que conta.</p>
+    <p style="margin-top:8px">CAPEM · ferramenta livre · <a href="https://github.com/philthemoser/capem">github.com/philthemoser/capem</a></p>
+  </footer>
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+<noscript>
+  <div style="padding:24px;max-width:620px;margin:0 auto">
+    <h2>Esta página precisa de JavaScript</h2>
+    <p>Tudo corre no seu aparelho — não há servidor. Sem JavaScript não dá para gerar as peças.</p>
+  </div>
+</noscript>
+
+<script>
+/*__JS__*/
+</script>
+</body>
+</html>

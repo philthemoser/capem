@@ -220,12 +220,50 @@ intake sign, both WhatsApp pieces and the instruction sheet — and deliberately
 visit card, which do not age. The date is honest in both directions: if the paper
 stays up for two weeks, the date is what tells a passer-by to call first.
 
+**A mark picker for hand-written items.** The catalogue is anchored to the marks,
+so an item typed by hand had no mark and printed the generic box — which says
+nothing to someone who does not read Portuguese, defeating the point of the
+system. Hand-written items now carry an optional `marca`, and the form offers all
+29 to choose from. "Luva de borracha" under the boots mark says "rubber,
+protection" to someone who cannot read the words. Approximate beats mute. The
+same grid doubles as a visible index of the whole set, so a coordinator can see
+what exists before typing something that has no mark.
+
 **A paused state.** A centre that fills up and cannot say stop keeps receiving.
 Ticking "não estamos recebendo" replaces the needs list on the door poster with a
 stop mark and a reason, keeps the "não traga" half (which matters more in that
 hour, not less), and swaps the green check beside the opening hours for the
 closed mark — a check next to "we are not accepting" would contradict itself on
 one sheet.
+
+## File order, and failing loudly
+
+The built file is one HTML document in a deliberate order: **script, then CSS,
+then the 160 KB of base64 fonts**. The script was originally last, 69% of the way
+into the file, which meant anything that truncated the tail — a size-limited
+preview, a clipped transfer — produced a page that looked like a merely broken
+form. Now the tool boots from the first fifth of the file and the fonts are the
+tail, so the failure mode is "it works but looks plainer" rather than "it does
+nothing".
+
+A red banner at the top of the body is present in the HTML and removed by the
+script on boot. If it is still on screen, the script did not run — almost always
+because the file is open inside a viewer that blocks scripts rather than in a
+browser — and it says so, with what to do about it. If `iniciar()` throws, the
+banner stays and prints the error text on the page: nobody in a gym can open a
+console.
+
+One CSS line earns its place at the top of the stylesheet:
+
+```css
+[hidden] { display: none !important; }
+```
+
+Any `display` rule beats the `hidden` attribute, and the result is an invisible
+full-screen element eating every tap. That has now happened twice in this
+project — once with the prototype's slide-up sheet, once with this kit's mark
+picker. `tools/kit-test.js` asserts that nothing carrying `[hidden]` computes to
+a visible `display`.
 
 ## Where the implementation departs from the design
 

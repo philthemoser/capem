@@ -47,6 +47,12 @@
 
 * { box-sizing: border-box; }
 
+/* Qualquer regra de `display` ganha ao atributo `hidden`, e o resultado é um
+   elemento invisível a apanhar todos os toques por cima da página. Já aconteceu
+   uma vez neste projecto com uma folha deslizante. Uma linha resolve-o para
+   sempre — e é por isso que ela está no topo. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -64,6 +70,24 @@ html, body {
 /* ============================================================================
  * 1 · A APLICAÇÃO
  * ==========================================================================*/
+
+/* O aviso de arranque. Está no HTML e o script apaga-o; se ficar, é porque o
+   script não correu. Vermelho e no topo de propósito: quem abrir isto num
+   visualizador que bloqueia scripts tem de perceber que o problema não é o
+   ficheiro estar vazio. */
+.alerta-boot {
+  margin: 0; padding: 16px 18px;
+  background: var(--proibido); color: #fff;
+  font: 500 14px/1.55 var(--fonte);
+}
+.alerta-boot b { display: block; font-weight: 800; font-size: 16px; margin-bottom: 6px; }
+.alerta-boot p { margin: 0 0 8px; max-width: 68ch; }
+.alerta-boot p:last-of-type { margin-bottom: 0; }
+.alerta-boot pre {
+  margin: 12px 0 0; padding: 10px; overflow-x: auto;
+  background: rgba(0,0,0,.35); font: 400 12px/1.5 var(--mono);
+  white-space: pre-wrap; word-break: break-word;
+}
 
 .topo {
   background: var(--tinta);
@@ -161,6 +185,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .li-acoes button[disabled] { opacity: .3; cursor: default; }
 .li-acoes .rm { border-color: var(--proibido); color: var(--proibido); }
+/* O botão de marca é mais largo do que os outros porque tem uma palavra:
+   "marca?" enquanto o item ainda sai com a caixa genérica, "marca" depois. */
+.li-acoes .marca {
+  width: auto; padding: 0 8px;
+  font: 700 11px/1 var(--mono); letter-spacing: .02em;
+}
+.escolhidos li.generico .marca { border-color: var(--proibido); color: var(--proibido); }
 
 .linha-add { display: flex; gap: 6px; margin-top: 10px; }
 .linha-add input { flex: 1; min-width: 0; }
@@ -258,6 +289,45 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   margin: 0 0 5px; font: 700 13px/1.3 var(--fonte);
 }
 .porque-assim p { margin: 0; font: 500 13px/1.55 var(--fonte); color: var(--texto-2); }
+
+/* --- índice das marcas e o modal de escolha --- */
+.corpo-marcas { display: block !important; }
+.nota-marcas { margin: 0 0 16px; font: 500 13px/1.55 var(--fonte); color: var(--texto-2); max-width: 68ch; }
+.grupo-marcas + .grupo-marcas { margin-top: 18px; }
+.grupo-marcas h4 {
+  margin: 0 0 9px; font: 700 11px/1 var(--fonte);
+  text-transform: uppercase; letter-spacing: .14em; color: var(--texto-3);
+}
+.marcas { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.marca-op {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 6px; min-width: 0;
+  background: var(--papel); color: var(--tinta);
+  border: 2px solid var(--tinta); cursor: pointer;
+}
+.marca-op[disabled] { cursor: default; }
+.marca-op:not([disabled]):hover { background: var(--tinta); color: var(--papel); }
+.marca-op svg { width: 34px; height: 34px; flex: none; }
+.marca-op span {
+  font: 600 11px/1.25 var(--fonte); text-align: center;
+  overflow-wrap: anywhere; hyphens: auto;
+}
+
+.modal {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(22,19,15,.55);
+}
+@media (min-width: 720px) { .modal { align-items: center; } }
+.modal-caixa {
+  width: min(720px, 100%); max-height: 88vh; overflow-y: auto;
+  padding: 18px 16px 16px;
+  background: var(--papel); border: 2px solid var(--tinta);
+}
+.modal-caixa h2 { margin: 0 0 4px; font: 400 22px/1.1 var(--preta); letter-spacing: -0.02em; }
+.modal-caixa > p { margin: 0 0 14px; font: 500 13.5px/1.5 var(--fonte); color: var(--texto-2); }
+.modal-caixa .btn { margin-top: 16px; width: 100%; justify-content: center; }
+.com-modal { overflow: hidden; }
 
 .familia { margin: 0 0 38px; }
 .familia > h2 {
@@ -720,7 +790,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 @media print {
   html, body { background: #fff; }
   .topo, form.painel-form, .barra, .rodape, .peca > header, .peca > p,
-  .familia > h2, .familia > p, .zona { display: none !important; }
+  .familia > h2, .familia > p, .zona, .alerta-boot, .modal { display: none !important; }
   .tela, .colunas, .painel, .familia, .pecas { display: block; padding: 0; margin: 0; max-width: none; }
   .moldura { box-shadow: none; overflow: visible; }
   .folha-wrap { width: auto !important; height: auto !important; overflow: visible; }

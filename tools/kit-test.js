@@ -217,6 +217,85 @@ const CENTRO = {
   ok('item sem marca avisa', livre.aviso && livre.n === '1');
   ok('item sem marca continua a sair no cartaz', livre.noCartaz);
 
+  console.log('\narranque');
+  const boot = await p.evaluate(() => ({
+    /* O aviso está no HTML e o script apaga-o. Se ainda estiver aqui depois de
+       tudo carregar, o script não arrancou. */
+    avisoApagado: !document.getElementById('sem-js'),
+    /* O script tem de vir antes das fontes no ficheiro: um visualizador que
+       corte o fim fica sem tipografia e continua a gerar peças. */
+    scriptAntesDasFontes: true
+  }));
+  ok('o aviso de arranque desaparece quando o script corre', boot.avisoApagado);
+
+  const ordem = require('fs').readFileSync(
+    require('path').resolve(__dirname, '..', 'field', 'kit.html'), 'utf8');
+  ok('o script vem antes das fontes embutidas',
+    ordem.indexOf('<script defer>') < ordem.indexOf('@font-face'),
+    `script @${ordem.indexOf('<script defer>')}, fontes @${ordem.indexOf('@font-face')}`);
+  /* 15% em vez dos 69% que eram antes de o script subir para o cabeçalho. */
+  const posJs = ordem.indexOf('<script defer>') / ordem.length;
+  ok('o script está no primeiro quinto do ficheiro', posJs < 0.2, (posJs * 100).toFixed(0) + '%');
+
+  const escondido = await p.evaluate(() => {
+    /* Uma regra de display a ganhar ao atributo hidden deixa um elemento
+       invisível a apanhar todos os toques. Já aconteceu neste projecto. */
+    const maus = [];
+    document.querySelectorAll('[hidden]').forEach(el => {
+      if (getComputedStyle(el).display !== 'none') maus.push(el.id || el.className);
+    });
+    return maus;
+  });
+  ok('nada com [hidden] fica visível', escondido.length === 0, escondido.join(','));
+
+  console.log('\nmarcas para itens escritos à mão');
+  await p.fill('#f-livre', 'Luva de borracha');
+  await p.click('#b-add-precisa');
+  await p.waitForTimeout(300);
+  const antes = await p.evaluate(() => {
+    const li = [...document.querySelectorAll('#lista-precisa li')].pop();
+    return { generico: li.classList.contains('generico'),
+             marca: li.querySelector('svg path').getAttribute('d') === POR_ID.caixa.d,
+             botao: li.querySelector('.marca').textContent.trim() };
+  });
+  ok('item escrito à mão começa com a caixa genérica', antes.generico && antes.marca);
+  ok('e o botão pergunta pela marca', antes.botao === 'marca?', antes.botao);
+
+  await p.click('#lista-precisa li:last-child .marca');
+  await p.waitForTimeout(300);
+  const modal = await p.evaluate(() => ({
+    aberto: !document.getElementById('modal-marca').hidden,
+    opcoes: document.querySelectorAll('#grade-marcas .marca-op').length
+  }));
+  ok('abre a lista de marcas', modal.aberto);
+  ok('com as 29 marcas todas', modal.opcoes === 29, String(modal.opcoes));
+
+  await p.click('#grade-marcas [data-pick="botas"]');
+  await p.waitForTimeout(350);
+  const depois = await p.evaluate(() => {
+    const li = [...document.querySelectorAll('#lista-precisa li')].pop();
+    const noCartaz = [...document.querySelectorAll('#peca-cartaz .grade-precisa .marca-item')]
+      .find(m => m.querySelector('.rot').textContent === 'Luva de borracha');
+    return {
+      fechou: document.getElementById('modal-marca').hidden,
+      jaNaoGenerico: !li.classList.contains('generico'),
+      /* A marca escolhida tem de chegar ao papel, não só à lista do lado. */
+      noPapel: !!noCartaz && noCartaz.querySelector('svg path').getAttribute('d') === POR_ID.botas.d
+    };
+  });
+  ok('escolher uma marca fecha a lista', depois.fechou);
+  ok('e o item deixa de estar marcado como genérico', depois.jaNaoGenerico);
+  ok('e a marca escolhida sai no cartaz', depois.noPapel);
+
+  const indice = await p.evaluate(() => ({
+    n: document.querySelectorAll('#indice-marcas .marca-op').length,
+    conta: document.getElementById('conta-marcas').textContent
+  }));
+  ok('o índice mostra as 29 marcas', indice.n === 29 && indice.conta === '29', JSON.stringify(indice));
+
+  await p.evaluate(() => { S.precisa = S.precisa.filter(v => typeof v === 'string'); salvar(); montarForm(); });
+  await p.waitForTimeout(300);
+
   console.log('\ncarimbo de data');
   const hoje = await p.evaluate(() => dataCurta());
   const carimbos = await p.evaluate(() => {

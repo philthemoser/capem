@@ -50,8 +50,16 @@ const RECUSAS = ['roupa-usada', 'sacos-misturados', 'pereciveis', 'moveis'];
 /* As funções que aparecem nos crachás e nas faixas de braço. */
 const FUNCOES = ['COORDENAÇÃO', 'TRIAGEM', 'ENTREGA', 'COZINHA', 'VOLUNTÁRIO'];
 
-/** Um item da lista é `{id}` do catálogo ou `{texto}` livre. Devolve os dois. */
+/**
+ * Um item da lista é uma de duas coisas:
+ *   'agua'                        — uma entrada do catálogo, com a sua marca
+ *   { texto, marca }              — escrito à mão; `marca` é opcional
+ *
+ * Um item escrito à mão sem marca sai com a caixa genérica, que não diz nada a
+ * quem não lê português. Por isso o formulário deixa escolher uma das 29 —
+ * é melhor uma marca aproximada do que uma caixa que não significa nada.
+ */
 function item(v) {
   if (typeof v === 'string') return { id: v, rotulo: ROTULO_BR[v] || v, livre: false };
-  return { id: 'caixa', rotulo: v.texto, livre: true };
+  return { id: v.marca || 'caixa', rotulo: v.texto, livre: true, semMarca: !v.marca };
 }

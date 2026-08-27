@@ -899,10 +899,13 @@ function montarForm() {
 
   const linhas = (lista, tipo) => lista.length ? lista.map((v, i) => {
     const it = item(v);
-    return `<li class="${it.livre ? 'generico' : ''}">
-      ${it.livre ? svgIcone('caixa') : svgIcone(it.id)}
-      <span>${esc(it.rotulo)}${it.livre ? ' <small style="color:var(--proibido)">· sem marca</small>' : ''}</span>
+    return `<li class="${it.semMarca ? 'generico' : ''}">
+      ${svgIcone(it.id)}
+      <span>${esc(it.rotulo)}</span>
       <span class="li-acoes">
+        ${it.livre ? `<button type="button" class="marca" data-marca="${i}" data-l="${tipo}"
+          aria-label="Escolher marca para ${esc(it.rotulo)}"
+          title="Escolher marca">${it.semMarca ? 'marca?' : 'marca'}</button>` : ''}
         ${tipo === 'precisa' ? `<button type="button" data-mv="${i}" data-d="-1" aria-label="Subir ${esc(it.rotulo)}" ${i === 0 ? 'disabled' : ''}>↑</button>
         <button type="button" data-mv="${i}" data-d="1" aria-label="Descer ${esc(it.rotulo)}" ${i === lista.length - 1 ? 'disabled' : ''}>↓</button>` : ''}
         <button type="button" class="rm" data-rm="${i}" data-l="${tipo}" aria-label="Remover ${esc(it.rotulo)}">✕</button>
@@ -1215,6 +1218,55 @@ function addLivre(campoId, lista) {
   el.value = '';
   salvar(); montarForm();
 }
+/* ---------------------------------------------------------------------------
+ * Escolher a marca de um item escrito à mão.
+ *
+ * Vinte e nove marcas não são muitas para escolher de uma lista, e são muito
+ * melhores do que uma caixa genérica: "Luva de borracha" com a marca das botas
+ * diz "equipamento de borracha para os pés e mãos" a quem não lê a palavra.
+ * Aproximado é melhor do que mudo.
+ * -------------------------------------------------------------------------*/
+let marcaAlvo = null;
+
+function gradeMarcas(onclick) {
+  const grupo = (titulo, cat) => `
+    <div class="grupo-marcas">
+      <h4>${esc(titulo)}</h4>
+      <div class="marcas">${ICONES.filter(i => i.cat === cat).map(i => `
+        <button type="button" class="marca-op"${onclick ? ` data-pick="${i.id}"` : ' disabled'}>
+          ${svgIcone(i.id)}<span>${esc(ROTULO_BR[i.id] || i.rotulo)}</span>
+        </button>`).join('')}</div>
+    </div>`;
+  return grupo('O que se precisa', 'need') +
+         grupo('O que não se aceita', 'refuse') +
+         grupo('Marcas de serviço', 'util');
+}
+
+function abrirMarcas(lista, i) {
+  marcaAlvo = { lista, i };
+  const it = item(S[lista][i]);
+  document.getElementById('modal-item').textContent = `Marca para “${it.rotulo}”`;
+  document.getElementById('grade-marcas').innerHTML = gradeMarcas(true);
+  const m = document.getElementById('modal-marca');
+  m.hidden = false;
+  document.body.classList.add('com-modal');
+  m.querySelector('.marca-op').focus();
+}
+
+function fecharMarcas() {
+  document.getElementById('modal-marca').hidden = true;
+  document.body.classList.remove('com-modal');
+  marcaAlvo = null;
+}
+
+function escolherMarca(id) {
+  if (!marcaAlvo) return;
+  const v = S[marcaAlvo.lista][marcaAlvo.i];
+  if (v && typeof v === 'object') v.marca = id;
+  fecharMarcas();
+  salvar(); montarForm();
+}
+
 function limparTudo() {
   if (!confirm('Apagar tudo e começar de novo?')) return;
   S = vazio(); salvar(); montarForm();
@@ -1241,14 +1293,27 @@ function iniciar() {
   });
 
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-tog],[data-rm],[data-mv],[data-print],[data-img]');
+    const t = e.target.closest('[data-tog],[data-rm],[data-mv],[data-print],[data-img],[data-marca],[data-pick]');
     if (!t) return;
-    if (t.dataset.tog) alternar(t.dataset.tog);
+    if (t.dataset.pick) escolherMarca(t.dataset.pick);
+    else if (t.dataset.marca) abrirMarcas(t.dataset.l === 'precisa' ? 'precisa' : 'naoTraga', +t.dataset.marca);
+    else if (t.dataset.tog) alternar(t.dataset.tog);
     else if (t.dataset.rm) remover(t.dataset.l, +t.dataset.rm);
     else if (t.dataset.mv) mover(+t.dataset.mv, +t.dataset.d);
     else if (t.dataset.print) imprimir(t.dataset.print);
     else if (t.dataset.img) imagem(t.dataset.img, t);
   });
+
+  document.getElementById('b-fechar-marca').addEventListener('click', fecharMarcas);
+  document.getElementById('modal-marca').addEventListener('click', e => {
+    if (e.target.id === 'modal-marca') fecharMarcas();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('modal-marca').hidden) fecharMarcas();
+  });
+
+  document.getElementById('indice-marcas').innerHTML = gradeMarcas(false);
+  document.getElementById('conta-marcas').textContent = ICONES.length;
 
   document.getElementById('b-add-precisa').addEventListener('click', () => addLivre('f-livre', 'precisa'));
   document.getElementById('b-add-nao').addEventListener('click', () => addLivre('f-nao-livre', 'naoTraga'));
@@ -1272,4 +1337,33 @@ function iniciar() {
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(escalar);
 }
 
-document.addEventListener('DOMContentLoaded', iniciar);
+/* ---------------------------------------------------------------------------
+ * Arranque.
+ *
+ * Duas redes de segurança, porque esta ferramenta vai ser aberta em sítios que
+ * não escolhemos: de uma pen, de um anexo de e-mail, de dentro de um leitor de
+ * ficheiros que talvez não corra scripts.
+ *
+ * 1. O aviso #sem-js está no HTML e é apagado aqui. Se o script não correr,
+ *    fica na tela a dizer o que fazer — em vez de um formulário morto que
+ *    parece só estranho.
+ * 2. Se iniciar() rebentar, o aviso fica e mostra o erro. Alguém num ginásio
+ *    não consegue abrir uma consola; o erro tem de estar na página.
+ * -------------------------------------------------------------------------*/
+function arrancar() {
+  try {
+    iniciar();
+    const aviso = document.getElementById('sem-js');
+    if (aviso) aviso.remove();
+  } catch (e) {
+    const aviso = document.getElementById('sem-js');
+    if (!aviso) return;
+    aviso.querySelector('b').textContent = 'Esta página teve um erro.';
+    const pre = document.getElementById('sem-js-erro');
+    pre.hidden = false;
+    pre.textContent = (e && (e.stack || e.message)) || String(e);
+  }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar);
+else arrancar();

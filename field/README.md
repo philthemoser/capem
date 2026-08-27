@@ -103,10 +103,29 @@ continua a receber. Marque "não estamos recebendo" e o cartaz passa a dizer
 isso em vez da lista — mantendo o "não traga", que é a mensagem que mais
 interessa nessa hora.
 
+**Todo item tem uma marca — inclusive os que você escrever.** O catálogo traz 16
+itens com marca própria. Se escrever outro à mão, ele sai com uma caixa
+genérica, que não diz nada a quem não lê português — mas o botão **marca?** ao
+lado dele abre a lista das 29 marcas para você escolher a mais próxima.
+"Luva de borracha" com a marca das botas diz "borracha, proteção" a quem não lê
+a palavra. Aproximado é melhor do que mudo.
+
 **Nada sai do aparelho.** O que escrever fica guardado só no seu celular.
 
 > **Antes de imprimir cem folhas, imprima uma.** Ligue "ver a preto e branco",
 > imprima o cartaz de porta e leia-o a dois metros. É o teste que conta.
+
+### Se a página aparecer vazia
+
+Se as listas estiverem vazias e nada for gerado, o JavaScript não correu — e a
+página diz isso numa faixa vermelha no topo. Quase sempre é porque o ficheiro
+está a ser aberto **dentro de um visualizador** (a pré-visualização de um anexo,
+um leitor de ficheiros) em vez de um navegador. **Guarde o ficheiro e abra-o no
+Safari, Chrome ou Firefox**; no telemóvel, descarregue e abra a partir de
+*Ficheiros*.
+
+Se a faixa não aparecer mas mostrar um erro, é um erro a sério — o texto do erro
+vem na própria faixa, para não ser preciso uma consola no meio de um ginásio.
 
 ## 2. Página de necessidades — em construção
 
@@ -127,7 +146,7 @@ carrega a própria lista, então funciona mesmo sem sinal.
 
 ```bash
 node build.js               # monta kit.html a partir de src/
-node ../tools/kit-test.js   # 75 verificações (precisa de Playwright)
+node ../tools/kit-test.js   # 87 verificações (precisa de Playwright)
 ```
 
 Sem dependências para usar. O `kit.html` gerado fica no repositório — quem só

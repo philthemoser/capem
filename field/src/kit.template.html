@@ -7,12 +7,37 @@
 <meta name="description" content="Gera o material impresso completo de um ponto de arrecadação ou abrigo: cartazes, etiquetas, panfletos, crachás. Funciona sem internet.">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%2316130F'/><path fill='white' fill-rule='evenodd' d='M6 14 H58 V24 H6 Z M10 26 H54 V58 H10 Z M28 30 H36 V44 H28 Z'/></svg>">
+<!-- A ORDEM DESTE FICHEIRO É DELIBERADA.
+     O JavaScript vem primeiro, antes das fontes embutidas. As fontes são
+     160 KB de base64 e são só a aparência; o script é a ferramenta inteira.
+     Um visualizador que corte o fim do ficheiro fica sem as fontes e continua
+     a gerar as peças — ao contrário do que acontecia quando o script era a
+     última coisa do documento, a 69% do caminho. Degrada-se pela ordem certa. -->
+<script defer>
+/*__JS__*/
+</script>
+<style>
+/*__CSS__*/
+</style>
 <style>
 /*__FONTS__*/
-/*__CSS__*/
 </style>
 </head>
 <body>
+
+<!-- Visível por omissão; o script apaga-o assim que arranca. Se ficar na tela,
+     é porque o JavaScript não correu — e é melhor dizê-lo do que deixar um
+     formulário morto que parece apenas estranho. -->
+<div id="sem-js" class="alerta-boot">
+  <b>Esta página não está a funcionar como devia.</b>
+  <p>O JavaScript não correu, por isso as listas estão vazias e nada é gerado.
+    Quase sempre é porque o ficheiro está a ser aberto dentro de um
+    visualizador (uma pré-visualização de anexo, um leitor de ficheiros) em vez
+    de um navegador.</p>
+  <p><b>Guarde o ficheiro e abra-o no navegador</b> — Safari, Chrome ou Firefox.
+    No telemóvel: descarregar, depois abrir a partir de <i>Ficheiros</i>.</p>
+  <pre id="sem-js-erro" hidden></pre>
+</div>
 
 <header class="topo">
   <h1>Kit de material impresso</h1>
@@ -120,6 +145,16 @@
         <button type="button" class="btn" id="b-texto">Copiar texto para o grupo</button>
       </div>
 
+      <details class="porque-assim" id="todas-marcas">
+        <summary>Todas as marcas disponíveis <span id="conta-marcas"></span></summary>
+        <div class="corpo corpo-marcas">
+          <p class="nota-marcas">Estas são todas as marcas que existem. Um item
+            escolhido de uma destas lê-se sem texto; um item escrito à mão sai
+            com a marca genérica de caixa, a não ser que lhe escolha uma aqui.</p>
+          <div class="grade-marcas" id="indice-marcas"></div>
+        </div>
+      </details>
+
       <details class="porque-assim">
         <summary>Porque é que estas peças são assim</summary>
         <div class="corpo">
@@ -177,17 +212,16 @@
   </footer>
 </div>
 
+<div class="modal" id="modal-marca" hidden>
+  <div class="modal-caixa" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <h2 id="modal-titulo">Escolher marca</h2>
+    <p id="modal-item"></p>
+    <div class="grade-marcas" id="grade-marcas"></div>
+    <button type="button" class="btn" id="b-fechar-marca">Fechar</button>
+  </div>
+</div>
+
 <div id="live" class="sr-only" role="status" aria-live="polite"></div>
 
-<noscript>
-  <div style="padding:24px;max-width:620px;margin:0 auto">
-    <h2>Esta página precisa de JavaScript</h2>
-    <p>Tudo corre no seu aparelho — não há servidor. Sem JavaScript não dá para gerar as peças.</p>
-  </div>
-</noscript>
-
-<script>
-/*__JS__*/
-</script>
 </body>
 </html>

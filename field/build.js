@@ -28,10 +28,12 @@ const js = [
   ['kit', ler('kit.js')]
 ].map(([nome, corpo]) => `/* ==== ${nome} ==== */\n${corpo}`).join('\n\n');
 
+/* A ordem no ficheiro é: script, CSS, fontes. Ver o comentário no topo do
+   template — o que faz a ferramenta funcionar vem antes do que a faz bonita. */
 const out = tpl
-  .replace('/*__FONTS__*/', () => fontes)
+  .replace('/*__JS__*/', () => js)
   .replace('/*__CSS__*/', () => css)
-  .replace('/*__JS__*/', () => js);
+  .replace('/*__FONTS__*/', () => fontes);
 
 const dest = path.join(__dirname, 'kit.html');
 fs.writeFileSync(dest, out);

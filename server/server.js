@@ -39,6 +39,7 @@ const { URL } = require('node:url');
 const db = require('./db');
 const P = require('./pagina');
 const A = require('./avisos');
+const B = require('./busca');
 
 const PORTA = Number(process.env.PORT || 8080);
 const ADMIN = process.env.CAPEM_ADMIN || '';
@@ -46,6 +47,15 @@ const BASE = (process.env.CAPEM_BASE || `http://localhost:${PORTA}`).replace(/\/
 const FICHEIRO_DB = process.env.CAPEM_DB || path.join(__dirname, 'capem.db');
 
 const RAIZ = path.join(__dirname, '..');
+
+/* Como o armazenamento deriva as colunas de procura. O `db.js` guarda e lê; as
+   regras de o que conta como uma correspondência estão no `busca.js`, e é aqui
+   que as duas metades se ligam — uma vez, no arranque. */
+db.definirDerivacao(d => ({
+  busca: B.textoDeBusca(d),
+  nome_ord: B.nomeDeOrdem(d),
+  pausado: !!(d && d.pausado)
+}));
 
 /* Falhar ao arrancar é melhor do que servir uma fila de aprovação aberta ao
    mundo. Um servidor que arranca sempre é um servidor que um dia arranca mal. */
@@ -281,9 +291,19 @@ async function encaminhar(req, res) {
     return responder(res, 200, P.paginaInicial({ contagem: db.contar(), base }));
   }
   if (caminho === '/centros' && req.method === 'GET') {
-    const centros = db.listar('aprovado')
-      .map(c => ({ ...c, url: urlDoCentro(c.slug, base) }));
-    return responder(res, 200, P.paginaCentros({ centros, base }),
+    const consulta = B.lerConsulta(url.searchParams);
+    const DIA = 86400000;
+    const r = db.procurar({
+      termos: B.termos(consulta.q), ordem: consulta.ordem,
+      aceitando: consulta.aceitando, recentes: consulta.recentes,
+      pagina: consulta.pagina, porPagina: consulta.porPagina,
+      /* As fronteiras dos escalões, calculadas agora: até um dia é "de hoje",
+         até sete ainda vale a pena mostrar sem alarme. */
+      fresca: Date.now() - DIA, envelhecida: Date.now() - 7 * DIA
+    });
+    const centros = r.linhas.map(x => ({ ...x, url: urlDoCentro(x.slug, base) }));
+    return responder(res, 200,
+      P.paginaCentros({ centros, base, consulta, total: r.total, paginas: r.paginas }),
       'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
   }
   if (caminho === '/centro' && req.method === 'GET') {

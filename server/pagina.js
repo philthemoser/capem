@@ -14,6 +14,7 @@
  * ==========================================================================*/
 const { svgIcone, svgProibido, svgAnel, item, ROTULO_BR, ICONES } = require('./compartilhado');
 const { linkWhatsApp } = require('./avisos');
+const B = require('./busca');
 
 const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -285,44 +286,68 @@ function paginaInicial({ contagem, base }) {
 /* ---------------------------------------------------------------------------
  * A lista de centros
  *
- * Ordenada pela idade da lista e não pelo nome: um centro que publicou hoje é
- * útil, um que não toca na página há três semanas é uma viagem em vão à espera
- * de acontecer. Os velhos ficam no fim e dizem-no.
+ * Ordenada, por omissão, pela idade da lista e não pelo nome: um centro que
+ * publicou hoje é útil, um que não toca na página há três semanas é uma viagem
+ * em vão à espera de acontecer. Os velhos ficam no fim e dizem-no.
  *
  * As marcas aparecem aqui, pequenas, para se poder correr a lista com os olhos
  * e ver quem precisa de água sem ler uma palavra.
+ *
+ * A ordem, os filtros, a procura e a página vêm todos do endereço, e o servidor
+ * só desenha o que já está escolhido. Antes esta página mandava todos os
+ * centros para o telemóvel e filtrava-os lá — com mil centros eram 1,6 MB.
+ *
+ * O formulário é um `<form method="get">` a sério: funciona com o JavaScript
+ * desligado, com o JavaScript por carregar, e no browser de dez anos que
+ * alguém tem no bolso. Com JavaScript, o botão "filtrar" desaparece e as
+ * escolhas aplicam-se sozinhas — é um acabamento, nunca o mecanismo.
  * -------------------------------------------------------------------------*/
-function paginaCentros({ centros, base }) {
-  const ordem = { fresca: 0, 'a-envelhecer': 1, velha: 2, nunca: 3 };
-  const linhas = centros
-    .map(c => ({ c, i: idade(c.publicado) }))
-    /* Primeiro pela idade da lista; dentro da mesma idade, quem está a receber
-       antes de quem está em pausa. Um centro em pausa com lista de hoje é
-       informação útil — "não vá lá" — mas esta página chama-se "quero ajudar",
-       e o primeiro da lista tem de ser um sítio que aceita alguma coisa. */
-    .sort((a, b) => ordem[a.i.nivel] - ordem[b.i.nivel] ||
-      (!!(a.c.dados || {}).pausado - !!(b.c.dados || {}).pausado) ||
-      String((a.c.dados || {}).nome).localeCompare(String((b.c.dados || {}).nome), 'pt'))
-    .map(({ c, i }) => {
-      const d = c.dados || {};
-      const precisa = (d.precisa || []).map(item).slice(0, 8);
-      const quando = { fresca: 'lista de hoje', 'a-envelhecer': `há ${i.dias} dias`,
-        velha: `há ${i.dias} dias`, nunca: 'ainda sem lista' }[i.nivel];
-      /* O que se procura é o nome ou o sítio, por isso é isso que o filtro vê. */
-      const busca = [d.nome, d.endereco, d.tipo].join(' ').toLowerCase();
-      return `<li class="c-item ${i.nivel}" data-busca="${esc(busca)}">
-        <a href="${esc(c.url || base + '/' + c.slug)}">
-          <span class="c-nome">${esc(d.nome || c.slug)}</span>
-          <span class="c-morada">${esc(d.endereco || '')}</span>
-          <span class="c-quando">${esc(quando)}</span>
-          ${d.pausado
-            ? `<span class="c-pausa">${svgIcone('fechado')} Não está recebendo agora</span>`
-            : precisa.length
-              ? `<span class="c-marcas">${precisa.map(x => svgIcone(x.id)).join('')}</span>`
-              : ''}
-        </a>
-      </li>`;
-    }).join('');
+function paginaCentros({ centros, base, consulta, total, paginas }) {
+  const c = consulta || B.lerConsulta();
+  const ts = B.termos(c.q);
+  const linhas = centros.map(x => {
+    const d = x.dados || {};
+    const i = idade(x.publicado);
+    /* Se alguém procurou "cobertor", a marca do cobertor tem de ser a primeira
+       que se vê — senão a lista responde sem mostrar a resposta. */
+    const precisa = B.realcar((d.precisa || []).map(item), ts).slice(0, 8);
+    const quando = { fresca: 'lista de hoje', 'a-envelhecer': `há ${i.dias} dias`,
+      velha: `há ${i.dias} dias`, nunca: 'ainda sem lista' }[i.nivel];
+    return `<li class="c-item ${i.nivel}">
+      <a href="${esc(x.url || base + '/' + x.slug)}">
+        <span class="c-nome">${esc(d.nome || x.slug)}</span>
+        <span class="c-morada">${esc(d.endereco || '')}</span>
+        <span class="c-quando">${esc(quando)}</span>
+        ${d.pausado
+          ? `<span class="c-pausa">${svgIcone('fechado')} Não está recebendo agora</span>`
+          : precisa.length
+            ? `<span class="c-marcas">${precisa.map(y => svgIcone(y.id)).join('')}</span>`
+            : ''}
+      </a>
+    </li>`;
+  }).join('');
+
+  const opcoes = Object.entries(B.ORDENS).map(([v, r]) =>
+    `<option value="${esc(v)}"${v === c.ordem ? ' selected' : ''}>${esc(r)}</option>`).join('');
+
+  /* Quantos resultados, e por causa de quê. Uma lista filtrada que não diz que
+     está filtrada faz alguém concluir que o seu bairro não tem centro nenhum. */
+  const filtrada = !!(c.q || c.aceitando || c.recentes);
+  const conta = total === 1 ? '1 centro' : `${total} centros`;
+  const resumo = filtrada
+    ? `${conta} ${total === 1 ? 'encontrado' : 'encontrados'}${c.q ? ` para “${esc(c.q)}”` : ''}`
+    : `${conta} no ar`;
+
+  const paginacao = paginas > 1 ? `
+  <nav class="paginas" aria-label="Páginas de resultados">
+    ${c.pagina > 1
+      ? `<a class="pg" rel="prev" href="${esc(B.comoEndereco(c, { pagina: c.pagina - 1 }))}">← anteriores</a>`
+      : '<span class="pg vazia">← anteriores</span>'}
+    <span class="pg-conta">página ${c.pagina} de ${paginas}</span>
+    ${c.pagina < paginas
+      ? `<a class="pg" rel="next" href="${esc(B.comoEndereco(c, { pagina: c.pagina + 1 }))}">seguintes →</a>`
+      : '<span class="pg vazia">seguintes →</span>'}
+  </nav>` : '';
 
   return molde({
     titulo: 'Centros de apoio — o que precisam hoje',
@@ -332,46 +357,70 @@ function paginaCentros({ centros, base }) {
   <header>
     <p class="tipo"><a href="/">CAPEM</a></p>
     <h1>Centros de apoio</h1>
-    <p class="entrada">Toque num centro para ver a lista completa, a morada e o
-      telefone. <b>Ligue antes de vir</b> se a lista não for de hoje.</p>
+    <p class="entrada">Procure pelo nome do centro, pelo lugar, ou pelo que
+      quer doar — escreva <b>cobertor</b> e vê quem está a pedir cobertores.
+      <b>Ligue antes de vir</b> se a lista não for de hoje.</p>
   </header>
 
-  ${centros.length ? `
-  <div class="busca">
-    <label class="sr-only" for="q">Procurar por nome ou lugar</label>
-    <input id="q" type="search" placeholder="Procurar por nome ou lugar…" autocomplete="off">
-  </div>
-  <ul class="centros">${linhas}</ul>
-  <p class="sem-resultado" id="sem-resultado" hidden>Nenhum centro com esse nome.</p>
-  ` : `<p class="vazio">Ainda não há centros no ar. Se está a montar um,
-        <a href="/novo">peça a página do seu centro</a>.</p>`}
+  <form class="procura" method="get" action="/centros" role="search">
+    <div class="linha-q">
+      <label class="sr-only" for="q">Procurar por nome, lugar ou item</label>
+      <input id="q" name="q" type="search" value="${esc(c.q)}"
+        placeholder="cobertor, água, Canoas…" autocomplete="off" maxlength="80">
+      <button class="btn" type="submit">Procurar</button>
+    </div>
+
+    <div class="opcoes">
+      <label class="campo-ordem">
+        <span>Ordenar</span>
+        <select name="ordem">${opcoes}</select>
+      </label>
+      <label class="caixa">
+        <input type="checkbox" name="aceitando" value="1"${c.aceitando ? ' checked' : ''}>
+        <span>Só quem está recebendo</span>
+      </label>
+      <label class="caixa">
+        <input type="checkbox" name="recentes" value="1"${c.recentes ? ' checked' : ''}>
+        <span>Só listas da última semana</span>
+      </label>
+      <button class="btn secundario" type="submit" id="aplicar">Aplicar</button>
+    </div>
+  </form>
+
+  <p class="resumo" role="status">${resumo}${
+    filtrada ? ` · <a href="/centros">ver todos</a>` : ''}</p>
+
+  ${centros.length
+    ? `<ul class="centros">${linhas}</ul>${paginacao}`
+    : total === 0 && filtrada
+      ? `<p class="sem-resultado">Nenhum centro com isso. Tente uma palavra só
+          — "agua" em vez de "água mineral" — ou <a href="/centros">veja todos</a>.</p>`
+      : `<p class="vazio">Ainda não há centros no ar. Se está a montar um,
+          <a href="/novo">peça a página do seu centro</a>.</p>`}
 
   <footer class="pe">
     <p><b>Não encontrou o seu centro?</b> <a href="/novo">Peça a página aqui.</a></p>
   </footer>
 </main>
 <script>
-/* Filtro no aparelho. A lista já veio toda: sem isto continua a funcionar,
-   só sem a caixa de procura. Com dezenas de centros chega bem; com centenas,
-   isto passa a ter de ser feito no servidor. */
+/* Acabamento, não mecanismo: sem isto o formulário continua a funcionar com o
+   botão "Aplicar". Com isto, escolher uma ordem ou marcar uma caixa aplica-se
+   sozinho e o botão sai da frente. */
 (function () {
-  var q = document.getElementById('q');
-  if (!q) return;
-  var itens = [].slice.call(document.querySelectorAll('.c-item'));
-  var vazio = document.getElementById('sem-resultado');
-  q.addEventListener('input', function () {
-    var t = q.value.trim().toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    var n = 0;
-    itens.forEach(function (li) {
-      var alvo = li.getAttribute('data-busca')
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      var bate = !t || alvo.indexOf(t) >= 0;
-      li.hidden = !bate;
-      if (bate) n++;
+  var f = document.querySelector('.procura');
+  if (!f) return;
+  var b = document.getElementById('aplicar');
+  if (b) b.hidden = true;
+  [].slice.call(f.querySelectorAll('select,input[type=checkbox]'))
+    .forEach(function (el) {
+      el.addEventListener('change', function () {
+        /* Uma escolha nova recomeça na primeira página: ficar na página 7 de
+           uma lista que agora tem duas é uma página vazia sem explicação. */
+        var p = f.querySelector('input[name=p]');
+        if (p) p.remove();
+        f.submit();
+      });
     });
-    vazio.hidden = n > 0;
-  });
 })();
 </script>`
   });
@@ -692,10 +741,38 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .porta-d{font:500 14.5px/1.5 var(--fonte);color:var(--texto-2)}
 
 /* --- lista de centros --- */
-.busca{margin:0 0 18px}
-input[type=search]{width:100%;padding:13px 14px;font:500 16px/1.3 var(--fonte);
+/* A procura e os filtros. Alvos grandes: isto usa-se de pé, com uma mão, num
+   telemóvel molhado. Nada aqui desce abaixo dos 44 px de altura tocável. */
+.procura{margin:0 0 16px}
+.linha-q{display:flex;gap:8px}
+input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--fonte);
   color:var(--tinta);background:var(--papel);border:2px solid var(--tinta);
   border-radius:0;-webkit-appearance:none}
+.linha-q .btn{flex:none;margin-top:0}
+.opcoes .btn{margin-top:0}
+.btn.secundario{padding:11px 14px;font-size:12.5px}
+.opcoes{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-top:12px}
+.campo-ordem{display:flex;align-items:center;gap:7px;
+  font:600 13px/1.2 var(--fonte);color:var(--texto-2)}
+.campo-ordem select{padding:9px 10px;font:600 14px/1.2 var(--fonte);
+  color:var(--tinta);background:var(--papel);border:2px solid var(--tinta);border-radius:0}
+/* A caixa é maior do que a predefinição do sistema de propósito: uma caixa de
+   13 px falha-se com o polegar, e uma pessoa que falha um filtro conclui que a
+   ferramenta não funciona. */
+.caixa{display:flex;align-items:center;gap:8px;min-height:44px;
+  font:600 14px/1.25 var(--fonte);cursor:pointer}
+.caixa input{width:22px;height:22px;flex:none;accent-color:var(--tinta);margin:0}
+.resumo{margin:0 0 10px;font:600 13px/1.4 var(--mono);color:var(--texto-2)}
+.resumo a{color:var(--texto-2)}
+/* Páginas. Só existem porque a lista deixou de vir toda de uma vez — e é isso
+   que faz a diferença entre 1,6 MB e 40 KB no telemóvel de quem vai ajudar. */
+.paginas{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:18px 0 0;font:600 13px/1.2 var(--fonte)}
+.pg{padding:12px 4px;text-decoration:none;border-bottom:2px solid var(--tinta)}
+/* Quando não há página anterior, o lugar dela fica lá mas vazio: um rótulo
+   cinzento que não é clicável falha o contraste E mente sobre ser um link. */
+.pg.vazia{visibility:hidden}
+.pg-conta{font:600 12px/1.2 var(--mono);color:var(--texto-2)}
 .centros{list-style:none;margin:0;padding:0}
 .c-item{border-top:2px solid var(--tinta)}
 .c-item:last-child{border-bottom:2px solid var(--tinta)}

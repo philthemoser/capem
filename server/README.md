@@ -96,10 +96,19 @@ completo da página do centro no campo de publicação.
 
 ## Onde alojar
 
+**Se é a primeira vez: [../docs/por-no-ar.md](../docs/por-no-ar.md).** Vinte
+minutos no browser, sem linha de comandos, ~5 USD/mês. Recomenda o Railway —
+não porque seja melhor, mas porque é o que tem menos passos entre "tenho o
+código" e "está no ar", e chegar ao ar é o que falta. O `railway.json` na raiz
+já está lá.
+
 Não usa nada que pertença a uma nuvem em particular: HTTP simples e um ficheiro
 SQLite. Corre igual num VPS de quatro euros, no Fly, no Railway, ou no seu
 portátil atrás de um túnel. Ponha um proxy à frente para o TLS (Caddy resolve
 isso em três linhas) e faça cópia do ficheiro `.db` — é o estado todo.
+
+Onde quer que seja: **o `.db` tem de estar num disco que sobreviva a um
+redeploy**. É a única forma de estragar isto num sítio só.
 
 O custo não é o problema: `docs/running-costs.md` fica-se por cerca de $25/mês, e
 para uma dúzia de centros a conta é praticamente zero.
@@ -109,7 +118,7 @@ para uma dúzia de centros a conta é praticamente zero.
 | Endereço | |
 |---|---|
 | `/` | Duas portas: **quero ajudar** e **sou de um centro**. Nada mais. |
-| `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Ordenada pela idade; quem está em pausa desce; quem não publica há semanas vai para o fim, a vermelho. Filtro por nome ou lugar, no aparelho. |
+| `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Procura, filtros, ordem e páginas — tudo no servidor, tudo no endereço. |
 | `/centro` | A porta de quem gere um centro: o material impresso, ou pedir uma página. |
 | `/novo` | O formulário de pedido. |
 | `/<centro>` | A página do centro — o destino do QR. |
@@ -120,6 +129,37 @@ A entrada não tem formulário de propósito. Quem chega é uma de duas pessoas 
 não há uma terceira: ou tem alguma coisa para dar, ou está a montar um centro.
 Um formulário na entrada obrigava a primeira — que aparece às centenas — a
 passar por cima da segunda.
+
+### `/centros`, em detalhe
+
+Tudo vem do endereço, e o endereço é partilhável — um link para
+"quem está a receber cobertores em Canoas" é `/centros?q=canoas+cobertor&aceitando=1`.
+
+| Parâmetro | |
+|---|---|
+| `q` | Procura. Sem acentos e sem maiúsculas dos dois lados, e **inclui as necessidades**: quem escreve `cobertor` encontra quem está a pedir cobertores, não só centros com "cobertor" no nome. Várias palavras têm de bater todas. |
+| `ordem` | `uteis` (por omissão), `recentes`, `nome`. |
+| `aceitando=1` | Esconde quem está em pausa. |
+| `recentes=1` | Só listas da última semana. |
+| `p` | Página. 40 por página. |
+
+`uteis` é a ordem de sempre: primeiro o escalão de idade da lista, depois quem
+está a receber antes de quem está em pausa, depois o nome. Esta página chama-se
+"quero ajudar" — o primeiro da lista tem de ser um sítio que aceita alguma coisa.
+
+**É um `<form method="get">` a sério.** Sem JavaScript há um botão *Aplicar* e
+funciona tudo; com JavaScript o botão desaparece e as escolhas aplicam-se
+sozinhas. O script é acabamento, nunca o mecanismo — e há um teste que falha se
+isso deixar de ser verdade.
+
+Porque foi feito assim: antes, a página desenhava **todos** os centros e
+filtrava-os no telemóvel. Com mil centros eram 1,6 MB de HTML e 41 páginas por
+segundo. Agora são 51 KB e ~440 por segundo, e o tamanho já não depende de
+quantos centros existem.
+
+Se um dia forem dezenas de milhares: a procura é um `LIKE '%…%'`, que percorre a
+tabela. A 10 000 centros ainda dá ~130 páginas por segundo; muito acima disso
+quer FTS5 ou uma tabela própria de necessidades. Está longe.
 
 ## O caminho completo
 
@@ -237,6 +277,7 @@ Isso mantém a posição de proteção de dados simples, ao contrário do protó
 ```
 server/server.js         rotas, defesas, arranque    (um ficheiro, sem dependências)
 server/db.js             SQLite; o único sítio que sabe como se guarda
+server/busca.js          o que conta como uma correspondência, e as ordens
 server/pagina.js         as páginas, com as fichas de design do papel
 server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ```
@@ -244,7 +285,8 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 123 verificações
+node tools/server-test.js    # 148 verificações
+node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas
@@ -258,9 +300,11 @@ redirecionarem uma para a outra nos dois estilos.
 
 - **Não há como um centro se apagar** a si próprio, nem como marcar um centro
   como encerrado. Hoje é uma alteração à mão na base de dados.
-- **A lista de centros é uma página só**, filtrada no aparelho. Chega bem para
-  dezenas; com centenas é preciso paginar e procurar no servidor, e
-  provavelmente ordenar por distância em vez de por idade.
+- **A lista não ordena por distância.** Ordena por idade da lista, o que é a
+  coisa certa a fazer com dez centros e a coisa errada com quinhentos: quem quer
+  ajudar quer o centro mais perto que precisa do que tem no carro. Isso obriga a
+  guardar coordenadas de cada centro e a pedir a localização a quem visita — e a
+  segunda parte é uma decisão de privacidade, não de código.
 - **Não há cópia de segurança automática** do ficheiro `.db`.
 - **O empurrão é manual.** Alguém tem de abrir a fila e carregar no botão. É
   deliberado a esta escala, mas com cem centros passa a ser trabalho a sério —

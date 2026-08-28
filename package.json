@@ -6,16 +6,23 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
-    "check": "node tools/check-i18n.js && node tools/smoke.js && node tools/flow.js && node tools/nav.js && node tools/a11y.js",
+    "check": "node tools/check-i18n.js && node tools/smoke.js && node tools/flow.js && node tools/nav.js && node tools/a11y.js && node tools/kit-test.js && node tools/server-test.js && node tools/a11y-server.js",
     "check:i18n": "node tools/check-i18n.js",
     "check:screens": "node tools/smoke.js",
     "check:flow": "node tools/flow.js",
     "check:a11y": "node tools/a11y.js",
     "shots": "node tools/shots.js",
-    "check:nav": "node tools/nav.js"
+    "check:nav": "node tools/nav.js",
+    "start": "node server/server.js",
+    "check:server": "node tools/server-test.js",
+    "check:kit": "node tools/kit-test.js",
+    "check:a11y-server": "node tools/a11y-server.js"
   },
   "devDependencies": {
     "axe-core": "^4.10.0",
     "playwright": "^1.49.0"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }

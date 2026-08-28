@@ -150,10 +150,12 @@ dias, faixa amarela "ligue antes de vir"; a partir de sete, faixa vermelha
 perigosa — uma lista de três semanas manda um vizinho carregar cinco quilos de
 arroz até um centro que já não os quer.
 
-Quem quer doar entra em `/`, escolhe **quero ajudar** e vê a lista de todos os
-centros com o que cada um precisa hoje — em marcas, para se correr a lista com
-os olhos. Quem está a montar um centro escolhe **sou de um centro** e pede a
-sua página.
+Quem quer doar entra em `/`, escolhe **quero ajudar** e vê a lista dos centros
+com o que cada um precisa hoje — em marcas, para se correr a lista com os olhos.
+A procura entende o que se tem para dar: escrever **cobertor** mostra quem está
+a pedir cobertores, e não só quem tem "cobertor" no nome. Dá para ver só quem
+está a receber, só listas da última semana, e mudar a ordem. Quem está a montar
+um centro escolhe **sou de um centro** e pede a sua página.
 
 Como correr, como alojar e todas as decisões: **[../server/README.md](../server/README.md)**.
 

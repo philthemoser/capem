@@ -22,6 +22,27 @@ const ESTADOS = ['pendente', 'aprovado', 'recusado'];
 
 let db;
 
+/**
+ * Como se derivam as colunas de procura a partir dos dados de um centro.
+ *
+ * Instalada de fora (`server.js` liga-lhe o `busca.js`) porque este ficheiro é
+ * armazenamento e mais nada: não sabe o que é o rótulo de um item, e não deve
+ * passar a saber só para poder indexá-lo. A predefinição chega para um teste
+ * que só queira guardar e ler.
+ */
+let derivar = d => ({
+  busca: String((d && d.nome) || '').toLowerCase(),
+  nome_ord: String((d && d.nome) || '').toLowerCase(),
+  pausado: !!(d && d.pausado)
+});
+
+const definirDerivacao = fn => { derivar = fn; };
+
+const derivadas = d => {
+  const x = derivar(d || {});
+  return [String(x.busca || ''), String(x.nome_ord || ''), x.pausado ? 1 : 0];
+};
+
 function abrir(ficheiro) {
   db = new DatabaseSync(ficheiro || path.join(__dirname, 'capem.db'));
   db.exec(`
@@ -32,9 +53,29 @@ function abrir(ficheiro) {
       dados       TEXT NOT NULL,
       criado      INTEGER NOT NULL,
       decidido    INTEGER,
-      publicado   INTEGER
+      publicado   INTEGER,
+
+      /* Três colunas que são cópias de coisas que já estão dentro do JSON.
+         Existem porque a lista de centros tem de ser filtrada, procurada e
+         ordenada em SQL — a alternativa é ler e desempacotar mil JSON a cada
+         pedido, que é exactamente o que tornava essa página lenta.
+
+         busca     nome + morada + tipo + os rótulos das necessidades, sem
+                   acentos nem maiúsculas. Ver busca.js: quem procura escreve
+                   o que quer dar, não o nome de um centro.
+         nome_ord  o nome sem acentos, porque o SQLite não ordena português.
+         pausado   para "só quem está a receber" ser um WHERE e não um filtro
+                   aplicado depois de já se ter desenhado tudo.
+
+         São derivadas: a coluna dados continua a ser a verdade. Reescrevem-se
+         sozinhas a cada publicação, e reindexar() refá-las todas. */
+      busca       TEXT NOT NULL DEFAULT '',
+      nome_ord    TEXT NOT NULL DEFAULT '',
+      pausado     INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_estado ON centros(estado, criado);
+    CREATE INDEX IF NOT EXISTS idx_lista ON centros(estado, publicado);
+    CREATE INDEX IF NOT EXISTS idx_nome ON centros(estado, nome_ord);
 
     /* Endereços antigos. Quando um centro é renomeado — normalmente na
        aprovação, para encurtar o que vai ser ditado ao telefone — o endereço
@@ -55,7 +96,58 @@ function abrir(ficheiro) {
       valor TEXT NOT NULL
     );
   `);
+  migrar();
+  /* Refaz as colunas derivadas de tudo o que já lá estava. É uma passagem por
+     uma tabela pequena, e é o que torna seguro mudar a regra de indexação sem
+     obrigar centro nenhum a republicar para voltar a ser encontrável. */
+  reindexar();
   return db;
+}
+
+/**
+ * Bases de dados que já existiam antes das colunas derivadas.
+ *
+ * O `CREATE TABLE IF NOT EXISTS` acima não toca numa tabela que já lá está, por
+ * isso um servidor actualizado sobre dados antigos arrancaria sem estas colunas
+ * e rebentaria no primeiro pedido. Acrescentam-se aqui, vazias; quem as enche é
+ * o `reindexar()` do arranque.
+ */
+function migrar() {
+  const tem = new Set(db.prepare('PRAGMA table_info(centros)').all().map(c => c.name));
+  const novas = {
+    busca: "TEXT NOT NULL DEFAULT ''",
+    nome_ord: "TEXT NOT NULL DEFAULT ''",
+    pausado: 'INTEGER NOT NULL DEFAULT 0'
+  };
+  Object.entries(novas).forEach(([c, t]) => {
+    if (!tem.has(c)) db.exec(`ALTER TABLE centros ADD COLUMN ${c} ${t}`);
+  });
+}
+
+/**
+ * Recalcula as colunas derivadas de todos os centros.
+ *
+ * Corre-se no arranque. É barato (uma passagem por uma tabela pequena) e é o
+ * que torna seguro mudar a regra de indexação: acrescentar uma palavra ao texto
+ * de busca não obriga ninguém a republicar para voltar a ser encontrável.
+ *
+ * O `derivar` vem de fora porque este ficheiro não sabe — nem deve saber — o
+ * que é o rótulo de um item.
+ */
+function reindexar() {
+  const linhas = db.prepare('SELECT slug, dados FROM centros').all();
+  const upd = db.prepare('UPDATE centros SET busca = ?, nome_ord = ?, pausado = ? WHERE slug = ?');
+  db.exec('BEGIN');
+  try {
+    linhas.forEach(r => {
+      let d = {};
+      try { d = JSON.parse(r.dados); } catch { /* uma linha corrompida não pára o arranque */ }
+      const x = derivar(d);
+      upd.run(x.busca, x.nome_ord, x.pausado ? 1 : 0, r.slug);
+    });
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return linhas.length;
 }
 
 /* ---------------------------------------------------------------------------
@@ -94,9 +186,10 @@ function codigoConfere(codigo, guardado) {
  * -------------------------------------------------------------------------*/
 function criar(slug, dados) {
   const codigo = novoCodigo();
-  db.prepare(`INSERT INTO centros (slug, estado, codigo_hash, dados, criado)
-              VALUES (?, 'pendente', ?, ?, ?)`)
-    .run(slug, hash(codigo), JSON.stringify(dados), Date.now());
+  db.prepare(`INSERT INTO centros (slug, estado, codigo_hash, dados, criado,
+                                   busca, nome_ord, pausado)
+              VALUES (?, 'pendente', ?, ?, ?, ?, ?, ?)`)
+    .run(slug, hash(codigo), JSON.stringify(dados), Date.now(), ...derivadas(dados));
   return codigo;
 }
 
@@ -141,8 +234,10 @@ function renomear(antigo, novo) {
 }
 
 function publicar(slug, dados) {
-  db.prepare('UPDATE centros SET dados = ?, publicado = ? WHERE slug = ?')
-    .run(JSON.stringify(dados), Date.now(), slug);
+  db.prepare(`UPDATE centros SET dados = ?, publicado = ?,
+                                 busca = ?, nome_ord = ?, pausado = ?
+              WHERE slug = ?`)
+    .run(JSON.stringify(dados), Date.now(), ...derivadas(dados), slug);
 }
 
 function decidir(slug, estado) {
@@ -156,6 +251,59 @@ function listar(estado) {
     ? db.prepare('SELECT * FROM centros WHERE estado = ? ORDER BY criado DESC').all(estado)
     : db.prepare('SELECT * FROM centros ORDER BY criado DESC').all();
   return q.map(r => ({ ...r, dados: JSON.parse(r.dados) }));
+}
+
+/* ---------------------------------------------------------------------------
+ * A lista pública, com procura, filtros, ordem e páginas.
+ *
+ * Tudo isto acontece em SQL e devolve no máximo `porPagina` linhas. A versão
+ * anterior lia todos os centros, desempacotava todos os JSON e mandava-os para
+ * o telemóvel filtrar: 1,6 MB de HTML e 41 páginas por segundo com mil centros.
+ *
+ * As fronteiras da idade chegam de fora em milissegundos, para o "hoje" ser o
+ * de quem faz o pedido e não o de quando o processo arrancou — um servidor que
+ * não reinicia há três semanas não pode achar que ainda é a semana passada.
+ * -------------------------------------------------------------------------*/
+function procurar({ termos = [], ordem = 'uteis', aceitando = false,
+                    recentes = false, pagina = 1, porPagina = 40,
+                    fresca = 0, envelhecida = 0 } = {}) {
+  const onde = ["estado = 'aprovado'"];
+  const arg = [];
+
+  /* Todos os termos têm de bater. Com o texto já normalizado dos dois lados,
+     um LIKE chega — e uma tabela pequena percorre-se mais depressa do que se
+     mantém um índice de texto que o `node:sqlite` pode nem ter compilado. */
+  termos.slice(0, 6).forEach(t => {
+    onde.push('busca LIKE ? ESCAPE \'\\\'');
+    arg.push('%' + t.replace(/[\\%_]/g, c => '\\' + c) + '%');
+  });
+  if (aceitando) onde.push('pausado = 0');
+  if (recentes) { onde.push('publicado IS NOT NULL AND publicado >= ?'); arg.push(envelhecida); }
+
+  const w = 'WHERE ' + onde.join(' AND ');
+  const total = db.prepare(`SELECT COUNT(*) n FROM centros ${w}`).get(...arg).n;
+
+  /* A ordem de sempre: escalão de idade, depois quem está a receber, depois o
+     nome. O escalão escreve-se aqui em vez de se ordenar por `publicado`
+     directamente porque dentro do mesmo escalão o que interessa é estar aberto,
+     não ter publicado dez minutos antes. */
+  const escalao = `CASE WHEN publicado IS NULL THEN 3
+                        WHEN publicado >= ? THEN 0
+                        WHEN publicado >= ? THEN 1
+                        ELSE 2 END`;
+  const ORDEM = {
+    uteis: { sql: `${escalao} ASC, pausado ASC, nome_ord ASC`, pre: [fresca, envelhecida] },
+    recentes: { sql: 'publicado IS NULL ASC, publicado DESC, nome_ord ASC', pre: [] },
+    nome: { sql: 'nome_ord ASC', pre: [] }
+  };
+  const o = ORDEM[ordem] || ORDEM.uteis;
+
+  const p = Math.max(1, pagina);
+  const linhas = db.prepare(`SELECT * FROM centros ${w} ORDER BY ${o.sql} LIMIT ? OFFSET ?`)
+    .all(...arg, ...o.pre, porPagina, (p - 1) * porPagina)
+    .map(r => ({ ...r, dados: JSON.parse(r.dados) }));
+
+  return { linhas, total, pagina: p, paginas: Math.max(1, Math.ceil(total / porPagina)) };
 }
 
 const lerEstado = (chave, recurso = null) => {
@@ -192,5 +340,6 @@ function contar() {
 }
 
 module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
-                   decidir, listar, parados, contar, lerEstado, escreverEstado,
+                   decidir, listar, procurar, parados, contar, lerEstado,
+                   escreverEstado, definirDerivacao, reindexar,
                    novoCodigo, codigoConfere, ESTADOS };

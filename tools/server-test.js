@@ -282,7 +282,109 @@ const DIA = 86400000;
     - (html.match(/class="c-pausa"/g) || []).length;
   ok('cada centro que recebe mostra as suas marcas', comMarcas === aReceber && comMarcas >= 3,
     `${comMarcas} com marcas, ${aReceber} a receber`);
-  ok('e a busca sabe procurar por lugar', /data-busca="[^"]*rua teste/.test(html));
+
+  console.log('\nprocurar, filtrar, ordenar');
+  /* Um vizinho com cobertores no carro não escreve o nome de um centro: escreve
+     "cobertor". Se a procura só vir nomes e moradas, a página não responde à
+     única pergunta que essa pessoa tem. */
+  const q = async qs => (await get('/centros?' + qs)).text();
+  const tem = (h, n) => h.indexOf('>' + n + '<') >= 0;
+
+  S.db.criar('proc-cobertores', { nome: 'Abrigo Dos Cobertores', tipo: 'Ponto de arrecadação',
+    endereco: 'Avenida Água Branca, 9', contato: '(51) 90000-0001',
+    precisa: ['cobertor', 'agua'], naoTraga: [] });
+  S.db.decidir('proc-cobertores', 'aprovado');
+  S.db.publicar('proc-cobertores', S.db.ler('proc-cobertores').dados);
+
+  S.db.criar('proc-racao', { nome: 'Ponto Zona Sul', tipo: 'Ponto de arrecadação',
+    endereco: 'Rua Central, 2', contato: '(51) 90000-0002',
+    precisa: [{ texto: 'Ração para cães', marca: 'caixa' }], naoTraga: [] });
+  S.db.decidir('proc-racao', 'aprovado');
+  S.db.publicar('proc-racao', S.db.ler('proc-racao').dados);
+
+  html = await q('q=cobertor');
+  ok('procurar por um item encontra quem o pede', tem(html, 'Abrigo Dos Cobertores'));
+  ok('e deixa de fora quem não o pede', !tem(html, 'Ponto Zona Sul'));
+
+  /* O item escrito à mão conta tanto como os do catálogo: é onde estão as
+     necessidades que ninguém previu, e é exactamente o que se procura. */
+  ok('um item escrito à mão também se procura',
+    tem(await q('q=racao'), 'Ponto Zona Sul'));
+
+  /* Acentos dos dois lados. Quem escreve de pé, à chuva, não escreve "água". */
+  ok('sem acentos encontra com acentos', tem(await q('q=agua'), 'Abrigo Dos Cobertores'));
+  ok('com acentos encontra na mesma', tem(await q('q=%C3%A1gua'), 'Abrigo Dos Cobertores'));
+  ok('e maiúsculas não interessam', tem(await q('q=COBERTOR'), 'Abrigo Dos Cobertores'));
+
+  /* Duas palavras estreitam, não alargam — senão escrever mais piora. */
+  html = await q('q=cobertor+branca');
+  ok('duas palavras exigem as duas', tem(html, 'Abrigo Dos Cobertores'));
+  ok('e uma palavra que não bate elimina o centro',
+    !tem(await q('q=cobertor+inexistente'), 'Abrigo Dos Cobertores'));
+
+  html = await q('q=zzzznada');
+  ok('sem resultados diz que não há e oferece a saída',
+    /Nenhum centro com isso/.test(html) && /href="\/centros"/.test(html));
+
+  /* A pergunta não pode desaparecer da caixa: quem não vê o que procurou não
+     sabe se procurou o que queria. */
+  ok('a procura fica escrita na caixa', /name="q"[^>]*value="cobertor"/.test(await q('q=cobertor')));
+
+  html = await q('aceitando=1');
+  ok('"só quem está recebendo" tira os pausados', !tem(html, 'AAA Pausado'));
+  ok('e mantém os outros', tem(html, 'AAA Fresco'));
+  ok('e a caixa fica marcada', /name="aceitando"[^>]*checked/.test(html));
+
+  html = await q('recentes=1');
+  ok('"só listas da última semana" tira as velhas', !tem(html, 'AAA Velho'));
+
+  html = await q('ordem=nome');
+  ok('ordenar por nome ordena por nome',
+    html.indexOf('>AAA Fresco<') < html.indexOf('>Abrigo Dos Cobertores<'));
+  ok('e a ordem escolhida fica escolhida', /value="nome" selected/.test(html));
+  /* Um parâmetro inventado não pode partir a página nem escolher-se a si mesmo. */
+  html = await q('ordem=' + encodeURIComponent("'; DROP TABLE centros; --"));
+  ok('uma ordem inventada volta à predefinida',
+    /value="uteis" selected/.test(html) && !/DROP TABLE/.test(html));
+
+  /* Sem JavaScript isto tem de continuar a ser utilizável: é um formulário GET
+     com um botão, e não uma lista que só se filtra no aparelho. */
+  html = await q('');
+  ok('os filtros são um formulário GET', /<form class="procura" method="get"/.test(html));
+  ok('com um botão que os aplica sem JavaScript', /id="aplicar"/.test(html));
+
+  console.log('\npáginas');
+  /* O que motivou tudo isto: com mil centros a página inteira eram 1,6 MB, e
+     ninguém numa rua com uma barra de rede espera por isso. */
+  const antes = S.db.contar().aprovado;
+  for (let i = 0; i < 45; i++) {
+    const sl = 'pag-' + i;
+    S.db.criar(sl, { nome: 'Paginado ' + String(i).padStart(2, '0'),
+      tipo: 'Ponto de arrecadação', endereco: 'Rua Paginada, ' + i,
+      contato: '(51) 90000-0000', precisa: ['agua'], naoTraga: [] });
+    S.db.decidir(sl, 'aprovado');
+    S.db.publicar(sl, S.db.ler(sl).dados);
+  }
+  const totalAgora = antes + 45;
+  html = await q('ordem=nome');
+  const naPagina = (html.match(/class="c-item /g) || []).length;
+  ok('uma página traz no máximo 40 centros', naPagina <= 40, String(naPagina));
+  ok('mas diz quantos há ao todo',
+    html.includes(totalAgora + ' centros'), String(totalAgora));
+  ok('e há um link para as seguintes', /rel="next"/.test(html));
+  ok('sem link para trás na primeira', !/rel="prev"/.test(html));
+  const p2 = await q('ordem=nome&p=2');
+  ok('a segunda página tem centros diferentes',
+    /rel="prev"/.test(p2) && (p2.match(/class="c-item /g) || []).length > 0 &&
+    p2.indexOf('>AAA Fresco<') < 0);
+  /* Uma página que não existe não pode ser um erro: alguém colou um link. */
+  const p999 = await get('/centros?p=999');
+  ok('uma página que não existe responde na mesma', p999.status === 200);
+
+  /* E o tamanho, que é o número que interessa a quem está na rua. */
+  const bytes = Buffer.byteLength(await q(''));
+  ok('a página fica pequena o suficiente para uma rede má', bytes < 200000,
+    Math.round(bytes / 1024) + ' KB com ' + totalAgora + ' centros');
 
   console.log('\navisos e empurrões');
   const A = require('../server/avisos.js');

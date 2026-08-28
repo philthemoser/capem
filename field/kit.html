@@ -1860,6 +1860,10 @@ async function publicar(botao) {
       S.link = j.url;
       salvar(); montarForm();
     }
+    /* Publicar e depois não contar a ninguém não serve de nada. O momento em
+       que se carrega em Publicar é o único em que o coordenador tem a lista
+       fresca na cabeça e o telemóvel na mão. */
+    if (r.ok && j.url) mostrarPartilha(j.url);
   } catch (e) {
     /* Sem sinal não é um erro nesta ferramenta: é o estado normal metade do
        tempo. Por isso a mensagem não pede desculpa, diz o que fazer. */
@@ -1867,6 +1871,48 @@ async function publicar(botao) {
       + 'houver sinal.', 'mau');
   }
   botao.disabled = false; botao.textContent = antes;
+}
+
+/**
+ * Um toque para mandar a lista de hoje para os grupos.
+ *
+ * `navigator.share` abre a folha do sistema, onde o WhatsApp é a primeira
+ * coisa. Onde não existir — desktop, browsers antigos — cai para um link
+ * wa.me, que faz o mesmo com mais um toque. Sem API, sem número, sem custo.
+ */
+function textoPartilha(url) {
+  const L = [];
+  L.push(`*${V.nome().toUpperCase()}* — ${S.pausado ? 'NÃO estamos recebendo agora' : 'precisamos hoje'}`);
+  L.push('');
+  if (!S.pausado && S.precisa.length) {
+    V.precisa10().forEach(i => L.push('• ' + i.rotulo));
+    L.push('');
+  }
+  L.push('*NÃO TRAGA:* ' + V.nao().map(i => i.rotulo).join(', '));
+  L.push('');
+  if (V.end()) L.push('📍 ' + V.end());
+  if (V.tel()) L.push('📱 ' + V.tel());
+  L.push('');
+  L.push('Lista sempre atualizada: ' + url);
+  return L.join('\n');
+}
+
+function mostrarPartilha(url) {
+  const caixa = document.getElementById('pos-publicar');
+  caixa.hidden = false;
+  caixa.querySelector('.pos-url').textContent = url.replace(/^https?:\/\//, '');
+}
+
+async function partilharLista(botao) {
+  const url = (S.link || '').trim();
+  if (!url) return;
+  const texto = textoPartilha(url);
+  if (navigator.share) {
+    try { await navigator.share({ text: texto }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+  avisar(botao, 'A abrir o WhatsApp');
 }
 
 /* ---------------------------------------------------------------------------
@@ -2022,6 +2068,8 @@ function iniciar() {
 
   document.getElementById('b-publicar')
     .addEventListener('click', e => publicar(e.currentTarget));
+  document.getElementById('b-partilhar')
+    .addEventListener('click', e => partilharLista(e.currentTarget));
   /* Se o kit foi servido pelo servidor, o pedido de página é lá; se foi aberto
      de uma pen, o link não sabe para onde ir e é escondido em vez de mentir. */
   const lp = document.getElementById('link-pedir');
@@ -2321,6 +2369,18 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .estado-pub.bom { border-left-color: var(--permitido); }
 .estado-pub.mau { border-left-color: var(--proibido); }
+
+.pos-publicar {
+  margin-top: 12px; padding: 14px;
+  border: 2px solid var(--permitido); background: var(--papel);
+}
+.pos-publicar p { margin: 0 0 8px; font: 500 13.5px/1.5 var(--fonte); color: var(--texto-2); }
+.pos-publicar b { color: var(--tinta); }
+.pos-url { font-family: var(--mono); word-break: break-all; }
+/* O verde do WhatsApp, e só aqui: é o único sítio da ferramenta que aponta
+   para fora dela. */
+.btn-wa { background: #25D366; border-color: #0f7a3a; color: var(--tinta); }
+.btn-wa:hover { background: #1eb85a; }
 
 .btn-txt {
   padding: 0; margin-top: 10px; background: none; border: 0;
@@ -3037,6 +3097,12 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
         </div>
         <button type="button" class="btn btn-primario largo" id="b-publicar">Publicar a lista de hoje</button>
         <p class="estado-pub" id="estado-pub" hidden></p>
+        <div class="pos-publicar" id="pos-publicar" hidden>
+          <p><b>No ar em <span class="pos-url"></span></b></p>
+          <p>Agora mande no grupo. É por aí que a lista chega mais longe — e o
+            link nunca fica velho, ao contrário de uma imagem.</p>
+          <button type="button" class="btn btn-wa largo" id="b-partilhar">Mandar no WhatsApp</button>
+        </div>
         <p class="ajuda">Ainda não tem página? <a id="link-pedir" href="/">Peça uma aqui</a> —
           recebe um código na hora. O código não é guardado neste aparelho a não ser
           que o escreva aqui, e nunca sai daqui para outro sítio sem ser o seu servidor.</p>

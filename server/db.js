@@ -45,6 +45,15 @@ function abrir(ficheiro) {
       slug  TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_alias_slug ON aliases(slug);
+
+    /* Um sítio para o pouco estado que não pertence a um centro — por agora,
+       quando foi enviado o último resumo de centros parados. Está na base de
+       dados e não em memória porque um servidor que reinicia três vezes numa
+       tarde não pode mandar três resumos. */
+    CREATE TABLE IF NOT EXISTS estado (
+      chave TEXT PRIMARY KEY,
+      valor TEXT NOT NULL
+    );
   `);
   return db;
 }
@@ -149,6 +158,31 @@ function listar(estado) {
   return q.map(r => ({ ...r, dados: JSON.parse(r.dados) }));
 }
 
+const lerEstado = (chave, recurso = null) => {
+  const r = db.prepare('SELECT valor FROM estado WHERE chave = ?').get(chave);
+  return r ? r.valor : recurso;
+};
+
+const escreverEstado = (chave, valor) =>
+  db.prepare('INSERT OR REPLACE INTO estado (chave, valor) VALUES (?, ?)')
+    .run(chave, String(valor));
+
+/**
+ * Centros aprovados que não publicam há mais de `dias`.
+ *
+ * Um centro parado é o modo de falhar mais provável desta ferramenta: a página
+ * continua no ar, parece nova, e manda gente carregar coisas até um sítio que
+ * já não as quer. Por isso alguém tem de ser avisado.
+ */
+function parados(dias) {
+  const limite = Date.now() - dias * 86400000;
+  return db.prepare(`SELECT * FROM centros
+                     WHERE estado = 'aprovado'
+                       AND (publicado IS NULL OR publicado < ?)
+                     ORDER BY COALESCE(publicado, 0) ASC`).all(limite)
+    .map(r => ({ ...r, dados: JSON.parse(r.dados) }));
+}
+
 function contar() {
   const r = {};
   ESTADOS.forEach(e => {
@@ -158,4 +192,5 @@ function contar() {
 }
 
 module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
-                   decidir, listar, contar, novoCodigo, codigoConfere, ESTADOS };
+                   decidir, listar, parados, contar, lerEstado, escreverEstado,
+                   novoCodigo, codigoConfere, ESTADOS };

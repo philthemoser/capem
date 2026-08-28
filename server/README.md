@@ -30,6 +30,22 @@ Imprime no arranque o endereço da fila de aprovação, com o segredo já lá.
 | `CAPEM_ESTILO` | `caminho` (omissão) ou `subdominio` — qual das duas formas é a canónica. |
 | `PORT` | por omissão 8080 |
 | `CAPEM_DB` | caminho do ficheiro SQLite, por omissão `server/capem.db` |
+| `CAPEM_TELEGRAM_TOKEN` + `CAPEM_TELEGRAM_CHAT` | avisa-o no Telegram quando chega um pedido |
+| `CAPEM_NTFY` | um endereço [ntfy.sh](https://ntfy.sh), em alternativa |
+| `CAPEM_WEBHOOK` | um POST com JSON, para ligar a outra coisa qualquer |
+| `CAPEM_PAIS` | indicativo do país para os links wa.me (por omissão `55`) |
+| `CAPEM_DIAS_PARADO` | ao fim de quantos dias um centro conta como parado (3) |
+
+### Avisos no Telegram em dois minutos
+
+1. Fale com o [@BotFather](https://t.me/BotFather), `/newbot`, guarde o token.
+2. Mande uma mensagem qualquer ao seu bot.
+3. Abra `https://api.telegram.org/bot<TOKEN>/getUpdates` e copie o `chat.id`.
+4. `CAPEM_TELEGRAM_TOKEN=… CAPEM_TELEGRAM_CHAT=… node server/server.js`
+
+Sem nada configurado os avisos saem na consola — é sempre melhor do que
+silêncio, e é onde alguém vai procurar quando perguntar porque é que não foi
+avisado. O arranque diz que canais estão mesmo ligados.
 
 ## Caminho ou subdomínio
 
@@ -104,6 +120,42 @@ passar por cima da segunda.
    sozinho para a página.
 4. **Quem lê o QR** vê a lista de hoje — com as mesmas marcas do papel.
 
+## WhatsApp
+
+O WhatsApp está aqui, mas não como API. As três coisas que se queriam dele
+não precisam da mesma ferramenta:
+
+**Avisar quem administra** — é uma pessoa, o seu próprio telemóvel. Telegram,
+ntfy ou um webhook fazem isto de graça e em dois minutos. Usar a Cloud API para
+isto obrigava a comprar um número dedicado só para se avisar a si próprio.
+
+**Empurrar um centro parado** — este quer mesmo WhatsApp: os coordenadores
+vivem lá e não vão ler e-mail. A fila de aprovação tem uma secção **precisam de
+um empurrão** com quem não publica há três dias ou mais, e um botão que abre a
+conversa com a mensagem já escrita — nomeia o centro, diz há quantos dias, dá o
+endereço do kit, e oferece marcar o centro como fechado. Zero configuração, e
+quem administra vê quem está a chatear, o que numa emergência é uma vantagem.
+
+**Mandar a lista para os grupos** — o kit oferece a partilha no momento de
+publicar, e a página pública tem um botão para qualquer pessoa reenviar. Manda
+sempre o **link**, nunca uma imagem: uma imagem de uma lista nasce velha e
+continua a circular meses depois no WhatsApp de alguém, que é exactamente o
+problema que estas páginas existem para resolver.
+
+### E a Cloud API, quando fizer sentido
+
+Entra como mais um adaptador em `server/avisos.js`, ao lado do telegram e do
+ntfy; nada no resto do servidor muda. O que ela exige (Agosto de 2026):
+
+- **Não exige verificação da empresa para começar** — 250 conversas iniciadas
+  por 24 h sem ela, o que chega para muitos centros.
+- Um **número de telefone dedicado**, que não pode ser um WhatsApp normal.
+- Um **URL de política de privacidade** publicado.
+- **Templates aprovados** um a um, e **consentimento explícito** de cada centro.
+- Preço por mensagem desde Julho de 2025. No Brasil, utilitária ≈ **$0,0068**;
+  mensagens de serviço são grátis, e templates utilitários são grátis dentro da
+  janela de 24 h aberta por uma mensagem do próprio centro.
+
 ## Decisões que valem a pena conhecer
 
 **A aprovação continua a valer depois do primeiro envio.** Publicar muda a lista
@@ -161,7 +213,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 96 verificações
+node tools/server-test.js    # 115 verificações
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas
@@ -173,15 +225,15 @@ redirecionarem uma para a outra nos dois estilos.
 
 ## O que falta
 
-- **Nada avisa quando chega um pedido.** É preciso abrir a fila para ver. Um
-  aviso por e-mail ou Telegram é o passo seguinte óbvio, e é o que decide se a
-  aprovação à mão aguenta uma emergência a sério.
 - **Não há como um centro se apagar** a si próprio, nem como marcar um centro
   como encerrado. Hoje é uma alteração à mão na base de dados.
 - **A lista de centros é uma página só**, filtrada no aparelho. Chega bem para
   dezenas; com centenas é preciso paginar e procurar no servidor, e
   provavelmente ordenar por distância em vez de por idade.
 - **Não há cópia de segurança automática** do ficheiro `.db`.
+- **O empurrão é manual.** Alguém tem de abrir a fila e carregar no botão. É
+  deliberado a esta escala, mas com cem centros passa a ser trabalho a sério —
+  aí entra a Cloud API.
 - **`node:sqlite` está marcado como experimental.** Se mudar de forma, é
   `server/db.js` que se reescreve e mais nenhum ficheiro — foi isolado de
   propósito.

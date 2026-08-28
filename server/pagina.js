@@ -13,9 +13,22 @@
  *     é precisamente a mentira que aqui é perigosa.
  * ==========================================================================*/
 const { svgIcone, svgProibido, svgAnel, item, ROTULO_BR, ICONES } = require('./compartilhado');
+const { linkWhatsApp } = require('./avisos');
 
 const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * Um valor para dentro de um <script>.
+ *
+ * `JSON.stringify` sozinho NÃO chega: não escapa o `<`, por isso um item
+ * publicado com "</script>" lá dentro fecha a etiqueta e o resto passa a ser
+ * HTML. Foi exactamente isso que o teste do escapamento apanhou no minuto em
+ * que este ficheiro ganhou o primeiro <script>.
+ */
+const paraScript = v => JSON.stringify(v)
+  .replace(/</g, '\\u003C').replace(/>/g, '\\u003E')
+  .replace(/&/g, '\\u0026').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 
 const DIA = 86400000;
 
@@ -76,6 +89,37 @@ ${corpo}
 }
 
 /* ---------------------------------------------------------------------------
+ * Partilhar
+ *
+ * O que se manda é o LINK e não uma imagem. Uma imagem de uma lista é o mesmo
+ * problema do cartaz impresso — nasce velha e continua a circular meses depois
+ * no WhatsApp de alguém. O link diz sempre o que o centro precisa hoje, e diz
+ * também quando a lista já não é de hoje.
+ * -------------------------------------------------------------------------*/
+function textoPartilhaCentro(d, url) {
+  const L = [];
+  const precisa = (d.precisa || []).map(item);
+  L.push(`*${String(d.nome || '').toUpperCase()}* — ${d.pausado
+    ? 'NÃO está recebendo agora' : 'precisa hoje'}`);
+  L.push('');
+  if (!d.pausado && precisa.length) {
+    precisa.slice(0, 10).forEach(i => L.push('• ' + i.rotulo));
+    L.push('');
+  }
+  const nao = (d.naoTraga || []).map(item).map(i => i.rotulo);
+  if (nao.length) { L.push('*NÃO TRAGA:* ' + nao.join(', ')); L.push(''); }
+  if (d.endereco) L.push('📍 ' + d.endereco);
+  if (d.horario) L.push('🕐 ' + d.horario);
+  if (d.contato) L.push('📱 ' + d.contato);
+  L.push('');
+  L.push('Lista sempre atualizada: ' + url);
+  return L.join('\n');
+}
+
+const linkPartilha = (d, url) =>
+  'https://wa.me/?text=' + encodeURIComponent(textoPartilhaCentro(d, url));
+
+/* ---------------------------------------------------------------------------
  * A página pública de um centro — o destino do QR
  * -------------------------------------------------------------------------*/
 function paginaCentro(centro, base, urlCanonica) {
@@ -123,12 +167,33 @@ function paginaCentro(centro, base, urlCanonica) {
     ${centro.publicado ? `<p class="carimbo">Lista de ${dataCurta(centro.publicado)}</p>` : ''}
   </section>
 
+  <section class="partilhar">
+    <a class="btn btn-wa" id="b-wa" href="${esc(linkPartilha(d, url))}" target="_blank" rel="noopener">
+      Mandar esta lista no WhatsApp</a>
+    <p class="nota-partilha">Mande o <b>link</b>, não uma imagem: a imagem fica velha,
+      o link não.</p>
+  </section>
+
   <footer class="pe">
     <p><b>Leve isto consigo.</b> <a href="${esc(url)}">${esc(url.replace(/^https?:\/\//, ''))}</a></p>
     <p class="creditos">CAPEM · ferramenta livre para centros de apoio ·
       <a href="https://github.com/philthemoser/capem">o código é aberto</a></p>
   </footer>
-</main>`;
+</main>
+<script>
+/* Onde o sistema tiver folha de partilha, usa-se essa — o WhatsApp é a
+   primeira coisa lá dentro, e ainda dá para mandar por outro lado. Onde não
+   tiver, o link wa.me do href faz o mesmo. Sem script continua a funcionar. */
+(function () {
+  var b = document.getElementById('b-wa');
+  if (!b || !navigator.share) return;
+  var t = ${paraScript(textoPartilhaCentro(d, url))};
+  b.addEventListener('click', function (e) {
+    e.preventDefault();
+    navigator.share({ text: t }).catch(function () { window.open(b.href, '_blank'); });
+  });
+})();
+</script>`;
 
   const lista = precisa.slice(0, 6).map(i => i.rotulo).join(', ');
   return molde({
@@ -386,7 +451,29 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica }) {
  * Uma tabela e dois botões. Isto é aberto num telemóvel, provavelmente de pé —
  * por isso os botões são grandes e a decisão é de um toque.
  * -------------------------------------------------------------------------*/
-function paginaAdmin({ pendentes, aprovados, token, contagem, base, erro }) {
+/* ---------------------------------------------------------------------------
+ * A mensagem do empurrão.
+ *
+ * Escrita para ser lida por alguém a montar um ginásio, não por um cliente.
+ * Nomeia o centro, diz há quantos dias, dá o endereço, e não pede nada além
+ * de trinta segundos. Sem "esperamos que esteja tudo bem".
+ * -------------------------------------------------------------------------*/
+function textoEmpurrao(centro, url) {
+  const d = centro.dados || {};
+  const { dias, nivel } = idade(centro.publicado);
+  const quando = nivel === 'nunca'
+    ? 'A página do seu centro já está no ar, mas ainda não tem lista.'
+    : `A lista do seu centro está com ${dias} dias.`;
+  return `Olá! Aqui é do CAPEM.
+
+${quando} Quem lê o QR dos cartazes vê essa data, e a página já está a avisar que pode não valer.
+
+Atualizar leva meio minuto: abra ${url.replace(/\/[^/]*$/, '')}/kit no telemóvel, marque o que precisam hoje e carregue em Publicar. O código é o mesmo de sempre.
+
+Se o centro fechou ou parou de receber, diga só — marcamos a página e ninguém aparece à porta em vão.`;
+}
+
+function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, erro }) {
   const linha = c => {
     const d = c.dados || {};
     return `<article class="pedido">
@@ -425,6 +512,27 @@ function paginaAdmin({ pendentes, aprovados, token, contagem, base, erro }) {
   ${pendentes.length
     ? `<div class="pedidos">${pendentes.map(linha).join('')}</div>`
     : '<p class="vazio">Nada à espera.</p>'}
+
+  ${parados && parados.length ? `
+  <h2>Precisam de um empurrão <span class="conta-n">${parados.length}</span></h2>
+  <p class="entrada">Estes não publicam há dias. A página deles já avisa quem a lê —
+    mas ninguém avisa quem a devia atualizar. Um toque abre o WhatsApp com a
+    mensagem escrita.</p>
+  <div class="pedidos">${parados.map(c => {
+    const d = c.dados || {};
+    const { dias, nivel } = idade(c.publicado);
+    const wa = linkWhatsApp(d.contato, textoEmpurrao(c, c.url || base + '/' + c.slug));
+    return `<article class="pedido parado">
+      <h3>${esc(d.nome || c.slug)}</h3>
+      <p class="meta ${nivel}">${nivel === 'nunca' ? 'nunca publicou' : `há ${dias} dias`}
+        · ${esc(d.contato || 'sem telefone')}</p>
+      <div class="botoes">
+        ${wa ? `<a class="btn btn-wa" href="${esc(wa)}" target="_blank" rel="noopener">
+          Empurrar no WhatsApp</a>` : '<span class="meta">sem telefone utilizável</span>'}
+        <a class="btn" href="${esc(c.url || base + '/' + c.slug)}" target="_blank" rel="noopener">Ver</a>
+      </div>
+    </article>`;
+  }).join('')}</div>` : ''}
 
   <h2>No ar</h2>
   ${aprovados.length ? `<ul class="lista-no-ar">${aprovados.map(c => {
@@ -507,6 +615,12 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .contacto .lin span{font:700 clamp(17px,4.6vw,22px)/1.25 var(--fonte)}
 .contacto .lin a span{text-decoration:underline;text-underline-offset:3px}
 .carimbo{margin:16px 0 0;font:600 13px/1.2 var(--mono);color:var(--texto-2)}
+
+/* --- partilhar --- */
+.partilhar{border-top:6px solid var(--tinta)}
+.btn-wa{background:#25D366;border-color:#0f7a3a;color:var(--tinta);font-weight:800;
+  display:block;text-align:center;margin-top:0}
+.nota-partilha{margin:10px 0 0;font:500 13px/1.45 var(--fonte);color:var(--texto-2)}
 
 /* --- pé --- */
 .pe{padding:20px;border-top:2px solid var(--tinta);
@@ -595,7 +709,12 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 .linha-slug{display:flex;align-items:center;gap:6px}
 .linha-slug span{font:600 16px/1 var(--mono);color:var(--texto-2)}
 .linha-slug input{flex:1;min-width:0;font-family:var(--mono);font-size:15px}
-.pedido .botoes{display:flex;gap:10px;margin-top:12px}
+.pedido.parado{border-color:var(--proibido)}
+.pedido .meta.velha,.pedido .meta.nunca{color:var(--proibido);font-weight:700}
+.btn-wa{background:#25D366;border-color:#0f7a3a;color:var(--tinta);font-weight:800}
+.conta-n{font:600 12px/1 var(--mono);padding:3px 6px;background:var(--proibido);color:#fff}
+.pedido .botoes{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.pedido .botoes .btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
 .pedido .btn{flex:1;margin-top:0;text-align:center}
 .lista-no-ar{list-style:none;margin:0;padding:0}
 .lista-no-ar li{display:flex;justify-content:space-between;gap:12px;

@@ -20,6 +20,12 @@
  *   PORT          por omissão 8080
  *   CAPEM_DB      caminho do ficheiro SQLite
  *
+ * Avisos (todos opcionais — ver server/avisos.js):
+ *   CAPEM_TELEGRAM_TOKEN + CAPEM_TELEGRAM_CHAT
+ *   CAPEM_NTFY          um endereço ntfy.sh
+ *   CAPEM_WEBHOOK       um POST com JSON, para tudo o resto
+ *   CAPEM_PAIS          indicativo do país para os links wa.me (55)
+ *
  * O QUE ESTE SERVIDOR NÃO GUARDA: nada sobre quem é atendido. Só a morada, o
  * horário e o telefone de um edifício, que é informação que o centro já quer
  * ver colada na porta. Isso mantém a posição de proteção de dados simples,
@@ -32,6 +38,7 @@ const { URL } = require('node:url');
 
 const db = require('./db');
 const P = require('./pagina');
+const A = require('./avisos');
 
 const PORTA = Number(process.env.PORT || 8080);
 const ADMIN = process.env.CAPEM_ADMIN || '';
@@ -296,6 +303,16 @@ async function encaminhar(req, res) {
     const slug = slugLivre(dados.nome);
     const codigo = db.criar(slug, dados);
     console.log(`[pedido] ${slug} — ${dados.nome}`);
+    /* Fire-and-forget de propósito: um bot em baixo não pode impedir um centro
+       de pedir a sua página. */
+    A.avisar({
+      tipo: 'pedido',
+      titulo: 'Novo pedido de centro',
+      corpo: [dados.nome, dados.tipo, dados.endereco, dados.contato, '/' + slug]
+        .filter(Boolean).join('\n'),
+      url: `${base}/admin?t=${encodeURIComponent(ADMIN)}`,
+      slug
+    });
     return responder(res, 200, P.paginaCodigo({ slug, codigo, base, url: urlDoCentro(slug, base) }));
   }
 
@@ -336,6 +353,7 @@ async function encaminhar(req, res) {
     return responder(res, 200, P.paginaAdmin({
       pendentes: db.listar('pendente'),
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
+      parados: db.parados(DIAS_PARADO).map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       erro: url.searchParams.get('erro'),
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
@@ -417,6 +435,42 @@ function criarServidor() {
   });
 }
 
+/* ---------------------------------------------------------------------------
+ * O resumo dos parados
+ *
+ * O modo de falhar mais provável desta ferramenta não é o servidor cair: é um
+ * centro deixar de publicar e a página continuar no ar a parecer nova. A
+ * própria página avisa quem a lê, mas ninguém avisa quem a devia atualizar.
+ *
+ * Uma vez por dia, no máximo: quantos estão parados e quem. A partir daí é um
+ * toque num link wa.me na fila de aprovação.
+ * -------------------------------------------------------------------------*/
+const DIAS_PARADO = Number(process.env.CAPEM_DIAS_PARADO || 3);
+
+function resumoDeParados(base) {
+  const ultimo = Number(db.lerEstado('ultimo_resumo', 0));
+  if (Date.now() - ultimo < 20 * 3600e3) return null;
+
+  const lista = db.parados(DIAS_PARADO);
+  db.escreverEstado('ultimo_resumo', Date.now());
+  if (!lista.length) return null;
+
+  const linhas = lista.slice(0, 20).map(c => {
+    const dias = c.publicado
+      ? Math.floor((Date.now() - c.publicado) / 86400000) + ' dias'
+      : 'nunca publicou';
+    return `· ${(c.dados || {}).nome || c.slug} — ${dias}`;
+  });
+  const aviso = {
+    tipo: 'parados',
+    titulo: `${lista.length} ${lista.length === 1 ? 'centro parado' : 'centros parados'}`,
+    corpo: linhas.join('\n') + (lista.length > 20 ? `\n… e mais ${lista.length - 20}` : ''),
+    url: `${base}/admin?t=${encodeURIComponent(ADMIN)}`
+  };
+  A.avisar(aviso);
+  return aviso;
+}
+
 if (require.main === module) {
   db.abrir(FICHEIRO_DB);
   criarServidor().listen(PORTA, () => {
@@ -424,8 +478,22 @@ if (require.main === module) {
     console.log(`fila de aprovação: ${BASE}/admin?t=${ADMIN}`);
     const c = db.contar();
     console.log(`${c.aprovado} no ar · ${c.pendente} à espera`);
+    const canais = A.canaisActivos();
+    console.log(`avisos por: ${canais.join(', ')}`);
+    if (canais.length === 1) {
+      console.log('  (só a consola — ver server/README.md para ligar o Telegram)');
+    }
+
+    /* De seis em seis horas verifica; o próprio resumo não sai mais do que uma
+       vez por dia. Assim um reinício não faz perder o dia inteiro nem manda
+       três resumos numa tarde. */
+    const relogio = setInterval(() => {
+      try { resumoDeParados(BASE); } catch (e) { console.error('[resumo]', e && e.message); }
+    }, 6 * 3600e3);
+    relogio.unref();
   });
 }
 
 module.exports = { criarServidor, encaminhar, fazerSlug, limparDados, db,
-                   urlDoCentro, slugDoAnfitriao, ESTILO, DOMINIO, RESERVADOS };
+                   urlDoCentro, slugDoAnfitriao, resumoDeParados, DIAS_PARADO,
+                   ESTILO, DOMINIO, RESERVADOS };

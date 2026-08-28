@@ -91,6 +91,7 @@ server/                 THE NEEDS PAGE — one small server for all centres
   db.js                 SQLite; the only file that knows how state is stored
   pagina.js             the pages, in the paper's design tokens
   compartilhado.js      loads the 29 marks from field/src/ — one source, not a copy
+  avisos.js             notifications out: telegram, ntfy, webhook, wa.me links
   README.md             how to run it, and every decision worth knowing
 field/                  FIELD TOOLS — not a demo, meant to be used
   kit.html              printed media kit: 15 pieces from one form
@@ -133,7 +134,7 @@ node tools/kit-test.js     # the printed kit: true mm sizes, overflow, mono, imp
 node tools/server-test.js  # the needs page: list age, approval, escaping, defences
 ```
 
-Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 87/87 kit assertions · 96/96 server assertions.
+Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 87/87 kit assertions · 115/115 server assertions.
 
 ## How to tell us we are wrong
 

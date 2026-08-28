@@ -1229,6 +1229,10 @@ async function publicar(botao) {
       S.link = j.url;
       salvar(); montarForm();
     }
+    /* Publicar e depois não contar a ninguém não serve de nada. O momento em
+       que se carrega em Publicar é o único em que o coordenador tem a lista
+       fresca na cabeça e o telemóvel na mão. */
+    if (r.ok && j.url) mostrarPartilha(j.url);
   } catch (e) {
     /* Sem sinal não é um erro nesta ferramenta: é o estado normal metade do
        tempo. Por isso a mensagem não pede desculpa, diz o que fazer. */
@@ -1236,6 +1240,48 @@ async function publicar(botao) {
       + 'houver sinal.', 'mau');
   }
   botao.disabled = false; botao.textContent = antes;
+}
+
+/**
+ * Um toque para mandar a lista de hoje para os grupos.
+ *
+ * `navigator.share` abre a folha do sistema, onde o WhatsApp é a primeira
+ * coisa. Onde não existir — desktop, browsers antigos — cai para um link
+ * wa.me, que faz o mesmo com mais um toque. Sem API, sem número, sem custo.
+ */
+function textoPartilha(url) {
+  const L = [];
+  L.push(`*${V.nome().toUpperCase()}* — ${S.pausado ? 'NÃO estamos recebendo agora' : 'precisamos hoje'}`);
+  L.push('');
+  if (!S.pausado && S.precisa.length) {
+    V.precisa10().forEach(i => L.push('• ' + i.rotulo));
+    L.push('');
+  }
+  L.push('*NÃO TRAGA:* ' + V.nao().map(i => i.rotulo).join(', '));
+  L.push('');
+  if (V.end()) L.push('📍 ' + V.end());
+  if (V.tel()) L.push('📱 ' + V.tel());
+  L.push('');
+  L.push('Lista sempre atualizada: ' + url);
+  return L.join('\n');
+}
+
+function mostrarPartilha(url) {
+  const caixa = document.getElementById('pos-publicar');
+  caixa.hidden = false;
+  caixa.querySelector('.pos-url').textContent = url.replace(/^https?:\/\//, '');
+}
+
+async function partilharLista(botao) {
+  const url = (S.link || '').trim();
+  if (!url) return;
+  const texto = textoPartilha(url);
+  if (navigator.share) {
+    try { await navigator.share({ text: texto }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+  avisar(botao, 'A abrir o WhatsApp');
 }
 
 /* ---------------------------------------------------------------------------
@@ -1391,6 +1437,8 @@ function iniciar() {
 
   document.getElementById('b-publicar')
     .addEventListener('click', e => publicar(e.currentTarget));
+  document.getElementById('b-partilhar')
+    .addEventListener('click', e => partilharLista(e.currentTarget));
   /* Se o kit foi servido pelo servidor, o pedido de página é lá; se foi aberto
      de uma pen, o link não sabe para onde ir e é escondido em vez de mentir. */
   const lp = document.getElementById('link-pedir');

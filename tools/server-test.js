@@ -276,6 +276,75 @@ const DIA = 86400000;
     `${comMarcas} com marcas, ${aReceber} a receber`);
   ok('e a busca sabe procurar por lugar', /data-busca="[^"]*rua teste/.test(html));
 
+  console.log('\navisos e empurrões');
+  const A = require('../server/avisos.js');
+  /* Um número escrito por uma pessoa não é um número que o WhatsApp aceite. */
+  const tels = [
+    ['(51) 99612-0044', '5551996120044'],
+    ['51 99612-0044', '5551996120044'],
+    ['+351 912 345 678', '351912345678'],
+    ['5551996120044', '5551996120044'],
+    ['', ''], ['sem número', '']
+  ];
+  tels.forEach(([bruto, esperado]) =>
+    ok(`telefone "${bruto || '(vazio)'}" → ${esperado || '(nada)'}`,
+      A.telefoneInternacional(bruto) === esperado, A.telefoneInternacional(bruto)));
+  ok('sem telefone não há link', A.linkWhatsApp('', 'olá') === '');
+  ok('o link leva a mensagem já escrita',
+    /^https:\/\/wa\.me\/5551996120044\?text=/.test(A.linkWhatsApp('(51) 99612-0044', 'olá')));
+
+  /* O aviso não pode partir um pedido: se o canal rebentar, o pedido segue. */
+  const originais = { ...A.ADAPTADORES.webhook };
+  process.env.CAPEM_WEBHOOK = 'http://127.0.0.1:1/nao-existe';
+  /* Outro IP: a trava por pedido já gastou a quota deste durante os testes
+     acima, e é ela que deve responder 429 — não o que se quer medir aqui. */
+  r = await fetch(base + '/pedir', {
+    method: 'POST', redirect: 'manual',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded',
+               'X-Forwarded-For': '203.0.113.7' },
+    body: new URLSearchParams({ nome: 'Centro Com Aviso', endereco: 'Rua Z, 9',
+                                contato: '(51) 97777-0000' }).toString()
+  });
+  ok('um canal de avisos em baixo não impede um pedido', r.status === 200, String(r.status));
+  ok('e o centro fica mesmo criado', !!S.db.ler('centro-com-aviso'));
+  delete process.env.CAPEM_WEBHOOK;
+  A.ADAPTADORES.webhook = originais;
+
+  /* Um centro parado tem de aparecer na fila com um botão de empurrão. */
+  const parado = 'centro-parado';
+  S.db.criar(parado, { nome: 'Centro Parado', tipo: 'Abrigo', endereco: 'Rua Velha, 1',
+    contato: '(51) 96666-0000', precisa: ['agua'], naoTraga: ['roupa-usada'] });
+  S.db.decidir(parado, 'aprovado');
+  S.db.publicar(parado, S.db.ler(parado).dados);
+  const c3 = new (require('node:sqlite').DatabaseSync)(ficheiro);
+  c3.prepare('UPDATE centros SET publicado=? WHERE slug=?').run(Date.now() - 9 * DIA, parado);
+  c3.close();
+
+  ok('a base sabe quem está parado',
+    S.db.parados(3).some(c => c.slug === parado), 'não listou');
+  ok('e não conta quem publicou hoje',
+    !S.db.parados(3).some(c => c.slug === slugFinal), 'contou um fresco');
+
+  html = await (await get('/admin?t=' + encodeURIComponent(ADMIN))).text();
+  ok('a fila mostra quem precisa de um empurrão', /Precisam de um empurrão/.test(html));
+  ok('com um botão de WhatsApp para o coordenador',
+    /href="https:\/\/wa\.me\/5551966660000\?text=/.test(html));
+  ok('e a mensagem nomeia o centro e a idade da lista',
+    /Centro%20Parado|Centro\+Parado/.test(html) || /9%20dias|9\+dias/.test(html));
+
+  /* O resumo sai no máximo uma vez por dia, mesmo com reinícios. */
+  S.db.escreverEstado('ultimo_resumo', 0);
+  const r1 = S.resumoDeParados('http://teste');
+  ok('o resumo é enviado quando há parados', !!r1 && /parado/i.test(r1.titulo), JSON.stringify(r1));
+  const r2 = S.resumoDeParados('http://teste');
+  ok('e não se repete no mesmo dia', r2 === null, JSON.stringify(r2));
+
+  console.log('\npartilhar');
+  html = await (await get('/' + slugFinal)).text();
+  ok('a página tem um botão de partilha', /id="b-wa"/.test(html));
+  ok('que manda o link e não uma imagem', /wa\.me\/\?text=/.test(html) &&
+    /Lista%20sempre%20atualizada|Lista\+sempre\+atualizada/.test(html));
+
   console.log('\nrecusar');
   const slug2 = slug + '-2';
   await form('/admin/decidir', { t: ADMIN, slug: slug2, decisao: 'recusado' });

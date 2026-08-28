@@ -171,6 +171,12 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .escolhidos li svg { width: 22px; height: 22px; flex: none; }
 .escolhidos li > span:first-of-type { flex: 1; min-width: 0; }
+/* Estreito de propósito: cabe "200" e "20 caixas", não cabe um parágrafo. */
+.escolhidos li .q {
+  width: 62px; flex: none; padding: 6px 7px;
+  font: 700 14px/1 var(--mono); text-align: center;
+  border-width: 1.5px;
+}
 .escolhidos li.vazio {
   border-style: dashed; border-color: var(--fio);
   color: var(--texto-3); font-weight: 500; justify-content: center;
@@ -455,14 +461,6 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   display: flex; flex-direction: column; align-items: center;
   justify-content: flex-end; gap: 1.5mm; min-height: 0; min-width: 0;
 }
-.marca-item svg { flex: 1; min-height: 0; width: 100%; }
-.marca-item .rot {
-  font-weight: 700; text-align: center; text-transform: uppercase;
-  letter-spacing: .01em; text-wrap: balance; word-break: break-word;
-}
-
-.cabeca { display: flex; align-items: center; gap: 4mm; flex: none; }
-
 /* ---- O carimbo de data -------------------------------------------------- */
 /* Discreto mas nunca ausente. Em mono não muda nada, porque nunca dependeu
    da cor. */

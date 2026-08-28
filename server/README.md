@@ -96,6 +96,7 @@ para uma dúzia de centros a conta é praticamente zero.
 |---|---|
 | `/` | Duas portas: **quero ajudar** e **sou de um centro**. Nada mais. |
 | `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Ordenada pela idade; quem está em pausa desce; quem não publica há semanas vai para o fim, a vermelho. Filtro por nome ou lugar, no aparelho. |
+| `/centro` | A porta de quem gere um centro: o material impresso, ou pedir uma página. |
 | `/novo` | O formulário de pedido. |
 | `/<centro>` | A página do centro — o destino do QR. |
 | `/kit` | O gerador de material impresso. |
@@ -156,6 +157,22 @@ ntfy; nada no resto do servidor muda. O que ela exige (Agosto de 2026):
   mensagens de serviço são grátis, e templates utilitários são grátis dentro da
   janela de 24 h aberta por uma mensagem do próprio centro.
 
+## Quantidades
+
+Um item pode levar uma quantidade curta — `200`, `500 L`, `20 caixas`, `muitas`.
+É opcional: quem sabe escreve, quem não sabe deixa em branco.
+
+**Um número só aparece onde pode ser corrigido**, e isso é exactamente um sítio:
+esta página, que é reescrita a cada publicação. O papel na porta, as imagens de
+WhatsApp e o texto colado num grupo **nunca levam o número** — nenhum deles se
+corrige depois de sair, e "200 cobertores" impresso às 8h está errado ao
+meio-dia. Um número velho é pior do que nenhum, porque parece exacto.
+
+Isso também evita o problema de layout: nada de selos a disputar espaço com uma
+marca que tem um piso de 26 mm para se ler a dois metros.
+
+O limite são oito caracteres, e a lista do "não traga" nunca leva quantidade.
+
 ## Decisões que valem a pena conhecer
 
 **A aprovação continua a valer depois do primeiro envio.** Publicar muda a lista
@@ -213,7 +230,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 115 verificações
+node tools/server-test.js    # 123 verificações
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas

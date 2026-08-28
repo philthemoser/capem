@@ -272,20 +272,39 @@ const CENTRO = {
 
   await p.click('#grade-marcas [data-pick="botas"]');
   await p.waitForTimeout(350);
-  const depois = await p.evaluate(() => {
+
+  const escolhido = await p.evaluate(() => {
     const li = [...document.querySelectorAll('#lista-precisa li')].pop();
-    const noCartaz = [...document.querySelectorAll('#peca-cartaz .grade-precisa .marca-item')]
-      .find(m => m.querySelector('.rot').textContent === 'Luva de borracha');
     return {
       fechou: document.getElementById('modal-marca').hidden,
       jaNaoGenerico: !li.classList.contains('generico'),
-      /* A marca escolhida tem de chegar ao papel, não só à lista do lado. */
-      noPapel: !!noCartaz && noCartaz.querySelector('svg path').getAttribute('d') === POR_ID.botas.d
+      rotulo: li.querySelector('span').textContent.trim()
     };
   });
-  ok('escolher uma marca fecha a lista', depois.fechou);
-  ok('e o item deixa de estar marcado como genérico', depois.jaNaoGenerico);
-  ok('e a marca escolhida sai no cartaz', depois.noPapel);
+  ok('escolher uma marca fecha a lista', escolhido.fechou);
+  ok('e o item deixa de estar marcado como genérico',
+    escolhido.jaNaoGenerico && escolhido.rotulo === 'Luva de borracha', JSON.stringify(escolhido));
+
+  /* Põe o item escrito à mão em primeiro antes de o procurar no cartaz. O
+     piso da marca corta os últimos da lista quando há QR no rodapé — procurá-lo
+     no fim seria testar o piso, não a marca escolhida. */
+  await p.evaluate(() => {
+    const i = S.precisa.findIndex(v => v && v.texto === 'Luva de borracha');
+    S.precisa.unshift(S.precisa.splice(i, 1)[0]);
+    salvar(); montarForm();
+  });
+  await p.waitForTimeout(350);
+
+  const noPapel = await p.evaluate(() => {
+    const m = [...document.querySelectorAll('#peca-cartaz .grade-precisa .marca-item')]
+      .find(x => x.querySelector('.rot').textContent === 'Luva de borracha');
+    return {
+      achou: !!m,
+      certa: !!m && m.querySelector('svg path').getAttribute('d') === POR_ID.botas.d,
+      rotulos: [...document.querySelectorAll('#peca-cartaz .grade-precisa .rot')].map(e => e.textContent)
+    };
+  });
+  ok('e a marca escolhida sai no cartaz', noPapel.achou && noPapel.certa, JSON.stringify(noPapel));
 
   const indice = await p.evaluate(() => ({
     n: document.querySelectorAll('#indice-marcas .marca-op').length,

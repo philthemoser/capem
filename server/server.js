@@ -218,9 +218,17 @@ function limparDados(d) {
   const out = {};
   Object.keys(LIMITES).forEach(k => { if (d[k] != null) out[k] = texto(d[k], LIMITES[k]); });
   out.pausado = !!d.pausado;
-  const lista = v => (Array.isArray(v) ? v : []).slice(0, 24).map(x =>
-    typeof x === 'string' ? texto(x, 40)
-      : { texto: texto(x && x.texto, 40), marca: x && x.marca ? texto(x.marca, 40) : undefined });
+  /* A quantidade é curta de propósito — cabe "200", "20 caixas" e "muitas",
+     não cabe um parágrafo. Ver o comentário em field/src/catalogo.js. */
+  const lista = v => (Array.isArray(v) ? v : []).slice(0, 24).map(x => {
+    if (typeof x === 'string') return texto(x, 40);
+    if (!x) return '';
+    const q = texto(x.q, 8);
+    if (x.id) return q ? { id: texto(x.id, 40), q } : texto(x.id, 40);
+    return { texto: texto(x.texto, 40),
+             marca: x.marca ? texto(x.marca, 40) : undefined,
+             q: q || undefined };
+  }).filter(Boolean);
   out.precisa = lista(d.precisa);
   out.naoTraga = lista(d.naoTraga);
   return out;
@@ -277,6 +285,9 @@ async function encaminhar(req, res) {
       .map(c => ({ ...c, url: urlDoCentro(c.slug, base) }));
     return responder(res, 200, P.paginaCentros({ centros, base }),
       'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
+  }
+  if (caminho === '/centro' && req.method === 'GET') {
+    return responder(res, 200, P.paginaCentroEntrada({ base }));
   }
   if (caminho === '/novo' && req.method === 'GET') {
     return responder(res, 200, P.paginaNovo({}));

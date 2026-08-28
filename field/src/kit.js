@@ -160,6 +160,18 @@ const V = {
 /* ---------------------------------------------------------------------------
  * Blocos partilhados
  * -------------------------------------------------------------------------*/
+/**
+ * Um item numa grelha: marca por cima, palavra por baixo. Sem número.
+ *
+ * A QUANTIDADE NÃO ENTRA EM NADA DO QUE SAI DAQUI, e isso é uma regra e não
+ * um esquecimento: um número só vive onde pode ser corrigido.
+ *
+ * O papel na porta não se corrige. Uma imagem posta no grupo às 8h continua a
+ * circular dias depois. As duas congelariam "200 cobertores" muito depois de
+ * isso ter deixado de ser verdade — e um número velho é pior do que nenhum,
+ * porque parece exacto. As quantidades vivem só na página do centro, que é
+ * reescrita a cada publicação; o papel e as imagens levam a lista e o link.
+ */
 function mi(it, prob, estilo) {
   const svg = prob ? svgProibido(it.id, estilo, AO_FUNDO) : svgIcone(it.id, estilo, AO_FUNDO);
   return `<div class="marca-item">${svg}<div class="rot">${esc(it.rotulo)}</div></div>`;
@@ -892,7 +904,7 @@ function montarForm() {
       <legend>${esc(g.g)}</legend>
       <div class="chips">
         ${g.ids.map(id => {
-          const on = S.precisa.includes(id);
+          const on = S.precisa.some(v => idDe(v) === id);
           return `<button type="button" class="chip${on ? ' on' : ''}" aria-pressed="${on}"
             data-tog="${id}">${svgIcone(id)}<span>${esc(ROTULO_BR[id])}</span></button>`;
         }).join('')}
@@ -904,6 +916,9 @@ function montarForm() {
     return `<li class="${it.semMarca ? 'generico' : ''}">
       ${svgIcone(it.id)}
       <span>${esc(it.rotulo)}</span>
+      ${tipo === 'precisa' ? `<input class="q" type="text" inputmode="numeric"
+        value="${esc(it.q)}" maxlength="8" placeholder="qtd"
+        data-q="${i}" aria-label="Quantidade de ${esc(it.rotulo)}">` : ''}
       <span class="li-acoes">
         ${it.livre ? `<button type="button" class="marca" data-marca="${i}" data-l="${tipo}"
           aria-label="Escolher marca para ${esc(it.rotulo)}"
@@ -1330,9 +1345,18 @@ function fallbackCopia(texto, ok) {
  * Ligações
  * -------------------------------------------------------------------------*/
 function alternar(id) {
-  const i = S.precisa.indexOf(id);
+  /* Comparar por id e não por valor: assim que um item ganha quantidade
+     deixa de ser a string 'agua' e passa a { id:'agua', q:'200' }. */
+  const i = S.precisa.findIndex(v => idDe(v) === id);
   if (i >= 0) S.precisa.splice(i, 1); else S.precisa.push(id);
   salvar(); montarForm();
+}
+
+function mudarQuantidade(lista, i, q) {
+  const arr = S[lista === 'precisa' ? 'precisa' : 'naoTraga'];
+  if (!arr[i]) return;
+  arr[i] = comQuantidade(arr[i], q);
+  salvar();
 }
 function remover(lista, i) { S[lista === 'precisa' ? 'precisa' : 'naoTraga'].splice(i, 1); salvar(); montarForm(); }
 function mover(i, d) {
@@ -1421,6 +1445,13 @@ function iniciar() {
   ].forEach(([id, k]) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { S[k] = el.value; salvar(); });
+  });
+
+  /* 'change' e não 'input': redesenhar quinze peças a cada tecla numa lista
+     de dez itens tornava o campo lento no telemóvel. */
+  document.addEventListener('change', e => {
+    const t = e.target.closest('[data-q]');
+    if (t) mudarQuantidade('precisa', +t.dataset.q, t.value);
   });
 
   document.addEventListener('click', e => {

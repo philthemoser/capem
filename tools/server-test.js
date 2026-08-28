@@ -60,8 +60,16 @@ const DIA = 86400000;
   /* Duas portas e nada mais: quem chega tem alguma coisa para dar, ou está a
      montar um centro. Um formulário aqui obrigava a primeira — que aparece às
      centenas — a passar por cima da segunda. */
-  ok('mostra as duas portas', /href="\/centros"/.test(html) && /href="\/novo"/.test(html));
+  ok('mostra as duas portas', /href="\/centros"/.test(html) && /href="\/centro"/.test(html));
   ok('e não pede dados logo à entrada', !/<form/.test(html));
+
+  /* A porta de quem gere um centro: faltava, e sem ela quem já tinha página
+     tinha de saber escrever /kit de cor. */
+  r = await get('/centro');
+  html = await r.text();
+  ok('a porta do centro responde', r.status === 200, String(r.status));
+  ok('e oferece o material impresso e o pedido de página',
+    /href="\/kit"/.test(html) && /href="\/novo"/.test(html));
   ok('serve o kit em /kit', (await get('/kit')).status === 200);
   ok('serve as mesmas fontes do papel', (await get('/fontes.css')).status === 200);
 
@@ -338,6 +346,36 @@ const DIA = 86400000;
   ok('o resumo é enviado quando há parados', !!r1 && /parado/i.test(r1.titulo), JSON.stringify(r1));
   const r2 = S.resumoDeParados('http://teste');
   ok('e não se repete no mesmo dia', r2 === null, JSON.stringify(r2));
+
+  console.log('\nquantidades');
+  /* Um número só vive onde pode ser corrigido: a página do centro. O papel e
+     as imagens levam a lista e o link, nunca o número. */
+  await api('/api/publicar', { slug: slugFinal, codigo, dados: {
+    precisa: [{ id: 'cobertor', q: '200' }, 'agua', { texto: 'Luva', marca: 'botas', q: '20' }],
+    naoTraga: ['roupa-usada'] } });
+  const guardadoQ = S.db.ler(slugFinal).dados.precisa;
+  ok('a quantidade sobrevive à publicação',
+    guardadoQ[0] && guardadoQ[0].q === '200', JSON.stringify(guardadoQ[0]));
+  ok('um item sem quantidade continua a ser só o id',
+    guardadoQ[1] === 'agua', JSON.stringify(guardadoQ[1]));
+  ok('e um item escrito à mão pode ter as duas coisas',
+    guardadoQ[2] && guardadoQ[2].marca === 'botas' && guardadoQ[2].q === '20',
+    JSON.stringify(guardadoQ[2]));
+
+  html = await (await get('/' + slugFinal)).text();
+  ok('a página mostra a quantidade', /class="q">200</.test(html));
+  ok('e o texto de partilha também', /Cobertor%20%E2%80%94%20200|Cobertor\s—\s200/.test(html));
+
+  /* Um número comprido demais seria uma frase dentro de uma grelha de marcas. */
+  await api('/api/publicar', { slug: slugFinal, codigo, dados: {
+    precisa: [{ id: 'cobertor', q: 'duzentos mil cobertores por favor' }],
+    naoTraga: ['roupa-usada'] } });
+  ok('uma quantidade comprida é cortada',
+    S.db.ler(slugFinal).dados.precisa[0].q.length <= 8,
+    S.db.ler(slugFinal).dados.precisa[0].q);
+  await api('/api/publicar', { slug: slugFinal, codigo, dados: {
+    precisa: ['agua', 'alimento', { texto: 'Luva de borracha', marca: 'botas' }],
+    naoTraga: ['roupa-usada', 'moveis'] } });
 
   console.log('\npartilhar');
   html = await (await get('/' + slugFinal)).text();

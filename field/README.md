@@ -110,6 +110,12 @@ lado dele abre a lista das 29 marcas para você escolher a mais próxima.
 "Luva de borracha" com a marca das botas diz "borracha, proteção" a quem não lê
 a palavra. Aproximado é melhor do que mudo.
 
+**Quantidade é opcional, e só sai na página.** Ao lado de cada item escolhido há
+um campo pequeno — `200`, `500 L`, `20 caixas`. Ele aparece na página do centro,
+que é reescrita a cada publicação. **Não** aparece no papel nem nas imagens de
+WhatsApp: um número impresso não se corrige, e "200 cobertores" às 8h está
+errado ao meio-dia. Um número velho é pior do que nenhum, porque parece exacto.
+
 **Nada sai do aparelho.** O que escrever fica guardado só no seu celular.
 
 > **Antes de imprimir cem folhas, imprima uma.** Ligue "ver a preto e branco",

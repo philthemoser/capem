@@ -614,17 +614,49 @@ const RECUSAS = ['roupa-usada', 'sacos-misturados', 'pereciveis', 'moveis'];
 const FUNCOES = ['COORDENAÇÃO', 'TRIAGEM', 'ENTREGA', 'COZINHA', 'VOLUNTÁRIO'];
 
 /**
- * Um item da lista é uma de duas coisas:
+ * Um item da lista é uma de três coisas:
  *   'agua'                        — uma entrada do catálogo, com a sua marca
- *   { texto, marca }              — escrito à mão; `marca` é opcional
+ *   { id, q }                     — a mesma, com uma quantidade
+ *   { texto, marca, q }           — escrito à mão; `marca` e `q` são opcionais
  *
  * Um item escrito à mão sem marca sai com a caixa genérica, que não diz nada a
  * quem não lê português. Por isso o formulário deixa escolher uma das 29 —
  * é melhor uma marca aproximada do que uma caixa que não significa nada.
+ *
+ * A QUANTIDADE É OPCIONAL E CURTA, e é assim de propósito.
+ *
+ * "200 cobertores" é muito mais accionável do que "cobertores" — e a
+ * sobra é precisamente o problema que esta ferramenta existe para combater.
+ * Mas um número envelhece mais depressa do que uma lista e parece mais
+ * autoritário enquanto o faz: "200" impresso às 8h está errado ao meio-dia, e
+ * um número exacto convida a mais confiança do que uma palavra sozinha.
+ *
+ * Daí: quem sabe escreve, quem não sabe deixa em branco e a peça fica como
+ * hoje. Sem sistema de unidades — "200", "20 caixas" e "muitas" servem todos,
+ * e o limite de caracteres é o que faz caber no cartaz.
  */
+const MAX_Q = 8;
+
 function item(v) {
-  if (typeof v === 'string') return { id: v, rotulo: ROTULO_BR[v] || v, livre: false };
-  return { id: v.marca || 'caixa', rotulo: v.texto, livre: true, semMarca: !v.marca };
+  if (typeof v === 'string') return { id: v, rotulo: ROTULO_BR[v] || v, livre: false, q: '' };
+  const q = String(v.q == null ? '' : v.q).trim().slice(0, MAX_Q);
+  if (v.id) return { id: v.id, rotulo: ROTULO_BR[v.id] || v.id, livre: false, q };
+  return { id: v.marca || 'caixa', rotulo: v.texto, livre: true, semMarca: !v.marca, q };
+}
+
+/** O id de um item, seja qual for a forma em que veio. */
+const idDe = v => (typeof v === 'string' ? v : (v && v.id) || null);
+
+/** Devolve o valor com a quantidade mudada, preservando a forma mais simples. */
+function comQuantidade(v, q) {
+  const limpo = String(q == null ? '' : q).trim().slice(0, MAX_Q);
+  if (typeof v === 'string') return limpo ? { id: v, q: limpo } : v;
+  const novo = { ...v, q: limpo };
+  if (!limpo) delete novo.q;
+  /* Sem quantidade, um item de catálogo volta a ser uma string: o estado
+     guardado fica pequeno e legível, e as versões antigas continuam a lê-lo. */
+  if (novo.id && !novo.q) return novo.id;
+  return novo;
 }
 
 
@@ -791,6 +823,18 @@ const V = {
 /* ---------------------------------------------------------------------------
  * Blocos partilhados
  * -------------------------------------------------------------------------*/
+/**
+ * Um item numa grelha: marca por cima, palavra por baixo. Sem número.
+ *
+ * A QUANTIDADE NÃO ENTRA EM NADA DO QUE SAI DAQUI, e isso é uma regra e não
+ * um esquecimento: um número só vive onde pode ser corrigido.
+ *
+ * O papel na porta não se corrige. Uma imagem posta no grupo às 8h continua a
+ * circular dias depois. As duas congelariam "200 cobertores" muito depois de
+ * isso ter deixado de ser verdade — e um número velho é pior do que nenhum,
+ * porque parece exacto. As quantidades vivem só na página do centro, que é
+ * reescrita a cada publicação; o papel e as imagens levam a lista e o link.
+ */
 function mi(it, prob, estilo) {
   const svg = prob ? svgProibido(it.id, estilo, AO_FUNDO) : svgIcone(it.id, estilo, AO_FUNDO);
   return `<div class="marca-item">${svg}<div class="rot">${esc(it.rotulo)}</div></div>`;
@@ -1523,7 +1567,7 @@ function montarForm() {
       <legend>${esc(g.g)}</legend>
       <div class="chips">
         ${g.ids.map(id => {
-          const on = S.precisa.includes(id);
+          const on = S.precisa.some(v => idDe(v) === id);
           return `<button type="button" class="chip${on ? ' on' : ''}" aria-pressed="${on}"
             data-tog="${id}">${svgIcone(id)}<span>${esc(ROTULO_BR[id])}</span></button>`;
         }).join('')}
@@ -1535,6 +1579,9 @@ function montarForm() {
     return `<li class="${it.semMarca ? 'generico' : ''}">
       ${svgIcone(it.id)}
       <span>${esc(it.rotulo)}</span>
+      ${tipo === 'precisa' ? `<input class="q" type="text" inputmode="numeric"
+        value="${esc(it.q)}" maxlength="8" placeholder="qtd"
+        data-q="${i}" aria-label="Quantidade de ${esc(it.rotulo)}">` : ''}
       <span class="li-acoes">
         ${it.livre ? `<button type="button" class="marca" data-marca="${i}" data-l="${tipo}"
           aria-label="Escolher marca para ${esc(it.rotulo)}"
@@ -1961,9 +2008,18 @@ function fallbackCopia(texto, ok) {
  * Ligações
  * -------------------------------------------------------------------------*/
 function alternar(id) {
-  const i = S.precisa.indexOf(id);
+  /* Comparar por id e não por valor: assim que um item ganha quantidade
+     deixa de ser a string 'agua' e passa a { id:'agua', q:'200' }. */
+  const i = S.precisa.findIndex(v => idDe(v) === id);
   if (i >= 0) S.precisa.splice(i, 1); else S.precisa.push(id);
   salvar(); montarForm();
+}
+
+function mudarQuantidade(lista, i, q) {
+  const arr = S[lista === 'precisa' ? 'precisa' : 'naoTraga'];
+  if (!arr[i]) return;
+  arr[i] = comQuantidade(arr[i], q);
+  salvar();
 }
 function remover(lista, i) { S[lista === 'precisa' ? 'precisa' : 'naoTraga'].splice(i, 1); salvar(); montarForm(); }
 function mover(i, d) {
@@ -2052,6 +2108,13 @@ function iniciar() {
   ].forEach(([id, k]) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { S[k] = el.value; salvar(); });
+  });
+
+  /* 'change' e não 'input': redesenhar quinze peças a cada tecla numa lista
+     de dez itens tornava o campo lento no telemóvel. */
+  document.addEventListener('change', e => {
+    const t = e.target.closest('[data-q]');
+    if (t) mudarQuantidade('precisa', +t.dataset.q, t.value);
   });
 
   document.addEventListener('click', e => {
@@ -2315,6 +2378,12 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .escolhidos li svg { width: 22px; height: 22px; flex: none; }
 .escolhidos li > span:first-of-type { flex: 1; min-width: 0; }
+/* Estreito de propósito: cabe "200" e "20 caixas", não cabe um parágrafo. */
+.escolhidos li .q {
+  width: 62px; flex: none; padding: 6px 7px;
+  font: 700 14px/1 var(--mono); text-align: center;
+  border-width: 1.5px;
+}
 .escolhidos li.vazio {
   border-style: dashed; border-color: var(--fio);
   color: var(--texto-3); font-weight: 500; justify-content: center;
@@ -2599,14 +2668,6 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   display: flex; flex-direction: column; align-items: center;
   justify-content: flex-end; gap: 1.5mm; min-height: 0; min-width: 0;
 }
-.marca-item svg { flex: 1; min-height: 0; width: 100%; }
-.marca-item .rot {
-  font-weight: 700; text-align: center; text-transform: uppercase;
-  letter-spacing: .01em; text-wrap: balance; word-break: break-word;
-}
-
-.cabeca { display: flex; align-items: center; gap: 4mm; flex: none; }
-
 /* ---- O carimbo de data -------------------------------------------------- */
 /* Discreto mas nunca ausente. Em mono não muda nada, porque nunca dependeu
    da cor. */

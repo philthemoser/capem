@@ -103,7 +103,7 @@ function textoPartilhaCentro(d, url) {
     ? 'NÃO está recebendo agora' : 'precisa hoje'}`);
   L.push('');
   if (!d.pausado && precisa.length) {
-    precisa.slice(0, 10).forEach(i => L.push('• ' + i.rotulo));
+    precisa.slice(0, 10).forEach(i => L.push('• ' + i.rotulo + (i.q ? ` — ${i.q}` : '')));
     L.push('');
   }
   const nao = (d.naoTraga || []).map(item).map(i => i.rotulo);
@@ -151,7 +151,9 @@ function paginaCentro(centro, base, urlCanonica) {
   <section class="bloco-precisa">
     <h2>${svgIcone('aberto', 'color:var(--permitido)')}<span>Precisamos hoje</span></h2>
     ${precisa.length
-      ? `<ul class="marcas">${precisa.map(i => `<li>${svgIcone(i.id)}<span>${esc(i.rotulo)}</span></li>`).join('')}</ul>`
+      ? `<ul class="marcas">${precisa.map(i => `<li>${svgIcone(i.id)}
+          <span>${esc(i.rotulo)}</span>
+          ${i.q ? `<b class="q">${esc(i.q)}</b>` : ''}</li>`).join('')}</ul>`
       : '<p class="vazio">Este centro ainda não publicou uma lista. Ligue antes de vir.</p>'}
   </section>`}
 
@@ -263,11 +265,11 @@ function paginaInicial({ contagem, base }) {
       <span class="porta-d">Ver os centros e o que cada um precisa hoje.
         ${contagem.aprovado ? `${contagem.aprovado} ${contagem.aprovado === 1 ? 'centro' : 'centros'} no ar.` : ''}</span>
     </a>
-    <a class="porta" href="/novo">
+    <a class="porta" href="/centro">
       ${svgIcone('cartaz')}
       <span class="porta-t">Sou de um centro</span>
-      <span class="porta-d">Peça a página do seu centro e gere o material impresso.
-        Leva dois minutos.</span>
+      <span class="porta-d">Gere o material impresso e publique a lista de hoje.
+        Peça a sua página se ainda não tiver.</span>
     </a>
   </div>
 
@@ -372,6 +374,50 @@ function paginaCentros({ centros, base }) {
   });
 })();
 </script>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * A porta de quem gere um centro
+ *
+ * Faltava. Quem já tinha página não tinha por onde entrar a partir da
+ * entrada — tinha de saber escrever /kit de cor. Um coordenador que perdeu o
+ * caminho para a sua própria ferramenta não a usa.
+ * -------------------------------------------------------------------------*/
+function paginaCentroEntrada({ base }) {
+  return molde({
+    titulo: 'Sou de um centro — CAPEM',
+    descricao: 'Gere o material impresso do seu centro e publique a lista de hoje.',
+    corpo: `
+<main class="portas">
+  <header>
+    <p class="tipo"><a href="/">CAPEM</a></p>
+    <h1>Sou de um centro</h1>
+    <p class="entrada">Tudo o que um ponto de arrecadação precisa: o material para
+      imprimir, e a lista de hoje que o QR desse material aponta.</p>
+  </header>
+
+  <div class="duas-portas">
+    <a class="porta" href="/kit">
+      ${svgIcone('cartaz')}
+      <span class="porta-t">Material impresso</span>
+      <span class="porta-d">Quinze peças a partir dos mesmos dados — cartaz de porta,
+        etiquetas de caixa, panfletos, crachás. E o botão para publicar a lista de
+        hoje, se já tiver página.</span>
+    </a>
+    <a class="porta" href="/novo">
+      ${svgIcone('pino')}
+      <span class="porta-t">Pedir a minha página</span>
+      <span class="porta-d">Ainda não tem endereço na internet? Peça um — recebe o
+        código na hora. É o que lhe deixa publicar todos os dias.</span>
+    </a>
+  </div>
+
+  <footer class="pe">
+    <p><b>Perdeu o código?</b> Não há como o recuperar — só emitir outro.
+      <a href="/novo">Peça uma página nova</a> e diga-nos, para juntarmos as duas.</p>
+  </footer>
+</main>`
   });
 }
 
@@ -599,6 +645,12 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .marcas svg{width:100%;max-width:74px;aspect-ratio:1}
 .marcas span{font:700 12px/1.2 var(--fonte);text-align:center;text-transform:uppercase;
   overflow-wrap:anywhere}
+/* A quantidade só existe aqui. O papel e as imagens não a levam: um número
+   impresso não se corrige, e "200" às 8h está errado ao meio-dia. Esta página
+   é reescrita a cada publicação, por isso é o único sítio onde um número pode
+   ser verdade. */
+.marcas .q{display:block;margin-top:3px;font:800 15px/1 var(--fonte);
+  padding:3px 6px;border:2px solid var(--tinta)}
 .vazio{margin:8px 0 0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 
 /* --- pausa --- */
@@ -724,5 +776,5 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 `;
 
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
-                   paginaInicial, paginaCentros, paginaNovo, paginaCodigo,
-                   paginaAdmin, idade, esc, CSS };
+                   paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
+                   paginaCodigo, paginaAdmin, idade, esc, CSS };

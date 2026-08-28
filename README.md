@@ -5,6 +5,29 @@
 An open concept prototype for running the building that becomes a relief centre — a church, a school, a gymnasium that was doing something else last week and is now sheltering three hundred people and receiving donations nobody asked for.
 
 **→ [Open the prototype](https://philthemoser.github.io/capem/)** · works on a phone · English, Español, Português
+**→ [Open the field kit](https://philthemoser.github.io/capem/field/kit.html)** · Portuguese · fifteen printable pieces · works offline
+
+### What is static and what needs a server
+
+The two halves of this repository host very differently, and it is worth
+knowing which is which before trying to deploy it.
+
+| | Where it runs |
+|---|---|
+| `index.html` — the prototype | **GitHub Pages.** Self-contained, no build step, no server. |
+| `field/kit.html` — the printed media kit | **GitHub Pages.** Same: one file, works offline, runs from a USB stick. |
+| `server/` — the needs pages | **Needs a machine.** Every page shows today's list and how many days old it is; both change without anyone making a commit. Pages serves files and does not run code, so there is no publish endpoint, no database and no approval queue. |
+
+That split is the right order rather than a compromise: the kit is deliberately
+standalone and offline, and the needs pages only start to matter once there are
+centres publishing to them. `.github/workflows/pages.yml` deploys the static
+half and fails the build if a committed `index.html` or `field/kit.html` has
+drifted from its sources — a stale generated file on a permanent URL is a tool
+shipping a bug that was already fixed.
+
+The kit can publish to a server hosted anywhere, from anywhere: paste the
+centre's full page address (`capem.org/canoas-ss`) into the publish field and it
+works whether the kit was opened from Pages, an email attachment or a USB stick.
 
 > **Everything in the prototype is fictional.** Both scenarios are invented, including every centre, household, quantity and event. The regions and the underlying problems are real; nothing else is. This has never been used in a real response and should not be until people who have run one have taken it apart.
 

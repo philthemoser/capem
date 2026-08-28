@@ -80,6 +80,20 @@ Nada disto impede o subdomínio — só diz o que ele custa. Se a sensação de 
 página é do centro" valer esse custo, ponha `CAPEM_ESTILO=subdominio` e está
 feito.
 
+## Isto não corre no GitHub Pages
+
+O Pages serve ficheiros; não corre código. Estas páginas mostram a lista de hoje
+e há quantos dias ela foi tocada — as duas coisas mudam sem ninguém fazer
+commit — e precisam de um POST para publicar, de uma base de dados e de uma
+fila de aprovação. Nada disso existe num alojamento estático.
+
+O que **vai** para o Pages é a outra metade: o protótipo e o kit de material
+impresso, que são ficheiros autónomos. Ver `.github/workflows/pages.yml`.
+
+O kit consegue publicar para um servidor alojado em qualquer sítio,
+independentemente de onde ele próprio foi aberto: basta colar o endereço
+completo da página do centro no campo de publicação.
+
 ## Onde alojar
 
 Não usa nada que pertença a uma nuvem em particular: HTTP simples e um ficheiro

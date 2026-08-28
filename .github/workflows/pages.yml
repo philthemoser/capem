@@ -1,0 +1,70 @@
+# Publica no GitHub Pages a metade que é estática.
+#
+# O protótipo e o kit de material impresso são ficheiros HTML autónomos: não
+# têm servidor, não têm passo de compilação, não guardam nada. Vão para o
+# Pages tal como estão e ficam num endereço permanente e gratuito.
+#
+# O QUE **NÃO** VAI PARA AQUI, e porquê: as páginas de necessidades. Cada uma
+# mostra a lista de hoje e há quantos dias ela foi tocada — as duas coisas
+# mudam sem ninguém fazer commit. O GitHub Pages serve ficheiros e não corre
+# código, por isso não há POST para publicar, não há base de dados e não há
+# fila de aprovação. Isso é `server/`, e precisa de uma máquina.
+#
+# A divisão não é um compromisso, é a ordem certa: o kit funciona sozinho e
+# offline de propósito, e a página de necessidades só passa a valer quando
+# houver centros a publicar.
+name: Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      # Os ficheiros gerados estão no repositório para quem só quer usá-los.
+      # Isto confirma que continuam a ser o que as fontes dizem — um index.html
+      # ou um kit.html desactualizado seria uma ferramenta com um bug já
+      # corrigido, publicada num endereço permanente.
+      - name: os ficheiros gerados batem certo com as fontes
+        run: |
+          node build.js
+          node field/build.js
+          if ! git diff --quiet -- index.html field/kit.html; then
+            echo "::error::index.html ou field/kit.html estão desactualizados."
+            echo "Corra 'node build.js && node field/build.js' e faça commit."
+            git diff --stat -- index.html field/kit.html
+            exit 1
+          fi
+
+      - run: node tools/check-i18n.js
+
+  publicar:
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4

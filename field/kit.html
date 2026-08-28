@@ -1847,7 +1847,54 @@ function avisar(botao, msg) {
  * servidor, é esse; se foi aberto de uma pen (file://), não há origem nenhuma e
  * o campo do endereço serve para a escrever.
  * -------------------------------------------------------------------------*/
+/**
+ * Onde fica o servidor, e qual é o endereço do centro.
+ *
+ * O campo do endereço aceita as duas coisas, porque as duas aparecem na vida
+ * real:
+ *
+ *     canoas-ss                          só o nome, quando o kit veio do servidor
+ *     capem.org/canoas-ss                colado da página do centro
+ *     https://capem.org/canoas-ss        colado do browser
+ *     canoas-ss.capem.org                se o servidor usar subdomínios
+ *
+ * Isto importa mais do que parece. Este ficheiro é aberto de uma pen, de um
+ * anexo de e-mail, do GitHub Pages — sítios que não são o servidor. Confiar
+ * só em `location.origin` fazia o kit tentar publicar no github.io e falhar
+ * com um erro que não explicava nada. O endereço da página é a única coisa
+ * que o coordenador tem sempre à mão: está no papel que imprimiu.
+ */
+function alvoPublicacao() {
+  const bruto = (S.slug || '').trim();
+  if (!bruto) return null;
+
+  const origem = location.origin;
+  const daPagina = (origem && origem !== 'null' && /^https?:/.test(origem)) ? origem : '';
+
+  /* Sem ponto nem barra é só o nome: o servidor tem de ser de onde isto veio. */
+  if (!/[./]/.test(bruto)) {
+    return daPagina ? { base: daPagina, slug: bruto.toLowerCase() } : null;
+  }
+
+  let u;
+  try { u = new URL(/^https?:\/\//.test(bruto) ? bruto : 'https://' + bruto); }
+  catch (e) { return null; }
+
+  const partes = u.pathname.split('/').filter(Boolean);
+  if (partes.length) return { base: u.origin, slug: partes[partes.length - 1].toLowerCase() };
+
+  /* Sem caminho, o nome está no subdomínio: canoas-ss.capem.org */
+  const rotulos = u.hostname.split('.');
+  if (rotulos.length < 3) return null;
+  return {
+    base: `${u.protocol}//${rotulos.slice(1).join('.')}${u.port ? ':' + u.port : ''}`,
+    slug: rotulos[0].toLowerCase()
+  };
+}
+
 function servidor() {
+  const a = alvoPublicacao();
+  if (a) return a.base;
   const o = location.origin;
   return (o && o !== 'null' && /^https?:/.test(o)) ? o : '';
 }
@@ -1860,19 +1907,19 @@ function estadoPub(msg, tipo) {
 }
 
 async function publicar(botao) {
-  const slug = (S.slug || '').trim().toLowerCase().replace(/^.*\//, '');
   const codigo = (S.codigo || '').trim();
-  if (!slug || !codigo) {
+  const alvo = alvoPublicacao();
+  if (!S.slug.trim() || !codigo) {
     estadoPub('Escreva o endereço do centro e o código.', 'mau');
     return;
   }
-  const base = servidor();
-  if (!base) {
-    estadoPub('Este ficheiro foi aberto do aparelho, não de um endereço. '
-      + 'Abra o kit a partir do endereço do servidor para publicar — a impressão '
-      + 'continua a funcionar aqui.', 'mau');
+  if (!alvo) {
+    estadoPub('Não percebemos esse endereço. Cole o endereço completo da página '
+      + 'do seu centro — está impresso no rodapé do cartaz, algo como '
+      + 'capem.org/canoas-ss. A impressão continua a funcionar sem isto.', 'mau');
     return;
   }
+  const { base, slug } = alvo;
 
   const antes = botao.textContent;
   botao.disabled = true; botao.textContent = 'A publicar…';
@@ -3148,8 +3195,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
           Publicar aqui é o que faz o papel impresso continuar a valer amanhã.</p>
         <div class="dois">
           <div>
-            <label class="campo" for="f-slug">Endereço do centro</label>
-            <input id="f-slug" type="text" placeholder="paroquia-sao-sebastiao" autocomplete="off" spellcheck="false">
+            <label class="campo" for="f-slug">Endereço da sua página</label>
+            <input id="f-slug" type="text" placeholder="capem.org/canoas-ss" autocomplete="off" spellcheck="false" inputmode="url">
           </div>
           <div>
             <label class="campo" for="f-codigo">Código</label>

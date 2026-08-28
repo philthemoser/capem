@@ -315,6 +315,34 @@ const CENTRO = {
   await p.evaluate(() => { S.precisa = S.precisa.filter(v => typeof v === 'string'); salvar(); montarForm(); });
   await p.waitForTimeout(300);
 
+  console.log('\nendereço para publicar');
+  /* Este ficheiro é aberto de uma pen, de um anexo, do GitHub Pages — sítios
+     que não são o servidor. O endereço da página é a única coisa que o
+     coordenador tem sempre: está impresso no rodapé do cartaz.
+     Aqui a página corre de file://, por isso testa-se o que não depende da
+     origem; o caso do nome sozinho está coberto pelo teste ponta-a-ponta,
+     que corre servido pelo servidor. */
+  const casos = [
+    ['capem.org/canoas-ss', 'https://capem.org', 'canoas-ss'],
+    ['https://capem.org/canoas-ss', 'https://capem.org', 'canoas-ss'],
+    ['http://localhost:8080/canoas-ss', 'http://localhost:8080', 'canoas-ss'],
+    ['canoas-ss.capem.org', 'https://capem.org', 'canoas-ss'],
+    ['CAPEM.org/Canoas-SS', 'https://capem.org', 'canoas-ss'],
+    ['capem.org/a/b/canoas-ss', 'https://capem.org', 'canoas-ss']
+  ];
+  for (const [entrada, base, slug] of casos) {
+    const got = await p.evaluate(v => { S.slug = v; return alvoPublicacao(); }, entrada);
+    ok(`"${entrada}" → ${base}/${slug}`,
+      !!got && got.base === base && got.slug === slug, JSON.stringify(got));
+  }
+  /* Servido de file://, "canoas-ss" sozinho não tem servidor nenhum — e não
+     pode inventar um, senão publicava para um sítio errado em silêncio. */
+  for (const mau of ['canoas-ss', '', '   ', '???']) {
+    const got = await p.evaluate(v => { S.slug = v; return alvoPublicacao(); }, mau);
+    ok(`"${mau || '(vazio)'}" sem servidor não inventa um`, got === null, JSON.stringify(got));
+  }
+  await p.evaluate(() => { S.slug = ''; salvar(); });
+
   console.log('\ncarimbo de data');
   const hoje = await p.evaluate(() => dataCurta());
   const carimbos = await p.evaluate(() => {

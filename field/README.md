@@ -127,12 +127,24 @@ Safari, Chrome ou Firefox**; no telemóvel, descarregue e abra a partir de
 Se a faixa não aparecer mas mostrar um erro, é um erro a sério — o texto do erro
 vem na própria faixa, para não ser preciso uma consola no meio de um ginásio.
 
-## 2. Página de necessidades — em construção
+## 2. Página de necessidades — `server/` ✅ pronto
 
-Cada centro terá um endereço na internet com a lista sempre atualizada. O
-coordenador atualiza pelo celular com um código; quem abre o link vê a versão de
-hoje. O QR code das peças aponta para essa página — assim o papel impresso nunca
-fica velho.
+Cada centro tem um endereço na internet com a lista sempre atualizada. O
+coordenador publica pelo celular com um código, direto do kit; quem abre o link
+— ou lê o QR de qualquer peça impressa — vê a versão de hoje. **É isso que
+impede o papel de ficar velho.**
+
+No fim do formulário do kit há uma secção **Publicar a lista de hoje**: endereço
+do centro, código, um botão. Depois da primeira publicação, o QR de todas as
+peças passa a apontar sozinho para a página.
+
+A página diz em voz alta a idade da lista: até um dia, nada; de dois a seis
+dias, faixa amarela "ligue antes de vir"; a partir de sete, faixa vermelha
+"pode já não valer". Uma página web parece sempre nova, e é essa a mentira
+perigosa — uma lista de três semanas manda um vizinho carregar cinco quilos de
+arroz até um centro que já não os quer.
+
+Como correr, como alojar e todas as decisões: **[../server/README.md](../server/README.md)**.
 
 ## 3. Código do saco — em construção
 

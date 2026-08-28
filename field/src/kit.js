@@ -58,6 +58,7 @@ const vazio = () => ({
   setaTexto: 'DOAÇÕES', setaDir: 'direita',
   fechadoTexto: 'Fechado agora — abrimos amanhã',
   pausado: false, motivoPausa: 'Estamos cheios. Ligue antes de vir.',
+  slug: '', codigo: '',
   mono: false, cortes: true,
   atualizado: ''
 });
@@ -880,6 +881,7 @@ async function fontesProntas() {
  * -------------------------------------------------------------------------*/
 function montarForm() {
   const set = (id, v) => { const el = document.getElementById(id); if (el && el.value !== v) el.value = v; };
+  set('f-slug', S.slug); set('f-codigo', S.codigo);
   set('f-nome', S.nome); set('f-tipo', S.tipo); set('f-endereco', S.endereco);
   set('f-horario', S.horario); set('f-contato', S.contato); set('f-link', S.link);
   set('f-seta-texto', S.setaTexto); set('f-seta-dir', S.setaDir);
@@ -1154,6 +1156,89 @@ function avisar(botao, msg) {
 }
 
 /* ---------------------------------------------------------------------------
+ * PUBLICAR
+ *
+ * O kit é o editor; a página web é o espelho. Não há um segundo formulário
+ * algures — o coordenador aprende uma interface e não duas, e o papel na porta
+ * e a página do QR não se podem contradizer porque saem do mesmo objecto.
+ *
+ * Isto é a única coisa neste ficheiro que fala com a rede, e é opcional: sem
+ * sinal continua tudo a imprimir. Quando houver sinal, um toque.
+ *
+ * O servidor fica onde o ficheiro for aberto. Se o kit foi servido a partir do
+ * servidor, é esse; se foi aberto de uma pen (file://), não há origem nenhuma e
+ * o campo do endereço serve para a escrever.
+ * -------------------------------------------------------------------------*/
+function servidor() {
+  const o = location.origin;
+  return (o && o !== 'null' && /^https?:/.test(o)) ? o : '';
+}
+
+function estadoPub(msg, tipo) {
+  const el = document.getElementById('estado-pub');
+  el.hidden = !msg;
+  el.textContent = msg || '';
+  el.className = 'estado-pub' + (tipo ? ' ' + tipo : '');
+}
+
+async function publicar(botao) {
+  const slug = (S.slug || '').trim().toLowerCase().replace(/^.*\//, '');
+  const codigo = (S.codigo || '').trim();
+  if (!slug || !codigo) {
+    estadoPub('Escreva o endereço do centro e o código.', 'mau');
+    return;
+  }
+  const base = servidor();
+  if (!base) {
+    estadoPub('Este ficheiro foi aberto do aparelho, não de um endereço. '
+      + 'Abra o kit a partir do endereço do servidor para publicar — a impressão '
+      + 'continua a funcionar aqui.', 'mau');
+    return;
+  }
+
+  const antes = botao.textContent;
+  botao.disabled = true; botao.textContent = 'A publicar…';
+  estadoPub('');
+  try {
+    const r = await fetch(base + '/api/publicar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, codigo, dados: {
+        horario: S.horario, link: S.link,
+        precisa: S.precisa, naoTraga: S.naoTraga,
+        pausado: S.pausado, motivoPausa: S.motivoPausa
+      } })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      estadoPub({
+        403: 'Código errado. Confira as letras — não há O nem I nem S no código.',
+        404: 'Não encontrámos esse centro. Confira o endereço.',
+        429: 'Demasiados envios. Espere um pouco.'
+      }[r.status] || ('Não deu para publicar' + (j.erro ? ': ' + j.erro : '.')), 'mau');
+    } else if (j.estado !== 'aprovado') {
+      estadoPub('Publicado. A página fica no ar assim que o pedido for verificado.', 'bom');
+    } else {
+      estadoPub('Publicado — ' + j.url, 'bom');
+    }
+    /* Fecha o círculo: o QR de todas as peças passa a apontar para a página
+       que acabou de ser publicada. Sem isto o coordenador teria de copiar o
+       endereço à mão para o campo do link, e a peça mais provável de ficar
+       sem QR seria justamente a que mais precisa dele. */
+    if (r.ok && j.url && !S.link.trim()) {
+      S.link = j.url;
+      salvar(); montarForm();
+    }
+  } catch (e) {
+    /* Sem sinal não é um erro nesta ferramenta: é o estado normal metade do
+       tempo. Por isso a mensagem não pede desculpa, diz o que fazer. */
+    estadoPub('Sem ligação ao servidor. O papel continua a sair; publique quando '
+      + 'houver sinal.', 'mau');
+  }
+  botao.disabled = false; botao.textContent = antes;
+}
+
+/* ---------------------------------------------------------------------------
  * Texto para colar no grupo. Nenhuma integração, nenhum custo, nenhum
  * cadastro na Meta — e chega ao mesmo sítio.
  * -------------------------------------------------------------------------*/
@@ -1286,7 +1371,7 @@ function iniciar() {
   [['f-nome', 'nome'], ['f-tipo', 'tipo'], ['f-endereco', 'endereco'],
    ['f-horario', 'horario'], ['f-contato', 'contato'], ['f-link', 'link'],
    ['f-seta-texto', 'setaTexto'], ['f-seta-dir', 'setaDir'], ['f-fechado', 'fechadoTexto'],
-   ['f-motivo', 'motivoPausa']
+   ['f-motivo', 'motivoPausa'], ['f-slug', 'slug'], ['f-codigo', 'codigo']
   ].forEach(([id, k]) => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('input', () => { S[k] = el.value; salvar(); });
@@ -1303,6 +1388,14 @@ function iniciar() {
     else if (t.dataset.print) imprimir(t.dataset.print);
     else if (t.dataset.img) imagem(t.dataset.img, t);
   });
+
+  document.getElementById('b-publicar')
+    .addEventListener('click', e => publicar(e.currentTarget));
+  /* Se o kit foi servido pelo servidor, o pedido de página é lá; se foi aberto
+     de uma pen, o link não sabe para onde ir e é escondido em vez de mentir. */
+  const lp = document.getElementById('link-pedir');
+  if (servidor()) lp.href = servidor() + '/';
+  else lp.closest('p').hidden = true;
 
   document.getElementById('b-fechar-marca').addEventListener('click', fecharMarcas);
   document.getElementById('modal-marca').addEventListener('click', e => {

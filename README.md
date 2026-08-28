@@ -86,6 +86,12 @@ What that does **not** solve — an official asking for the list, what happens t
 
 ```
 index.html              the prototype, self-contained and committed — open it directly
+server/                 THE NEEDS PAGE — one small server for all centres
+  server.js             routes, defences, boot (no dependencies, Node 22+)
+  db.js                 SQLite; the only file that knows how state is stored
+  pagina.js             the pages, in the paper's design tokens
+  compartilhado.js      loads the 29 marks from field/src/ — one source, not a copy
+  README.md             how to run it, and every decision worth knowing
 field/                  FIELD TOOLS — not a demo, meant to be used
   kit.html              printed media kit: 15 pieces from one form
                         (Portuguese, offline, no server, fonts embedded) — ready
@@ -124,9 +130,10 @@ node tools/nav.js          # navigation: stable order, expand-in-place, mobile s
 node tools/a11y.js         # axe-core, WCAG 2.1 A/AA
 node tools/verify-qr.js tools/qr-tests.json > /tmp/o.json && python3 tools/verify-qr.py /tmp/o.json
 node tools/kit-test.js     # the printed kit: true mm sizes, overflow, mono, imposition
+node tools/server-test.js  # the needs page: list age, approval, escaping, defences
 ```
 
-Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 87/87 kit assertions.
+Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 87/87 kit assertions · 52/52 server assertions.
 
 ## How to tell us we are wrong
 

@@ -1,6 +1,4 @@
+server/capem.db
+server/*.db-journal
+server/*.db-wal
 node_modules/
-package-lock.json
-shots/
-.DS_Store
-*.log
-field/tela.png

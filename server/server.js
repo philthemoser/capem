@@ -1,0 +1,292 @@
+#!/usr/bin/env node
+/* ============================================================================
+ * CAPEM — servidor das páginas de necessidades
+ *
+ * Um ficheiro, sem dependências, só módulos que vêm dentro do Node. Corre num
+ * VPS de quatro euros, no Fly, no Railway ou no seu portátil, e não usa nada
+ * que pertença a uma nuvem em particular — a decisão de onde alojar isto pode
+ * ser tomada depois sem reescrever nada.
+ *
+ *   node server/server.js
+ *
+ * Variáveis:
+ *   CAPEM_ADMIN   obrigatória — o segredo que abre /admin
+ *   CAPEM_BASE    o endereço público (ex.: https://capem.org). Serve para os
+ *                 QR codes e os links; sem ele usa http://localhost:PORTA
+ *   PORT          por omissão 8080
+ *   CAPEM_DB      caminho do ficheiro SQLite
+ *
+ * O QUE ESTE SERVIDOR NÃO GUARDA: nada sobre quem é atendido. Só a morada, o
+ * horário e o telefone de um edifício, que é informação que o centro já quer
+ * ver colada na porta. Isso mantém a posição de proteção de dados simples,
+ * ao contrário do protótipo — ver docs/data-protection.md.
+ * ==========================================================================*/
+const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
+const { URL } = require('node:url');
+
+const db = require('./db');
+const P = require('./pagina');
+
+const PORTA = Number(process.env.PORT || 8080);
+const ADMIN = process.env.CAPEM_ADMIN || '';
+const BASE = (process.env.CAPEM_BASE || `http://localhost:${PORTA}`).replace(/\/+$/, '');
+const FICHEIRO_DB = process.env.CAPEM_DB || path.join(__dirname, 'capem.db');
+
+const RAIZ = path.join(__dirname, '..');
+
+/* Falhar ao arrancar é melhor do que servir uma fila de aprovação aberta ao
+   mundo. Um servidor que arranca sempre é um servidor que um dia arranca mal. */
+if (!ADMIN || ADMIN.length < 16) {
+  console.error('CAPEM_ADMIN em falta ou curta demais (mínimo 16 caracteres).');
+  console.error('Ex.:  CAPEM_ADMIN=$(node -e "console.log(require(\'crypto\').randomBytes(24).toString(\'hex\'))") node server/server.js');
+  process.exit(1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Utilitários
+ * -------------------------------------------------------------------------*/
+const LIMITES = { nome: 80, tipo: 60, endereco: 140, horario: 80, contato: 40, link: 140, motivoPausa: 140 };
+
+const texto = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
+
+/** Um slug legível, porque vai ser lido em voz alta ao telefone. */
+function fazerSlug(nome) {
+  return String(nome || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    .slice(0, 48) || 'centro';
+}
+
+function slugLivre(nome) {
+  const base = fazerSlug(nome);
+  if (!db.existe(base)) return base;
+  for (let i = 2; i < 200; i++) if (!db.existe(`${base}-${i}`)) return `${base}-${i}`;
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+/* Trava simples por IP. Não é uma defesa a sério — é o suficiente para que um
+   script aborrecido não encha a fila de aprovação enquanto ninguém olha. */
+const tentativas = new Map();
+function demasiado(ip, limite, janela) {
+  const agora = Date.now();
+  const t = (tentativas.get(ip) || []).filter(x => agora - x < janela);
+  t.push(agora);
+  tentativas.set(ip, t);
+  if (tentativas.size > 5000) tentativas.clear();
+  return t.length > limite;
+}
+
+function corpo(req, maxBytes = 64 * 1024) {
+  return new Promise((resolve, reject) => {
+    let n = 0; const pedacos = [];
+    req.on('data', c => {
+      n += c.length;
+      if (n > maxBytes) { reject(new Error('corpo grande demais')); req.destroy(); return; }
+      pedacos.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(pedacos).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+const responder = (res, cod, corpoHtml, tipo = 'text/html; charset=utf-8', extra = {}) => {
+  res.writeHead(cod, {
+    'Content-Type': tipo,
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+    ...extra
+  });
+  res.end(corpoHtml);
+};
+
+const json = (res, cod, obj) =>
+  responder(res, cod, JSON.stringify(obj), 'application/json; charset=utf-8',
+    { 'Access-Control-Allow-Origin': '*' });
+
+const paraOndeIr = (res, url) => { res.writeHead(303, { Location: url }); res.end(); };
+
+const ipDe = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+  || req.socket.remoteAddress || '?';
+
+/* O endereço público.
+ *
+ * Se CAPEM_BASE estiver definido, manda ele. Se não, deduz-se do pedido —
+ * porque a alternativa era servir "http://localhost:8080" dentro de páginas
+ * reais no dia em que alguém se esquecesse da variável, e um endereço errado
+ * impresso num QR não se corrige depois de estar colado a cem portas. */
+function baseDe(req) {
+  if (process.env.CAPEM_BASE) return BASE;
+  const proto = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'http';
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  return /^[a-z0-9.:\[\]-]+$/i.test(host) && host ? `${proto}://${host}` : BASE;
+}
+
+/** Só os campos que conhecemos, cortados ao tamanho, nada mais. */
+function limparDados(d) {
+  const out = {};
+  Object.keys(LIMITES).forEach(k => { if (d[k] != null) out[k] = texto(d[k], LIMITES[k]); });
+  out.pausado = !!d.pausado;
+  const lista = v => (Array.isArray(v) ? v : []).slice(0, 24).map(x =>
+    typeof x === 'string' ? texto(x, 40)
+      : { texto: texto(x && x.texto, 40), marca: x && x.marca ? texto(x.marca, 40) : undefined });
+  out.precisa = lista(d.precisa);
+  out.naoTraga = lista(d.naoTraga);
+  return out;
+}
+
+/* ---------------------------------------------------------------------------
+ * Rotas
+ * -------------------------------------------------------------------------*/
+async function encaminhar(req, res) {
+  const url = new URL(req.url, 'http://interno');
+  const caminho = decodeURIComponent(url.pathname).replace(/\/+$/, '') || '/';
+  const ip = ipDe(req);
+  const base = baseDe(req);
+
+  if (req.method === 'OPTIONS') {
+    return responder(res, 204, '', 'text/plain', {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type'
+    });
+  }
+
+  /* --- estáticos --- */
+  if (caminho === '/fontes.css') {
+    return responder(res, 200, fs.readFileSync(path.join(RAIZ, 'field', 'src', 'fonts.css')),
+      'text/css; charset=utf-8', { 'Cache-Control': 'public, max-age=31536000, immutable' });
+  }
+  if (caminho === '/kit') {
+    return responder(res, 200, fs.readFileSync(path.join(RAIZ, 'field', 'kit.html')),
+      'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  /* --- entrada --- */
+  if (caminho === '/' && req.method === 'GET') {
+    return responder(res, 200, P.paginaInicial({ contagem: db.contar(), base }));
+  }
+
+  /* --- pedir uma página --- */
+  if (caminho === '/pedir' && req.method === 'POST') {
+    if (demasiado(ip, 5, 3600e3)) return responder(res, 429, P.molde({
+      titulo: 'Demasiados pedidos',
+      corpo: '<main class="aviso-pagina"><h1>Demasiados pedidos deste aparelho</h1><p>Tente daqui a uma hora.</p></main>'
+    }));
+    const campos = new URLSearchParams(await corpo(req));
+    const dados = limparDados({
+      nome: campos.get('nome'), tipo: campos.get('tipo'), endereco: campos.get('endereco'),
+      horario: campos.get('horario'), contato: campos.get('contato'),
+      precisa: [], naoTraga: require('./compartilhado').RECUSAS
+    });
+    if (!dados.nome || !dados.endereco || !dados.contato) {
+      return responder(res, 400, P.molde({
+        titulo: 'Faltam dados',
+        corpo: '<main class="aviso-pagina"><h1>Faltam dados</h1><p>O nome, o endereço e o telefone são obrigatórios.</p><p><a href="/">Voltar</a></p></main>'
+      }));
+    }
+    const slug = slugLivre(dados.nome);
+    const codigo = db.criar(slug, dados);
+    console.log(`[pedido] ${slug} — ${dados.nome}`);
+    return responder(res, 200, P.paginaCodigo({ slug, codigo, base }));
+  }
+
+  /* --- publicar (o botão do kit) --- */
+  if (caminho === '/api/publicar' && req.method === 'POST') {
+    if (demasiado(ip, 120, 3600e3)) return json(res, 429, { erro: 'demasiados envios' });
+    let p;
+    try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
+    const centro = db.ler(texto(p.slug, 60));
+    if (!centro) return json(res, 404, { erro: 'centro não encontrado' });
+    if (!db.codigoConfere(p.codigo || '', centro.codigo_hash)) {
+      return json(res, 403, { erro: 'código errado' });
+    }
+    /* O nome, o endereço e o telefone foram verificados à mão; a lista do dia
+       não. Por isso a publicação muda a lista e não os dados verificados —
+       senão a aprovação passava a não valer nada depois do primeiro envio. */
+    const antes = centro.dados;
+    const novo = limparDados(p.dados || {});
+    const dados = {
+      ...antes,
+      precisa: novo.precisa, naoTraga: novo.naoTraga,
+      horario: novo.horario || antes.horario,
+      link: novo.link || antes.link,
+      pausado: novo.pausado, motivoPausa: novo.motivoPausa || ''
+    };
+    db.publicar(centro.slug, dados);
+    console.log(`[publicado] ${centro.slug} — ${dados.precisa.length} itens${dados.pausado ? ' (pausado)' : ''}`);
+    return json(res, 200, {
+      ok: true, slug: centro.slug, url: `${base}/${centro.slug}`,
+      estado: centro.estado
+    });
+  }
+
+  /* --- admin --- */
+  if (caminho === '/admin' && req.method === 'GET') {
+    if (url.searchParams.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    return responder(res, 200, P.paginaAdmin({
+      pendentes: db.listar('pendente'), aprovados: db.listar('aprovado'),
+      token: ADMIN, contagem: db.contar(), base
+    }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+  }
+  if (caminho === '/admin/decidir' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    const slug = texto(campos.get('slug'), 60);
+    const decisao = campos.get('decisao');
+    if (db.existe(slug) && db.ESTADOS.includes(decisao)) {
+      db.decidir(slug, decisao);
+      console.log(`[${decisao}] ${slug}`);
+    }
+    return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
+  }
+
+  /* --- a página de um centro --- */
+  if (req.method === 'GET' && /^\/[a-z0-9-]{1,60}$/.test(caminho)) {
+    const centro = db.ler(caminho.slice(1));
+    if (!centro) return responder(res, 404, P.paginaNaoExiste());
+    if (centro.estado !== 'aprovado') {
+      /* O coordenador pode ver a sua página antes de estar no ar, com o código.
+         Sem isso teria de imprimir o QR às cegas. */
+      const c = url.searchParams.get('codigo');
+      if (c && db.codigoConfere(c, centro.codigo_hash)) {
+        return responder(res, 200, P.paginaCentro(centro, base), 'text/html; charset=utf-8',
+          { 'X-Robots-Tag': 'noindex' });
+      }
+      return responder(res, 404, P.paginaPendente(centro), 'text/html; charset=utf-8',
+        { 'X-Robots-Tag': 'noindex' });
+    }
+    return responder(res, 200, P.paginaCentro(centro, base), 'text/html; charset=utf-8',
+      { 'Cache-Control': 'public, max-age=120' });
+  }
+
+  return responder(res, 404, P.paginaNaoExiste());
+}
+
+/* ---------------------------------------------------------------------------
+ * Arranque
+ * -------------------------------------------------------------------------*/
+function criarServidor() {
+  return http.createServer((req, res) => {
+    encaminhar(req, res).catch(e => {
+      console.error('erro:', e && e.message);
+      if (!res.headersSent) responder(res, 500, P.molde({
+        titulo: 'Erro',
+        corpo: '<main class="aviso-pagina"><h1>Alguma coisa correu mal</h1><p>Tente outra vez daqui a pouco.</p></main>'
+      }));
+    });
+  });
+}
+
+if (require.main === module) {
+  db.abrir(FICHEIRO_DB);
+  criarServidor().listen(PORTA, () => {
+    console.log(`CAPEM em ${BASE}  (porta ${PORTA})`);
+    console.log(`fila de aprovação: ${BASE}/admin?t=${ADMIN}`);
+    const c = db.contar();
+    console.log(`${c.aprovado} no ar · ${c.pendente} à espera`);
+  });
+}
+
+module.exports = { criarServidor, encaminhar, fazerSlug, limparDados, db };

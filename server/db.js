@@ -35,6 +35,16 @@ function abrir(ficheiro) {
       publicado   INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_estado ON centros(estado, criado);
+
+    /* Endereços antigos. Quando um centro é renomeado — normalmente na
+       aprovação, para encurtar o que vai ser ditado ao telefone — o endereço
+       velho continua a responder e redireciona. Um endereço que já saiu da
+       impressora não se corrige. */
+    CREATE TABLE IF NOT EXISTS aliases (
+      alias TEXT PRIMARY KEY,
+      slug  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_alias_slug ON aliases(slug);
   `);
   return db;
 }
@@ -88,7 +98,37 @@ function ler(slug) {
 }
 
 function existe(slug) {
-  return !!db.prepare('SELECT 1 FROM centros WHERE slug = ?').get(slug);
+  return !!db.prepare('SELECT 1 FROM centros WHERE slug = ?').get(slug)
+      || !!db.prepare('SELECT 1 FROM aliases WHERE alias = ?').get(slug);
+}
+
+/** Devolve o slug verdadeiro para um endereço que pode ser antigo. */
+function resolver(x) {
+  if (db.prepare('SELECT 1 FROM centros WHERE slug = ?').get(x)) return x;
+  const a = db.prepare('SELECT slug FROM aliases WHERE alias = ?').get(x);
+  return a ? a.slug : null;
+}
+
+/**
+ * Renomear.
+ *
+ * O sítio natural para isto é a aprovação: é aí que alguém olha para
+ * "Paróquia São Sebastião, Canoas/RS" e percebe que "canoas-sao-sebastiao"
+ * é longo de ditar e "canoas-ss" não é. O endereço antigo passa a alias e
+ * continua a responder para sempre.
+ */
+function renomear(antigo, novo) {
+  if (antigo === novo) return;
+  if (existe(novo)) throw new Error('esse endereço já está ocupado: ' + novo);
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE centros SET slug = ? WHERE slug = ?').run(novo, antigo);
+    db.prepare('UPDATE aliases SET slug = ? WHERE slug = ?').run(novo, antigo);
+    db.prepare('INSERT OR REPLACE INTO aliases (alias, slug) VALUES (?, ?)').run(antigo, novo);
+    /* Um alias que aponte para si próprio faria um redireccionamento infinito. */
+    db.prepare('DELETE FROM aliases WHERE alias = slug').run();
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
 }
 
 function publicar(slug, dados) {
@@ -117,5 +157,5 @@ function contar() {
   return r;
 }
 
-module.exports = { abrir, criar, ler, existe, publicar, decidir, listar, contar,
-                   novoCodigo, codigoConfere, ESTADOS };
+module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
+                   decidir, listar, contar, novoCodigo, codigoConfere, ESTADOS };

@@ -169,69 +169,190 @@ function paginaNaoExiste() {
 /* ---------------------------------------------------------------------------
  * A entrada
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * A entrada — duas portas e nada mais
+ *
+ * Quem chega aqui é uma de duas pessoas, e não há uma terceira: ou tem alguma
+ * coisa para dar, ou está a montar um centro. Um formulário na página de
+ * entrada obrigava a primeira a passar por cima da segunda para chegar ao que
+ * queria, e é a primeira que aparece às centenas.
+ * -------------------------------------------------------------------------*/
 function paginaInicial({ contagem, base }) {
   return molde({
-    titulo: 'CAPEM — página de necessidades',
-    descricao: 'Cada centro de apoio tem uma página com a lista do dia. Atualiza-se pelo telemóvel.',
+    titulo: 'CAPEM — centros de apoio',
+    descricao: 'Veja o que os centros de apoio precisam hoje, ou peça a página do seu centro.',
     corpo: `
-<main class="inicial">
+<main class="portas">
   <header>
     <p class="tipo">CAPEM · ferramenta livre</p>
-    <h1>A lista de hoje, num endereço que não envelhece</h1>
-    <p class="entrada">Um cartaz impresso diz o que o centro precisava no dia em que foi
-      impresso. Esta página diz o que precisa hoje — e o QR de todas as peças do kit
-      aponta para ela. O coordenador atualiza pelo telemóvel, com um código; quem
-      abre o link vê a versão de hoje.</p>
+    <h1>O que os centros precisam hoje</h1>
+    <p class="entrada">Um cartaz impresso diz o que um centro precisava no dia em que
+      foi impresso. Estas páginas dizem o que precisa hoje — e é para aqui que aponta
+      o QR de todo o material do kit.</p>
   </header>
 
-  <section class="passos-i">
-    <ol>
-      <li><b>Peça a página do seu centro.</b> Preencha o formulário aqui em baixo.
-        Recebe já um código — guarde-o, é o que lhe deixa publicar.</li>
-      <li><b>Gere o material impresso.</b> O <a href="/kit">kit</a> faz quinze peças a
-        partir dos mesmos dados: cartaz de porta, etiquetas de caixa, panfletos, crachás.</li>
-      <li><b>Publique todos os dias.</b> No fim do kit há um botão para enviar a lista
-        do dia para esta página. O papel na porta continua a valer porque o QR aponta
-        para aqui.</li>
-    </ol>
-  </section>
-
-  <section class="pedir">
-    <h2>Pedir a página de um centro</h2>
-    <p class="dica">Cada pedido é verificado à mão antes de a página ir para o ar —
-      um endereço errado numa emergência manda pessoas para o sítio errado.</p>
-    <form method="POST" action="/pedir">
-      <label class="campo" for="nome">Nome do centro</label>
-      <input id="nome" name="nome" type="text" required maxlength="80" placeholder="Paróquia São Sebastião">
-
-      <label class="campo" for="tipo">O que é</label>
-      <select id="tipo" name="tipo">
-        <option>Ponto de arrecadação</option>
-        <option>Abrigo</option>
-        <option>Abrigo e ponto de arrecadação</option>
-        <option>Cozinha comunitária</option>
-        <option>Centro de distribuição</option>
-      </select>
-
-      <label class="campo" for="endereco">Endereço</label>
-      <input id="endereco" name="endereco" type="text" required maxlength="140" placeholder="R. Bento Gonçalves, 412 — Centro, Canoas/RS">
-
-      <label class="campo" for="horario">Horário</label>
-      <input id="horario" name="horario" type="text" maxlength="80" placeholder="Todos os dias, 8h às 20h">
-
-      <label class="campo" for="contato">Telefone</label>
-      <input id="contato" name="contato" type="text" required maxlength="40" placeholder="(51) 99612-0044">
-
-      <button type="submit" class="btn btn-primario">Pedir a página</button>
-    </form>
-  </section>
+  <div class="duas-portas">
+    <a class="porta" href="/centros">
+      ${svgIcone('caixa')}
+      <span class="porta-t">Quero ajudar</span>
+      <span class="porta-d">Ver os centros e o que cada um precisa hoje.
+        ${contagem.aprovado ? `${contagem.aprovado} ${contagem.aprovado === 1 ? 'centro' : 'centros'} no ar.` : ''}</span>
+    </a>
+    <a class="porta" href="/novo">
+      ${svgIcone('cartaz')}
+      <span class="porta-t">Sou de um centro</span>
+      <span class="porta-d">Peça a página do seu centro e gere o material impresso.
+        Leva dois minutos.</span>
+    </a>
+  </div>
 
   <footer class="pe">
-    <p>${contagem.aprovado} ${contagem.aprovado === 1 ? 'centro' : 'centros'} no ar.</p>
     <p class="creditos">Nada aqui recolhe dados de quem é atendido — só a morada,
       o horário e o telefone de um edifício.
       <a href="https://github.com/philthemoser/capem">O código é aberto.</a></p>
   </footer>
+</main>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * A lista de centros
+ *
+ * Ordenada pela idade da lista e não pelo nome: um centro que publicou hoje é
+ * útil, um que não toca na página há três semanas é uma viagem em vão à espera
+ * de acontecer. Os velhos ficam no fim e dizem-no.
+ *
+ * As marcas aparecem aqui, pequenas, para se poder correr a lista com os olhos
+ * e ver quem precisa de água sem ler uma palavra.
+ * -------------------------------------------------------------------------*/
+function paginaCentros({ centros, base }) {
+  const ordem = { fresca: 0, 'a-envelhecer': 1, velha: 2, nunca: 3 };
+  const linhas = centros
+    .map(c => ({ c, i: idade(c.publicado) }))
+    /* Primeiro pela idade da lista; dentro da mesma idade, quem está a receber
+       antes de quem está em pausa. Um centro em pausa com lista de hoje é
+       informação útil — "não vá lá" — mas esta página chama-se "quero ajudar",
+       e o primeiro da lista tem de ser um sítio que aceita alguma coisa. */
+    .sort((a, b) => ordem[a.i.nivel] - ordem[b.i.nivel] ||
+      (!!(a.c.dados || {}).pausado - !!(b.c.dados || {}).pausado) ||
+      String((a.c.dados || {}).nome).localeCompare(String((b.c.dados || {}).nome), 'pt'))
+    .map(({ c, i }) => {
+      const d = c.dados || {};
+      const precisa = (d.precisa || []).map(item).slice(0, 8);
+      const quando = { fresca: 'lista de hoje', 'a-envelhecer': `há ${i.dias} dias`,
+        velha: `há ${i.dias} dias`, nunca: 'ainda sem lista' }[i.nivel];
+      /* O que se procura é o nome ou o sítio, por isso é isso que o filtro vê. */
+      const busca = [d.nome, d.endereco, d.tipo].join(' ').toLowerCase();
+      return `<li class="c-item ${i.nivel}" data-busca="${esc(busca)}">
+        <a href="${esc(c.url || base + '/' + c.slug)}">
+          <span class="c-nome">${esc(d.nome || c.slug)}</span>
+          <span class="c-morada">${esc(d.endereco || '')}</span>
+          <span class="c-quando">${esc(quando)}</span>
+          ${d.pausado
+            ? `<span class="c-pausa">${svgIcone('fechado')} Não está recebendo agora</span>`
+            : precisa.length
+              ? `<span class="c-marcas">${precisa.map(x => svgIcone(x.id)).join('')}</span>`
+              : ''}
+        </a>
+      </li>`;
+    }).join('');
+
+  return molde({
+    titulo: 'Centros de apoio — o que precisam hoje',
+    descricao: 'Lista dos centros de apoio e do que cada um precisa hoje.',
+    corpo: `
+<main class="lista-centros">
+  <header>
+    <p class="tipo"><a href="/">CAPEM</a></p>
+    <h1>Centros de apoio</h1>
+    <p class="entrada">Toque num centro para ver a lista completa, a morada e o
+      telefone. <b>Ligue antes de vir</b> se a lista não for de hoje.</p>
+  </header>
+
+  ${centros.length ? `
+  <div class="busca">
+    <label class="sr-only" for="q">Procurar por nome ou lugar</label>
+    <input id="q" type="search" placeholder="Procurar por nome ou lugar…" autocomplete="off">
+  </div>
+  <ul class="centros">${linhas}</ul>
+  <p class="sem-resultado" id="sem-resultado" hidden>Nenhum centro com esse nome.</p>
+  ` : `<p class="vazio">Ainda não há centros no ar. Se está a montar um,
+        <a href="/novo">peça a página do seu centro</a>.</p>`}
+
+  <footer class="pe">
+    <p><b>Não encontrou o seu centro?</b> <a href="/novo">Peça a página aqui.</a></p>
+  </footer>
+</main>
+<script>
+/* Filtro no aparelho. A lista já veio toda: sem isto continua a funcionar,
+   só sem a caixa de procura. Com dezenas de centros chega bem; com centenas,
+   isto passa a ter de ser feito no servidor. */
+(function () {
+  var q = document.getElementById('q');
+  if (!q) return;
+  var itens = [].slice.call(document.querySelectorAll('.c-item'));
+  var vazio = document.getElementById('sem-resultado');
+  q.addEventListener('input', function () {
+    var t = q.value.trim().toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    var n = 0;
+    itens.forEach(function (li) {
+      var alvo = li.getAttribute('data-busca')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      var bate = !t || alvo.indexOf(t) >= 0;
+      li.hidden = !bate;
+      if (bate) n++;
+    });
+    vazio.hidden = n > 0;
+  });
+})();
+</script>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Pedir uma página
+ * -------------------------------------------------------------------------*/
+function paginaNovo({ erro }) {
+  return molde({
+    titulo: 'Pedir a página de um centro',
+    corpo: `
+<main class="inicial">
+  <header>
+    <p class="tipo"><a href="/">CAPEM</a></p>
+    <h1>Pedir a página do seu centro</h1>
+    <p class="entrada">Recebe um código na hora — é o que lhe deixa publicar a lista
+      todos os dias, a partir do <a href="/kit">kit</a>. Cada pedido é verificado à
+      mão antes de a página ir para o ar: um endereço errado numa emergência manda
+      pessoas para o sítio errado.</p>
+  </header>
+
+  ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
+
+  <form method="POST" action="/pedir">
+    <label class="campo" for="nome">Nome do centro</label>
+    <input id="nome" name="nome" type="text" required maxlength="80" placeholder="Paróquia São Sebastião">
+
+    <label class="campo" for="tipo">O que é</label>
+    <select id="tipo" name="tipo">
+      <option>Ponto de arrecadação</option>
+      <option>Abrigo</option>
+      <option>Abrigo e ponto de arrecadação</option>
+      <option>Cozinha comunitária</option>
+      <option>Centro de distribuição</option>
+    </select>
+
+    <label class="campo" for="endereco">Endereço</label>
+    <input id="endereco" name="endereco" type="text" required maxlength="140" placeholder="R. Bento Gonçalves, 412 — Centro, Canoas/RS">
+
+    <label class="campo" for="horario">Horário</label>
+    <input id="horario" name="horario" type="text" maxlength="80" placeholder="Todos os dias, 8h às 20h">
+
+    <label class="campo" for="contato">Telefone</label>
+    <input id="contato" name="contato" type="text" required maxlength="40" placeholder="(51) 99612-0044">
+
+    <button type="submit" class="btn btn-primario largo">Pedir a página</button>
+  </form>
 </main>`
   });
 }
@@ -265,7 +386,7 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica }) {
  * Uma tabela e dois botões. Isto é aberto num telemóvel, provavelmente de pé —
  * por isso os botões são grandes e a decisão é de um toque.
  * -------------------------------------------------------------------------*/
-function paginaAdmin({ pendentes, aprovados, token, contagem, base }) {
+function paginaAdmin({ pendentes, aprovados, token, contagem, base, erro }) {
   const linha = c => {
     const d = c.dados || {};
     return `<article class="pedido">
@@ -273,12 +394,21 @@ function paginaAdmin({ pendentes, aprovados, token, contagem, base }) {
       <p class="meta">${esc(d.tipo || '')} · pedido em ${dataCurta(c.criado)}</p>
       <p>${svgIcone('pino')} ${esc(d.endereco || '—')}</p>
       <p>${svgIcone('telefone')} ${esc(d.contato || '—')}</p>
-      <p class="meta">/${esc(c.slug)}</p>
       <form method="POST" action="/admin/decidir">
         <input type="hidden" name="t" value="${esc(token)}">
         <input type="hidden" name="slug" value="${esc(c.slug)}">
-        <button class="btn btn-primario" name="decisao" value="aprovado">Aprovar</button>
-        <button class="btn btn-recusar" name="decisao" value="recusado">Recusar</button>
+        <label class="campo" for="s-${esc(c.slug)}">Endereço</label>
+        <div class="linha-slug">
+          <span>/</span>
+          <input id="s-${esc(c.slug)}" name="novo_slug" type="text" value="${esc(c.slug)}"
+            maxlength="48" autocomplete="off" spellcheck="false">
+        </div>
+        <p class="meta">Encurte-o se for longo de ditar ao telefone. O endereço
+          antigo continua a responder.</p>
+        <div class="botoes">
+          <button class="btn btn-primario" name="decisao" value="aprovado">Aprovar</button>
+          <button class="btn btn-recusar" name="decisao" value="recusado">Recusar</button>
+        </div>
       </form>
     </article>`;
   };
@@ -290,6 +420,7 @@ function paginaAdmin({ pendentes, aprovados, token, contagem, base }) {
   <h1>Pedidos</h1>
   <p class="entrada">${contagem.pendente} à espera · ${contagem.aprovado} no ar ·
     ${contagem.recusado} recusados</p>
+  ${erro === 'ocupado' ? '<p class="erro-form">Esse endereço já está ocupado. Escolha outro.</p>' : ''}
 
   ${pendentes.length
     ? `<div class="pedidos">${pendentes.map(linha).join('')}</div>`
@@ -383,6 +514,45 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .pe p{margin:0 0 6px}
 .pe .creditos{color:var(--texto-3)}
 
+/* --- as duas portas --- */
+.portas,.lista-centros{padding:24px 20px}
+.duas-portas{display:grid;gap:14px;margin:8px 0 28px}
+@media(min-width:640px){.duas-portas{grid-template-columns:1fr 1fr;gap:18px}}
+.porta{display:flex;flex-direction:column;gap:8px;padding:22px 20px;
+  border:3px solid var(--tinta);text-decoration:none;background:var(--papel)}
+.porta:hover{background:var(--claro)}
+.porta svg{width:44px;height:44px}
+.porta-t{font:400 clamp(22px,6vw,30px)/1 var(--preta);letter-spacing:-.02em}
+.porta-d{font:500 14.5px/1.5 var(--fonte);color:var(--texto-2)}
+
+/* --- lista de centros --- */
+.busca{margin:0 0 18px}
+input[type=search]{width:100%;padding:13px 14px;font:500 16px/1.3 var(--fonte);
+  color:var(--tinta);background:var(--papel);border:2px solid var(--tinta);
+  border-radius:0;-webkit-appearance:none}
+.centros{list-style:none;margin:0;padding:0}
+.c-item{border-top:2px solid var(--tinta)}
+.c-item:last-child{border-bottom:2px solid var(--tinta)}
+.c-item a{display:grid;gap:4px;padding:15px 0;text-decoration:none}
+.c-nome{font:800 17px/1.25 var(--fonte)}
+.c-morada{font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
+.c-quando{font:600 12px/1.2 var(--mono);color:var(--texto-2)}
+/* Um centro que não toca na página há semanas é uma viagem em vão à espera de
+   acontecer. Fica no fim da lista e diz-se em vermelho. */
+.c-item.velha .c-quando,.c-item.nunca .c-quando{color:var(--proibido);font-weight:700}
+.c-item.velha .c-nome,.c-item.nunca .c-nome{color:var(--texto-2)}
+.c-marcas{display:flex;flex-wrap:wrap;gap:7px;margin-top:5px}
+.c-marcas svg{width:26px;height:26px;flex:none}
+.c-pausa{display:flex;align-items:center;gap:7px;margin-top:5px;
+  font:700 13px/1.2 var(--fonte);color:var(--proibido)}
+.c-pausa svg{width:20px;height:20px;flex:none}
+.sem-resultado{margin:18px 0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
+.erro-form{margin:0 0 16px;padding:12px 14px;background:var(--proibido);color:#fff;
+  font:600 14px/1.45 var(--fonte)}
+.btn.largo{width:100%;text-align:center}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
 /* --- inicial, admin, avisos --- */
 .inicial,.admin,.aviso-pagina{padding:24px 20px}
 .inicial h1,.admin h1,.aviso-pagina h1{margin:0 0 10px;
@@ -420,8 +590,13 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
   font:500 14px/1.4 var(--fonte)}
 .pedido svg{width:17px;height:17px;flex:none}
 .pedido .meta{font:500 12px/1.3 var(--mono);color:var(--texto-2)}
-.pedido form{display:flex;gap:10px;margin-top:8px}
-.pedido .btn{flex:1;margin-top:6px;text-align:center}
+.pedido form{margin-top:10px}
+.pedido .campo{margin:10px 0 4px}
+.linha-slug{display:flex;align-items:center;gap:6px}
+.linha-slug span{font:600 16px/1 var(--mono);color:var(--texto-2)}
+.linha-slug input{flex:1;min-width:0;font-family:var(--mono);font-size:15px}
+.pedido .botoes{display:flex;gap:10px;margin-top:12px}
+.pedido .btn{flex:1;margin-top:0;text-align:center}
 .lista-no-ar{list-style:none;margin:0;padding:0}
 .lista-no-ar li{display:flex;justify-content:space-between;gap:12px;
   padding:11px 0;border-bottom:1px solid var(--tenue);font:600 15px/1.3 var(--fonte)}
@@ -430,4 +605,5 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 `;
 
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
-                   paginaInicial, paginaCodigo, paginaAdmin, idade, esc, CSS };
+                   paginaInicial, paginaCentros, paginaNovo, paginaCodigo,
+                   paginaAdmin, idade, esc, CSS };

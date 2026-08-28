@@ -74,12 +74,31 @@ isso em três linhas) e faça cópia do ficheiro `.db` — é o estado todo.
 O custo não é o problema: `docs/running-costs.md` fica-se por cerca de $25/mês, e
 para uma dúzia de centros a conta é praticamente zero.
 
+## As páginas
+
+| Endereço | |
+|---|---|
+| `/` | Duas portas: **quero ajudar** e **sou de um centro**. Nada mais. |
+| `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Ordenada pela idade; quem está em pausa desce; quem não publica há semanas vai para o fim, a vermelho. Filtro por nome ou lugar, no aparelho. |
+| `/novo` | O formulário de pedido. |
+| `/<centro>` | A página do centro — o destino do QR. |
+| `/kit` | O gerador de material impresso. |
+| `/admin?t=…` | A fila de aprovação. |
+
+A entrada não tem formulário de propósito. Quem chega é uma de duas pessoas e
+não há uma terceira: ou tem alguma coisa para dar, ou está a montar um centro.
+Um formulário na entrada obrigava a primeira — que aparece às centenas — a
+passar por cima da segunda.
+
 ## O caminho completo
 
-1. **O centro pede a página** em `/` — nome, tipo, endereço, horário, telefone.
-   Recebe na hora um código de oito caracteres.
-2. **Você aprova** em `/admin?t=SEGREDO`. Um cartão por pedido, dois botões.
-   Feito para ser aberto de pé, no telemóvel.
+1. **O centro pede a página** em `/novo` — nome, tipo, endereço, horário,
+   telefone. Recebe na hora um código de oito caracteres.
+2. **Você aprova** em `/admin?t=SEGREDO`. Um cartão por pedido, dois botões, e
+   **um campo para encurtar o endereço** — é aqui que
+   `paroquia-sao-sebastiao` passa a `canoas-ss`, que é o que se consegue ditar
+   ao telefone. O endereço antigo fica a redireccionar para sempre. Feito para
+   ser aberto de pé, no telemóvel.
 3. **O coordenador gera o material** em `/kit` e publica a lista do dia com o
    código. Depois da primeira publicação, o QR de todas as peças aponta
    sozinho para a página.
@@ -112,6 +131,10 @@ ninguém publica em nome de um centro; se o coordenador o perder, emite-se outro
 `0`, `1` nem `5`, porque vai ser ditado ao telefone a alguém num ginásio com
 barulho.
 
+**Encurtar o endereço não parte nada.** Renomear guarda o endereço antigo como
+alias: continua a responder, faz 301 para o novo, e `POST /api/publicar` aceita
+os dois. Um endereço que já saiu da impressora não se corrige.
+
 **Uma página não aprovada não está no ar** — devolve 404 e `noindex`. Mas o
 coordenador pode pré-vê-la juntando `?codigo=SEU-CODIGO`, senão teria de
 imprimir o QR às cegas.
@@ -138,7 +161,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 72 verificações
+node tools/server-test.js    # 96 verificações
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas
@@ -155,6 +178,9 @@ redirecionarem uma para a outra nos dois estilos.
   aprovação à mão aguenta uma emergência a sério.
 - **Não há como um centro se apagar** a si próprio, nem como marcar um centro
   como encerrado. Hoje é uma alteração à mão na base de dados.
+- **A lista de centros é uma página só**, filtrada no aparelho. Chega bem para
+  dezenas; com centenas é preciso paginar e procurar no servidor, e
+  provavelmente ordenar por distância em vez de por idade.
 - **Não há cópia de segurança automática** do ficheiro `.db`.
 - **`node:sqlite` está marcado como experimental.** Se mudar de forma, é
   `server/db.js` que se reescreve e mais nenhum ficheiro — foi isolado de

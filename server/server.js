@@ -55,12 +55,20 @@ const LIMITES = { nome: 80, tipo: 60, endereco: 140, horario: 80, contato: 40, l
 
 const texto = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
 
-/** Um slug legível, porque vai ser lido em voz alta ao telefone. */
-function fazerSlug(nome) {
+/**
+ * Um slug legível, porque vai ser lido em voz alta ao telefone.
+ *
+ * `recurso` é o que sai quando não resta nada de utilizável. Ao criar um
+ * centro isso é aceitável — "centro-2" é um endereço como outro qualquer. Ao
+ * renomear NÃO é: um campo vazio ou um punhado de pontuação passaria a
+ * renomear um centro para "centro" sem ninguém ter pedido nada. Quem renomeia
+ * passa '' e trata o vazio como "não mexer".
+ */
+function fazerSlug(nome, recurso = 'centro') {
   return String(nome || '').toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    .slice(0, 48) || 'centro';
+    .slice(0, 48) || recurso;
 }
 
 function slugLivre(nome) {
@@ -257,6 +265,15 @@ async function encaminhar(req, res) {
   if (caminho === '/' && req.method === 'GET') {
     return responder(res, 200, P.paginaInicial({ contagem: db.contar(), base }));
   }
+  if (caminho === '/centros' && req.method === 'GET') {
+    const centros = db.listar('aprovado')
+      .map(c => ({ ...c, url: urlDoCentro(c.slug, base) }));
+    return responder(res, 200, P.paginaCentros({ centros, base }),
+      'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
+  }
+  if (caminho === '/novo' && req.method === 'GET') {
+    return responder(res, 200, P.paginaNovo({}));
+  }
 
   /* --- pedir uma página --- */
   if (caminho === '/pedir' && req.method === 'POST') {
@@ -271,9 +288,9 @@ async function encaminhar(req, res) {
       precisa: [], naoTraga: require('./compartilhado').RECUSAS
     });
     if (!dados.nome || !dados.endereco || !dados.contato) {
-      return responder(res, 400, P.molde({
-        titulo: 'Faltam dados',
-        corpo: '<main class="aviso-pagina"><h1>Faltam dados</h1><p>O nome, o endereço e o telefone são obrigatórios.</p><p><a href="/">Voltar</a></p></main>'
+      /* Devolve o formulário com o aviso, não uma página de erro sem saída. */
+      return responder(res, 400, P.paginaNovo({
+        erro: 'O nome, o endereço e o telefone são obrigatórios.'
       }));
     }
     const slug = slugLivre(dados.nome);
@@ -287,7 +304,8 @@ async function encaminhar(req, res) {
     if (demasiado(ip, 120, 3600e3)) return json(res, 429, { erro: 'demasiados envios' });
     let p;
     try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
-    const centro = db.ler(texto(p.slug, 60));
+    const real = db.resolver(texto(p.slug, 60));
+    const centro = real ? db.ler(real) : null;
     if (!centro) return json(res, 404, { erro: 'centro não encontrado' });
     if (!db.codigoConfere(p.codigo || '', centro.codigo_hash)) {
       return json(res, 403, { erro: 'código errado' });
@@ -318,6 +336,7 @@ async function encaminhar(req, res) {
     return responder(res, 200, P.paginaAdmin({
       pendentes: db.listar('pendente'),
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
+      erro: url.searchParams.get('erro'),
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
   }
@@ -326,10 +345,24 @@ async function encaminhar(req, res) {
     if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
     const slug = texto(campos.get('slug'), 60);
     const decisao = campos.get('decisao');
-    if (db.existe(slug) && db.ESTADOS.includes(decisao)) {
-      db.decidir(slug, decisao);
-      console.log(`[${decisao}] ${slug}`);
+    if (!db.existe(slug) || !db.ESTADOS.includes(decisao)) {
+      return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
     }
+    let alvo = slug;
+    /* Encurtar o endereço na aprovação é o momento certo: é aqui que alguém
+       olha para "paroquia-sao-sebastiao" e percebe que "canoas-ss" é o que
+       se consegue ditar ao telefone. O endereço antigo fica a redireccionar. */
+    const novo = fazerSlug(texto(campos.get('novo_slug'), 48), '');
+    if (decisao === 'aprovado' && novo && novo !== slug) {
+      if (RESERVADOS.has(novo) || db.existe(novo)) {
+        return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN) + '&erro=ocupado');
+      }
+      db.renomear(slug, novo);
+      alvo = novo;
+      console.log(`[renomeado] ${slug} → ${novo}`);
+    }
+    db.decidir(alvo, decisao);
+    console.log(`[${decisao}] ${alvo}`);
     return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
   }
 
@@ -346,6 +379,12 @@ async function encaminhar(req, res) {
 }
 
 function servirCentro(req, res, slug, url, base) {
+  /* Um endereço antigo continua a responder — está impresso algures — mas
+     manda o browser para o actual. */
+  const real = db.resolver(slug);
+  if (real && real !== slug) {
+    return redireccionar(res, urlDoCentro(real, base) + url.search, 301);
+  }
   const centro = db.ler(slug);
   if (!centro) return responder(res, 404, P.paginaNaoExiste());
   if (centro.estado !== 'aprovado') {

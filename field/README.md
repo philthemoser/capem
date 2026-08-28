@@ -144,6 +144,11 @@ dias, faixa amarela "ligue antes de vir"; a partir de sete, faixa vermelha
 perigosa — uma lista de três semanas manda um vizinho carregar cinco quilos de
 arroz até um centro que já não os quer.
 
+Quem quer doar entra em `/`, escolhe **quero ajudar** e vê a lista de todos os
+centros com o que cada um precisa hoje — em marcas, para se correr a lista com
+os olhos. Quem está a montar um centro escolhe **sou de um centro** e pede a
+sua página.
+
 Como correr, como alojar e todas as decisões: **[../server/README.md](../server/README.md)**.
 
 ## 3. Código do saco — em construção

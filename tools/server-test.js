@@ -57,11 +57,23 @@ const DIA = 86400000;
   let r = await get('/');
   let html = await r.text();
   ok('a página inicial responde', r.status === 200, String(r.status));
-  ok('e explica o que é antes de pedir dados', /lista de hoje/i.test(html));
+  /* Duas portas e nada mais: quem chega tem alguma coisa para dar, ou está a
+     montar um centro. Um formulário aqui obrigava a primeira — que aparece às
+     centenas — a passar por cima da segunda. */
+  ok('mostra as duas portas', /href="\/centros"/.test(html) && /href="\/novo"/.test(html));
+  ok('e não pede dados logo à entrada', !/<form/.test(html));
   ok('serve o kit em /kit', (await get('/kit')).status === 200);
   ok('serve as mesmas fontes do papel', (await get('/fontes.css')).status === 200);
 
+  console.log('\nlista de centros');
+  r = await get('/centros');
+  html = await r.text();
+  ok('a lista responde mesmo vazia', r.status === 200, String(r.status));
+  ok('e diz o que fazer quando não há nada', /ainda não há centros/i.test(html));
+
   console.log('\npedir uma página');
+  r = await get('/novo');
+  ok('o formulário vive na sua própria página', r.status === 200 && /<form/.test(await r.text()));
   r = await form('/pedir', {
     nome: 'Paróquia São Sebastião', tipo: 'Ponto de arrecadação',
     endereco: 'R. Bento Gonçalves, 412 — Centro, Canoas/RS',
@@ -81,7 +93,10 @@ const DIA = 86400000;
     (await r.text()).includes(slug + '-2'));
 
   r = await form('/pedir', { nome: 'Sem telefone', endereco: 'Rua X' });
+  html = await r.text();
   ok('faltar o telefone é recusado', r.status === 400, String(r.status));
+  /* Devolver o formulário com o aviso, não uma página de erro sem saída. */
+  ok('e devolve o formulário com o aviso', /<form/.test(html) && /obrigatórios/.test(html));
 
   console.log('\nantes de ser aprovada');
   r = await get('/' + slug);
@@ -132,18 +147,57 @@ const DIA = 86400000;
   ok('não se aprova sem o segredo', r.status === 404, String(r.status));
   ok('e o centro continua pendente', S.db.ler(slug).estado === 'pendente');
 
+  ok('a fila deixa editar o endereço antes de aprovar', /name="novo_slug"/.test(html));
+
+  /* Um campo de endereço vazio, ou só com pontuação, tem de ser "não mexer".
+     O recurso do gerador de slugs é "centro" — sem esta guarda, aprovar sem
+     tocar no campo renomeava o centro para /centro. */
+  for (const vazio of ['', '   ', '!!!', '---']) {
+    r = await form('/admin/decidir', { t: ADMIN, slug, decisao: 'aprovado', novo_slug: vazio });
+    ok(`endereço "${vazio || '(vazio)'}" não renomeia nada`, !!S.db.ler(slug), 'renomeou');
+    S.db.decidir(slug, 'pendente');
+  }
+
   r = await form('/admin/decidir', { t: ADMIN, slug, decisao: 'aprovado' });
   ok('aprovar redireciona de volta à fila', r.status === 303, String(r.status));
   ok('e o centro fica aprovado', S.db.ler(slug).estado === 'aprovado');
+
+  console.log('\nencurtar o endereço na aprovação');
+  /* O ponto: "paroquia-sao-sebastiao" é longo de ditar; "canoas-ss" não é.
+     Mas o endereço antigo pode já estar impresso. */
+  S.db.decidir(slug, 'pendente');
+  r = await form('/admin/decidir', { t: ADMIN, slug, decisao: 'aprovado', novo_slug: 'Canoas SS' });
+  ok('renomear aceita texto e faz o slug', !!S.db.ler('canoas-ss'), 'não renomeou');
+  ok('e o centro fica aprovado no novo endereço',
+    S.db.ler('canoas-ss') && S.db.ler('canoas-ss').estado === 'aprovado');
+  ok('o endereço antigo já não é o centro', S.db.ler(slug) === null);
+
+  r = await get('/' + slug);
+  ok('mas o endereço antigo continua a responder', r.status === 301, String(r.status));
+  ok('e manda para o novo', /\/canoas-ss$/.test(r.headers.get('location') || ''),
+    r.headers.get('location'));
+
+  r = await api('/api/publicar', { slug, codigo, dados: { precisa: ['agua'] } });
+  ok('publicar pelo endereço antigo continua a funcionar', r.status === 200, String(r.status));
+  ok('e devolve o novo endereço', (await r.json()).slug === 'canoas-ss');
+
+  /* Um alias a apontar para si próprio faria um ciclo de redireccionamentos. */
+  r = await get('/canoas-ss');
+  ok('o endereço novo serve a página, sem ciclo', r.status === 200, String(r.status));
+
+  r = await form('/admin/decidir', { t: ADMIN, slug: 'canoas-ss', decisao: 'aprovado', novo_slug: 'admin' });
+  ok('não se pode renomear para um nome reservado', !!S.db.ler('canoas-ss'));
+
+  const slugFinal = 'canoas-ss';
 
   console.log('\na página pública');
   /* Republica com um item escrito à mão que tem marca escolhida — o passo
      anterior tinha reposto a lista, e o que se quer verificar aqui é que a
      marca escolhida no kit chega ao ecrã. */
-  await api('/api/publicar', { slug, codigo, dados: {
+  await api('/api/publicar', { slug: slugFinal, codigo, dados: {
     precisa: ['agua', 'alimento', { texto: 'Luva de borracha', marca: 'botas' }],
     naoTraga: ['roupa-usada', 'moveis'] } });
-  r = await get('/' + slug);
+  r = await get('/' + slugFinal);
   html = await r.text();
   ok('está no ar', r.status === 200, String(r.status));
   ok('mostra o nome do centro', html.includes('Paróquia São Sebastião'));
@@ -162,29 +216,65 @@ const DIA = 86400000;
     [0, 'fresca', false], [3 * DIA, 'a-envelhecer', true], [30 * DIA, 'velha', true]
   ];
   for (const [atras, nivel, avisa] of idades) {
-    S.db.publicar(slug, S.db.ler(slug).dados);
+    S.db.publicar(slugFinal, S.db.ler(slugFinal).dados);
     const bd = require('node:sqlite');
     const conn = new bd.DatabaseSync(ficheiro);
     conn.prepare('UPDATE centros SET publicado = ? WHERE slug = ?')
-      .run(Date.now() - atras, slug);
+      .run(Date.now() - atras, slugFinal);
     conn.close();
-    html = await (await get('/' + slug)).text();
+    html = await (await get('/' + slugFinal)).text();
     const dias = Math.round(atras / DIA);
     ok(`lista de ${dias} dia(s) é classificada "${nivel}"`,
       require('../server/pagina').idade(Date.now() - atras).nivel === nivel);
     ok(`e ${avisa ? 'avisa' : 'não avisa'} na página`,
       /class="idade/.test(html) === avisa);
   }
-  html = await (await get('/' + slug)).text();
+  html = await (await get('/' + slugFinal)).text();
   ok('uma lista velha manda ligar antes de vir', /ligue antes/i.test(html));
 
   console.log('\npausa');
-  await api('/api/publicar', { slug, codigo, dados: { precisa: ['agua'], pausado: true,
+  await api('/api/publicar', { slug: slugFinal, codigo, dados: { precisa: ['agua'], pausado: true,
     motivoPausa: 'Estamos cheios.' } });
-  html = await (await get('/' + slug)).text();
+  html = await (await get('/' + slugFinal)).text();
   ok('a pausa substitui a lista', /não estamos recebendo/i.test(html) && !/class="bloco-precisa"/.test(html));
   ok('mas mantém o "não traga"', /class="bloco-nao"/.test(html));
-  await api('/api/publicar', { slug, codigo, dados: { precisa: ['agua'], pausado: false } });
+  await api('/api/publicar', { slug: slugFinal, codigo, dados: { precisa: ['agua'], pausado: false } });
+
+  console.log('\nordem da lista de centros');
+  /* Cria três vizinhos para poder verificar a ordem sem depender do resto. */
+  for (const [nm, dias, pausa] of [['AAA Fresco', 0, false], ['AAA Pausado', 0, true],
+                                    ['AAA Velho', 30, false]]) {
+    const sl = S.fazerSlug(nm);
+    if (!S.db.existe(sl)) {
+      S.db.criar(sl, { nome: nm, tipo: 'Ponto de arrecadação', endereco: 'Rua Teste, 1',
+        contato: '(51) 90000-0000', precisa: ['agua'], naoTraga: ['roupa-usada'],
+        pausado: pausa, motivoPausa: pausa ? 'Cheios.' : '' });
+      S.db.decidir(sl, 'aprovado');
+      S.db.publicar(sl, S.db.ler(sl).dados);
+      const c2 = new (require('node:sqlite').DatabaseSync)(ficheiro);
+      c2.prepare('UPDATE centros SET publicado=? WHERE slug=?')
+        .run(Date.now() - dias * DIA, sl);
+      c2.close();
+    }
+  }
+  html = await (await get('/centros')).text();
+  const pos = n => html.indexOf('>' + n + '<');
+  ok('quem recebe vem antes de quem está em pausa',
+    pos('AAA Fresco') < pos('AAA Pausado'),
+    `fresco@${pos('AAA Fresco')} pausado@${pos('AAA Pausado')}`);
+  ok('e uma lista velha vai para o fim',
+    pos('AAA Pausado') < pos('AAA Velho'),
+    `pausado@${pos('AAA Pausado')} velho@${pos('AAA Velho')}`);
+  ok('a pausa é dita na lista', /Não está recebendo agora/.test(html));
+  /* Contar <svg> na página inteira apanharia o favicon e diria pouco. O que
+     interessa é que cada centro que está a receber traga as suas marcas —
+     é isso que deixa correr a lista com os olhos sem ler uma palavra. */
+  const comMarcas = (html.match(/class="c-marcas"/g) || []).length;
+  const aReceber = (html.match(/class="c-item [^"]*"/g) || []).length
+    - (html.match(/class="c-pausa"/g) || []).length;
+  ok('cada centro que recebe mostra as suas marcas', comMarcas === aReceber && comMarcas >= 3,
+    `${comMarcas} com marcas, ${aReceber} a receber`);
+  ok('e a busca sabe procurar por lugar', /data-busca="[^"]*rua teste/.test(html));
 
   console.log('\nrecusar');
   const slug2 = slug + '-2';
@@ -192,13 +282,13 @@ const DIA = 86400000;
   ok('um centro recusado não vai para o ar', (await get('/' + slug2)).status === 404);
 
   console.log('\ndefesas simples');
-  r = await api('/api/publicar', { slug, codigo, dados: {
+  r = await api('/api/publicar', { slug: slugFinal, codigo, dados: {
     nome: 'x'.repeat(500), precisa: new Array(200).fill('agua') } });
-  const d = S.db.ler(slug).dados;
+  const d = S.db.ler(slugFinal).dados;
   ok('a lista é cortada a um tamanho sensato', d.precisa.length <= 24, String(d.precisa.length));
-  r = await api('/api/publicar', { slug, codigo, dados: {
+  r = await api('/api/publicar', { slug: slugFinal, codigo, dados: {
     precisa: [{ texto: '<script>alert(1)</script>', marca: 'caixa' }] } });
-  html = await (await get('/' + slug)).text();
+  html = await (await get('/' + slugFinal)).text();
   ok('nada do que é publicado vira HTML', !html.includes('<script>alert'));
   ok('e sai escapado', html.includes('&lt;script&gt;'));
 
@@ -207,13 +297,13 @@ const DIA = 86400000;
 
   /* Sem CAPEM_BASE, os endereços têm de sair do pedido. Um "localhost:8080"
      impresso num QR não se corrige depois de estar colado a cem portas. */
-  html = await (await get('/' + slug)).text();
+  html = await (await get('/' + slugFinal)).text();
   ok('os links usam o endereço por onde o pedido chegou',
     html.includes('127.0.0.1') && !html.includes('localhost:8080'),
     (html.match(/https?:\/\/[^"< ]+/) || [])[0]);
-  html = await (await get('/' + slug, { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'capem.org' })).text();
-  ok('e respeitam o proxy à frente', html.includes('https://capem.org/' + slug),
-    (html.match(/https?:\/\/[^"< ]+/) || [])[0]);
+  html = await (await get('/' + slugFinal, { 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'capem.org' })).text();
+  ok('e respeitam o proxy à frente', html.includes('https://capem.org/' + slugFinal),
+    (html.match(/https:\/\/capem[^"< ]*/) || [])[0]);
 
   servidor.close();
 
@@ -242,25 +332,25 @@ const DIA = 86400000;
     const comHost = (p, host) => fetch(b2 + p, { redirect: 'manual',
       headers: { 'X-Forwarded-Host': host } });
 
-    const porSub = await comHost('/', `${slug}.capem.org`);
-    const porCaminho = await comHost('/' + slug, 'capem.org');
+    const porSub = await comHost('/', `${slugFinal}.capem.org`);
+    const porCaminho = await comHost('/' + slugFinal, 'capem.org');
 
     if (estilo === 'caminho') {
       ok('o subdomínio redireciona para o caminho', porSub.status === 301, String(porSub.status));
       ok('e aponta para o endereço certo',
-        porSub.headers.get('location') === `http://capem.org/${slug}`,
+        porSub.headers.get('location') === `http://capem.org/${slugFinal}`,
         porSub.headers.get('location'));
       ok('o caminho serve a página', porCaminho.status === 200, String(porCaminho.status));
       ok('e o endereço impresso é o caminho',
-        (await porCaminho.text()).includes(`capem.org/${slug}`));
+        (await porCaminho.text()).includes(`capem.org/${slugFinal}`));
     } else {
       ok('o subdomínio serve a página', porSub.status === 200, String(porSub.status));
       ok('o caminho redireciona para o subdomínio', porCaminho.status === 301, String(porCaminho.status));
       ok('e aponta para o endereço certo',
-        porCaminho.headers.get('location') === `http://${slug}.capem.org`,
+        porCaminho.headers.get('location') === `http://${slugFinal}.capem.org`,
         porCaminho.headers.get('location'));
       ok('e o endereço impresso é o subdomínio',
-        (await porSub.text()).includes(`${slug}.capem.org`));
+        (await porSub.text()).includes(`${slugFinal}.capem.org`));
     }
 
     /* Um centro chamado "admin" seria um convite; e o kit, a fila e as fontes
@@ -272,7 +362,7 @@ const DIA = 86400000;
     ok('um subdomínio de dois níveis não é tratado como centro',
       S2.slugDoAnfitriao({ headers: { host: 'a.b.capem.org' } }) === null);
 
-    const kitNoSub = await comHost('/kit', `${slug}.capem.org`);
+    const kitNoSub = await comHost('/kit', `${slugFinal}.capem.org`);
     ok('o kit pedido a um subdomínio volta ao domínio de topo',
       kitNoSub.status === 301 && kitNoSub.headers.get('location') === 'http://capem.org/kit',
       `${kitNoSub.status} ${kitNoSub.headers.get('location')}`);
@@ -280,11 +370,11 @@ const DIA = 86400000;
     const pub = await fetch(b2 + '/api/publicar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-Host': 'capem.org' },
-      body: JSON.stringify({ slug, codigo, dados: { precisa: ['agua'] } })
+      body: JSON.stringify({ slug: slugFinal, codigo, dados: { precisa: ['agua'] } })
     });
     const j = await pub.json();
     ok('o kit recebe de volta o endereço canónico',
-      j.url === (estilo === 'subdominio' ? `http://${slug}.capem.org` : `http://capem.org/${slug}`),
+      j.url === (estilo === 'subdominio' ? `http://${slugFinal}.capem.org` : `http://capem.org/${slugFinal}`),
       j.url);
 
     srv2.close();

@@ -216,6 +216,82 @@ const DIA = 86400000;
     (html.match(/https?:\/\/[^"< ]+/) || [])[0]);
 
   servidor.close();
+
+  /* -------------------------------------------------------------------------
+   * SUBDOMÍNIOS
+   *
+   * As duas formas têm de responder sempre — um endereço já impresso não se
+   * corrige. O que muda com CAPEM_ESTILO é qual delas é a canónica: a que sai
+   * no QR, e para a qual a outra redireciona.
+   * -----------------------------------------------------------------------*/
+  for (const estilo of ['caminho', 'subdominio']) {
+    console.log(`\nsubdomínios · estilo "${estilo}"`);
+    /* O módulo lê as variáveis ao ser carregado, por isso recarrega-se. */
+    delete require.cache[require.resolve('../server/server.js')];
+    delete require.cache[require.resolve('../server/pagina.js')];
+    process.env.CAPEM_DOMINIO = 'capem.org';
+    process.env.CAPEM_ESTILO = estilo;
+    const S2 = require('../server/server.js');
+    S2.db.abrir(ficheiro);
+    const srv2 = S2.criarServidor();
+    await new Promise(res2 => srv2.listen(0, res2));
+    const b2 = `http://127.0.0.1:${srv2.address().port}`;
+    /* `Host` é um cabeçalho proibido no fetch do Node, e em produção há sempre
+       um proxy à frente — por isso o servidor lê X-Forwarded-Host, e é isso
+       que se testa. */
+    const comHost = (p, host) => fetch(b2 + p, { redirect: 'manual',
+      headers: { 'X-Forwarded-Host': host } });
+
+    const porSub = await comHost('/', `${slug}.capem.org`);
+    const porCaminho = await comHost('/' + slug, 'capem.org');
+
+    if (estilo === 'caminho') {
+      ok('o subdomínio redireciona para o caminho', porSub.status === 301, String(porSub.status));
+      ok('e aponta para o endereço certo',
+        porSub.headers.get('location') === `http://capem.org/${slug}`,
+        porSub.headers.get('location'));
+      ok('o caminho serve a página', porCaminho.status === 200, String(porCaminho.status));
+      ok('e o endereço impresso é o caminho',
+        (await porCaminho.text()).includes(`capem.org/${slug}`));
+    } else {
+      ok('o subdomínio serve a página', porSub.status === 200, String(porSub.status));
+      ok('o caminho redireciona para o subdomínio', porCaminho.status === 301, String(porCaminho.status));
+      ok('e aponta para o endereço certo',
+        porCaminho.headers.get('location') === `http://${slug}.capem.org`,
+        porCaminho.headers.get('location'));
+      ok('e o endereço impresso é o subdomínio',
+        (await porSub.text()).includes(`${slug}.capem.org`));
+    }
+
+    /* Um centro chamado "admin" seria um convite; e o kit, a fila e as fontes
+       vivem no domínio de topo, não num subdomínio de centro. */
+    ok('"admin" nunca é tratado como centro', S2.slugDoAnfitriao({ headers: { host: 'admin.capem.org' } }) === null);
+    ok('"www" nunca é tratado como centro', S2.slugDoAnfitriao({ headers: { host: 'www.capem.org' } }) === null);
+    ok('um domínio estranho não é tratado como centro',
+      S2.slugDoAnfitriao({ headers: { host: 'capem.org.mau.example' } }) === null);
+    ok('um subdomínio de dois níveis não é tratado como centro',
+      S2.slugDoAnfitriao({ headers: { host: 'a.b.capem.org' } }) === null);
+
+    const kitNoSub = await comHost('/kit', `${slug}.capem.org`);
+    ok('o kit pedido a um subdomínio volta ao domínio de topo',
+      kitNoSub.status === 301 && kitNoSub.headers.get('location') === 'http://capem.org/kit',
+      `${kitNoSub.status} ${kitNoSub.headers.get('location')}`);
+
+    const pub = await fetch(b2 + '/api/publicar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Forwarded-Host': 'capem.org' },
+      body: JSON.stringify({ slug, codigo, dados: { precisa: ['agua'] } })
+    });
+    const j = await pub.json();
+    ok('o kit recebe de volta o endereço canónico',
+      j.url === (estilo === 'subdominio' ? `http://${slug}.capem.org` : `http://capem.org/${slug}`),
+      j.url);
+
+    srv2.close();
+    delete process.env.CAPEM_DOMINIO;
+    delete process.env.CAPEM_ESTILO;
+  }
+
   fs.unlinkSync(ficheiro);
   console.log(`\n${passou} passaram · ${falhou} falharam\n`);
   process.exit(falhou ? 1 : 0);

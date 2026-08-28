@@ -78,13 +78,13 @@ ${corpo}
 /* ---------------------------------------------------------------------------
  * A página pública de um centro — o destino do QR
  * -------------------------------------------------------------------------*/
-function paginaCentro(centro, base) {
+function paginaCentro(centro, base, urlCanonica) {
   const d = centro.dados || {};
   const precisa = (d.precisa || []).map(item);
   const nao = (d.naoTraga || []).map(item);
   const tel = (d.contato || '').trim();
   const telLink = tel.replace(/[^\d+]/g, '');
-  const url = `${base}/${centro.slug}`;
+  const url = urlCanonica || `${base}/${centro.slug}`;
 
   const corpo = `
 <main class="centro">
@@ -236,8 +236,8 @@ function paginaInicial({ contagem, base }) {
   });
 }
 
-function paginaCodigo({ slug, codigo, base }) {
-  const url = `${base}/${slug}`;
+function paginaCodigo({ slug, codigo, base, url: urlCanonica }) {
+  const url = urlCanonica || `${base}/${slug}`;
   return molde({
     titulo: 'Pedido recebido — guarde o código',
     corpo: `
@@ -300,7 +300,7 @@ function paginaAdmin({ pendentes, aprovados, token, contagem, base }) {
     const { dias, nivel } = idade(c.publicado);
     const quando = nivel === 'nunca' ? 'nunca publicou' :
       dias <= 1 ? 'lista de hoje' : `há ${dias} dias`;
-    return `<li class="${nivel}"><a href="${esc(base)}/${esc(c.slug)}">${esc((c.dados || {}).nome || c.slug)}</a>
+    return `<li class="${nivel}"><a href="${esc(c.url || base + '/' + c.slug)}">${esc((c.dados || {}).nome || c.slug)}</a>
       <span>${esc(quando)}</span></li>`;
   }).join('')}</ul>` : '<p class="vazio">Nenhum centro no ar.</p>'}
 </main>`

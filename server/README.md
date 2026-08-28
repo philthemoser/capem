@@ -26,8 +26,43 @@ Imprime no arranque o endereço da fila de aprovação, com o segredo já lá.
 |---|---|
 | `CAPEM_ADMIN` | **obrigatória**, mínimo 16 caracteres. O servidor recusa arrancar sem ela — uma fila de aprovação aberta ao mundo é pior do que um servidor que não arranca. |
 | `CAPEM_BASE` | o endereço público, ex. `https://capem.org`. Se não estiver definida, deduz-se de cada pedido (respeitando `X-Forwarded-Proto` e `X-Forwarded-Host`). |
+| `CAPEM_DOMINIO` | o domínio de topo, ex. `capem.org`. Só é preciso para que `centro.capem.org` funcione. |
+| `CAPEM_ESTILO` | `caminho` (omissão) ou `subdominio` — qual das duas formas é a canónica. |
 | `PORT` | por omissão 8080 |
 | `CAPEM_DB` | caminho do ficheiro SQLite, por omissão `server/capem.db` |
+
+## Caminho ou subdomínio
+
+As duas formas respondem sempre:
+
+```
+capem.org/canoas-sao-sebastiao       (caminho)
+canoas-sao-sebastiao.capem.org       (subdomínio)
+```
+
+`CAPEM_ESTILO` decide qual é a **canónica** — a que sai impressa, a que entra no
+QR, e para a qual a outra faz 301. A outra continua a responder para sempre,
+porque um endereço já colado numa porta não se corrige.
+
+Para que o subdomínio funcione é preciso `CAPEM_DOMINIO=capem.org`, um registo
+DNS wildcard `*.capem.org`, e um certificado wildcard. Nomes reservados
+(`www`, `admin`, `api`, `kit`, `mail`, …) nunca são tratados como centro.
+
+**O padrão é o caminho, por duas razões que custam dinheiro a quem as ignora:**
+
+1. **O certificado.** Um wildcard obriga a validação DNS-01, o que obriga a
+   guardar credenciais do fornecedor de DNS no servidor. Se esse certificado
+   falhar a renovação, caem todos os centros ao mesmo tempo. Com caminhos há um
+   certificado só, e o modo de falhar é o mais conhecido que existe.
+2. **Quem escreve mal.** Um subdomínio mal escrito dá erro de DNS no browser —
+   "não foi possível encontrar o servidor" — e acabou. Um caminho mal escrito
+   chega aqui, e podemos responder. Esta ferramenta foi desenhada à volta de
+   gente a ditar coisas ao telefone num ginásio com barulho; um engano que nós
+   vemos vale mais do que um engano que não vemos.
+
+Nada disto impede o subdomínio — só diz o que ele custa. Se a sensação de "a
+página é do centro" valer esse custo, ponha `CAPEM_ESTILO=subdominio` e está
+feito.
 
 ## Onde alojar
 
@@ -103,14 +138,15 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 52 verificações
+node tools/server-test.js    # 72 verificações
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas
 terem de chegar ao ecrã; o que foi verificado à mão não poder ser mudado por um
 POST; páginas não aprovadas não estarem no ar. Mais o escapamento, os limites de
-tamanho, a trava por IP, e os endereços saírem do pedido e não de um
-`localhost` esquecido numa variável.
+tamanho, a trava por IP, os endereços saírem do pedido e não de um `localhost`
+esquecido numa variável, e as duas formas de endereço responderem e
+redirecionarem uma para a outra nos dois estilos.
 
 ## O que falta
 

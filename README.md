@@ -133,7 +133,7 @@ node tools/kit-test.js     # the printed kit: true mm sizes, overflow, mono, imp
 node tools/server-test.js  # the needs page: list age, approval, escaping, defences
 ```
 
-Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 87/87 kit assertions · 52/52 server assertions.
+Current status: i18n complete · 144/144 renders · 26/26 flow assertions · 14/14 navigation assertions · 0 WCAG A/AA violations · 6/6 QR codes decode · 87/87 kit assertions · 72/72 server assertions.
 
 ## How to tell us we are wrong
 

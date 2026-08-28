@@ -12,7 +12,11 @@
  * Variáveis:
  *   CAPEM_ADMIN   obrigatória — o segredo que abre /admin
  *   CAPEM_BASE    o endereço público (ex.: https://capem.org). Serve para os
- *                 QR codes e os links; sem ele usa http://localhost:PORTA
+ *                 QR codes e os links; sem ele deduz-se de cada pedido
+ *   CAPEM_DOMINIO o domínio de topo (ex.: capem.org). Só é preciso para que
+ *                 centro.capem.org funcione — ver "Subdomínios" mais abaixo
+ *   CAPEM_ESTILO  'caminho' (por omissão) ou 'subdominio': qual das duas
+ *                 formas é a canónica, a que vai impressa e para o QR
  *   PORT          por omissão 8080
  *   CAPEM_DB      caminho do ficheiro SQLite
  *
@@ -107,8 +111,67 @@ const json = (res, cod, obj) =>
 
 const paraOndeIr = (res, url) => { res.writeHead(303, { Location: url }); res.end(); };
 
+/* 301 e não 302: um QR fotografado e reenviado no WhatsApp fica a apontar
+   para a forma não canónica durante meses. Vale a pena que os browsers e os
+   motores de busca aprendam qual é a boa. */
+const redireccionar = (res, url, cod = 301) => {
+  res.writeHead(cod, { Location: url, 'Cache-Control': 'public, max-age=3600' });
+  res.end();
+};
+
 const ipDe = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
   || req.socket.remoteAddress || '?';
+
+/* ---------------------------------------------------------------------------
+ * SUBDOMÍNIOS
+ *
+ * As duas formas funcionam sempre:
+ *
+ *     capem.org/canoas-sao-sebastiao       (caminho)
+ *     canoas-sao-sebastiao.capem.org       (subdomínio)
+ *
+ * `CAPEM_ESTILO` decide qual delas é a canónica — a que sai impressa, a que
+ * entra no QR, e para a qual a outra redireciona. A outra continua a
+ * responder, porque um endereço já impresso não se corrige.
+ *
+ * Duas coisas a saber antes de escolher `subdominio`:
+ *
+ *   1. Precisa de DNS wildcard (*.capem.org) e de um certificado wildcard, o
+ *      que obriga a validação DNS-01 e a guardar credenciais do fornecedor de
+ *      DNS no servidor. Se esse certificado falhar a renovação, caem todos os
+ *      centros ao mesmo tempo. Com caminhos há um certificado só, e o modo de
+ *      falhar é o mais conhecido que existe.
+ *   2. Um endereço mal escrito com subdomínio dá erro de DNS no browser —
+ *      "não foi possível encontrar o servidor" — e acabou. Com caminho, o erro
+ *      chega aqui, e podemos responder com a página certa. Numa emergência,
+ *      um engano que nós vemos vale mais do que um engano que não vemos.
+ *
+ * Esta ferramenta foi desenhada à volta de gente a ditar coisas ao telefone
+ * num ginásio com barulho. Por isso o padrão é o caminho.
+ * -------------------------------------------------------------------------*/
+const DOMINIO = (process.env.CAPEM_DOMINIO || '').toLowerCase().replace(/^\.+|\.+$/g, '');
+const ESTILO = process.env.CAPEM_ESTILO === 'subdominio' ? 'subdominio' : 'caminho';
+
+/* Nomes que nunca podem ser um centro, porque são infra-estrutura ou porque
+   um centro chamado "admin" seria um convite. */
+const RESERVADOS = new Set(['www', 'admin', 'api', 'kit', 'mail', 'smtp', 'imap',
+  'ftp', 'ns', 'ns1', 'ns2', 'mx', 'cdn', 'static', 'assets', 'app', 'test',
+  'dev', 'staging', 'localhost']);
+
+function anfitriao(req) {
+  return (req.headers['x-forwarded-host'] || req.headers.host || '')
+    .split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
+}
+
+/** O slug se o pedido veio por subdomínio; null se veio pelo domínio de topo. */
+function slugDoAnfitriao(req) {
+  if (!DOMINIO) return null;
+  const h = anfitriao(req);
+  if (!h.endsWith('.' + DOMINIO)) return null;
+  const rotulo = h.slice(0, -(DOMINIO.length + 1));
+  if (!/^[a-z0-9-]{1,60}$/.test(rotulo) || rotulo.includes('.')) return null;
+  return RESERVADOS.has(rotulo) ? null : rotulo;
+}
 
 /* O endereço público.
  *
@@ -117,10 +180,22 @@ const ipDe = req => (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
  * reais no dia em que alguém se esquecesse da variável, e um endereço errado
  * impresso num QR não se corrige depois de estar colado a cem portas. */
 function baseDe(req) {
-  if (process.env.CAPEM_BASE) return BASE;
   const proto = (req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'http';
-  const host = (req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
-  return /^[a-z0-9.:\[\]-]+$/i.test(host) && host ? `${proto}://${host}` : BASE;
+  const porta = (req.headers['x-forwarded-host'] || req.headers.host || '')
+    .split(',')[0].trim().match(/:\d+$/);
+  if (process.env.CAPEM_BASE) return BASE;
+  /* Num pedido que chegou por subdomínio, a "base" é sempre o domínio de topo:
+     é lá que estão a entrada, o kit e a fila. */
+  const s = slugDoAnfitriao(req);
+  const h = s ? DOMINIO + (porta ? porta[0] : '') : anfitriao(req) + (porta ? porta[0] : '');
+  return /^[a-z0-9.:\[\]-]+$/i.test(h) && h ? `${proto}://${h}` : BASE;
+}
+
+/** O endereço canónico de um centro, na forma escolhida. */
+function urlDoCentro(slug, base) {
+  if (ESTILO !== 'subdominio' || !DOMINIO) return `${base}/${slug}`;
+  const u = new URL(base);
+  return `${u.protocol}//${slug}.${u.host}`;
 }
 
 /** Só os campos que conhecemos, cortados ao tamanho, nada mais. */
@@ -144,6 +219,7 @@ async function encaminhar(req, res) {
   const caminho = decodeURIComponent(url.pathname).replace(/\/+$/, '') || '/';
   const ip = ipDe(req);
   const base = baseDe(req);
+  const slugAnfitriao = slugDoAnfitriao(req);
 
   if (req.method === 'OPTIONS') {
     return responder(res, 204, '', 'text/plain', {
@@ -151,6 +227,20 @@ async function encaminhar(req, res) {
       'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     });
+  }
+
+  /* --- um pedido que chegou por subdomínio ---
+     Serve o centro na raiz. Se a forma canónica for o caminho, redireciona
+     em vez de servir duas cópias do mesmo conteúdo em endereços diferentes. */
+  if (slugAnfitriao && req.method === 'GET' && caminho === '/') {
+    if (ESTILO !== 'subdominio') {
+      return redireccionar(res, `${base}/${slugAnfitriao}${url.search}`, 301);
+    }
+    return servirCentro(req, res, slugAnfitriao, url, base);
+  }
+  if (slugAnfitriao && caminho !== '/') {
+    /* Tudo o resto vive no domínio de topo: o kit, a fila, o formulário. */
+    return redireccionar(res, `${base}${caminho}${url.search}`, 301);
   }
 
   /* --- estáticos --- */
@@ -189,7 +279,7 @@ async function encaminhar(req, res) {
     const slug = slugLivre(dados.nome);
     const codigo = db.criar(slug, dados);
     console.log(`[pedido] ${slug} — ${dados.nome}`);
-    return responder(res, 200, P.paginaCodigo({ slug, codigo, base }));
+    return responder(res, 200, P.paginaCodigo({ slug, codigo, base, url: urlDoCentro(slug, base) }));
   }
 
   /* --- publicar (o botão do kit) --- */
@@ -217,7 +307,7 @@ async function encaminhar(req, res) {
     db.publicar(centro.slug, dados);
     console.log(`[publicado] ${centro.slug} — ${dados.precisa.length} itens${dados.pausado ? ' (pausado)' : ''}`);
     return json(res, 200, {
-      ok: true, slug: centro.slug, url: `${base}/${centro.slug}`,
+      ok: true, slug: centro.slug, url: urlDoCentro(centro.slug, base),
       estado: centro.estado
     });
   }
@@ -226,7 +316,8 @@ async function encaminhar(req, res) {
   if (caminho === '/admin' && req.method === 'GET') {
     if (url.searchParams.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
     return responder(res, 200, P.paginaAdmin({
-      pendentes: db.listar('pendente'), aprovados: db.listar('aprovado'),
+      pendentes: db.listar('pendente'),
+      aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
   }
@@ -244,24 +335,32 @@ async function encaminhar(req, res) {
 
   /* --- a página de um centro --- */
   if (req.method === 'GET' && /^\/[a-z0-9-]{1,60}$/.test(caminho)) {
-    const centro = db.ler(caminho.slice(1));
-    if (!centro) return responder(res, 404, P.paginaNaoExiste());
-    if (centro.estado !== 'aprovado') {
-      /* O coordenador pode ver a sua página antes de estar no ar, com o código.
-         Sem isso teria de imprimir o QR às cegas. */
-      const c = url.searchParams.get('codigo');
-      if (c && db.codigoConfere(c, centro.codigo_hash)) {
-        return responder(res, 200, P.paginaCentro(centro, base), 'text/html; charset=utf-8',
-          { 'X-Robots-Tag': 'noindex' });
-      }
-      return responder(res, 404, P.paginaPendente(centro), 'text/html; charset=utf-8',
-        { 'X-Robots-Tag': 'noindex' });
+    const slug = caminho.slice(1);
+    if (ESTILO === 'subdominio' && DOMINIO && db.existe(slug)) {
+      return redireccionar(res, urlDoCentro(slug, base) + url.search, 301);
     }
-    return responder(res, 200, P.paginaCentro(centro, base), 'text/html; charset=utf-8',
-      { 'Cache-Control': 'public, max-age=120' });
+    return servirCentro(req, res, slug, url, base);
   }
 
   return responder(res, 404, P.paginaNaoExiste());
+}
+
+function servirCentro(req, res, slug, url, base) {
+  const centro = db.ler(slug);
+  if (!centro) return responder(res, 404, P.paginaNaoExiste());
+  if (centro.estado !== 'aprovado') {
+    /* O coordenador pode ver a sua página antes de estar no ar, com o código.
+       Sem isso teria de imprimir o QR às cegas. */
+    const c = url.searchParams.get('codigo');
+    if (c && db.codigoConfere(c, centro.codigo_hash)) {
+      return responder(res, 200, P.paginaCentro(centro, base, urlDoCentro(slug, base)),
+        'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
+    return responder(res, 404, P.paginaPendente(centro), 'text/html; charset=utf-8',
+      { 'X-Robots-Tag': 'noindex' });
+  }
+  return responder(res, 200, P.paginaCentro(centro, base, urlDoCentro(slug, base)),
+    'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=120' });
 }
 
 /* ---------------------------------------------------------------------------
@@ -289,4 +388,5 @@ if (require.main === module) {
   });
 }
 
-module.exports = { criarServidor, encaminhar, fazerSlug, limparDados, db };
+module.exports = { criarServidor, encaminhar, fazerSlug, limparDados, db,
+                   urlDoCentro, slugDoAnfitriao, ESTILO, DOMINIO, RESERVADOS };

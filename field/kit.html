@@ -1725,9 +1725,9 @@ function cartao(p, primeira) {
 
   return `<article class="${classes.join(' ')}" id="peca-${p.id}" data-peca="${p.id}">
     <div class="peca-corpo">
-      <div class="moldura">${chapas}${
-        primeira ? '<span class="selo">Comece por esta</span>' : ''}</div>
+      <div class="moldura">${chapas}</div>
       <div class="peca-txt">
+        ${primeira ? '<span class="selo">Comece por esta</span>' : ''}
         <header>
           <h3>${esc(p.titulo)}</h3>
           <span class="fmt">${esc(p.fmt)}${folhas.length > 1 ? ` · ${folhas.length} folhas` : ''}</span>
@@ -1763,11 +1763,12 @@ function escalar() {
     const cw = w.clientWidth, ch = w.clientHeight;
     if (!cw || !ch || !wpx || !hpx) return;
 
-    /* 4% de folga para a folha não encostar à moldura. É o que separa uma
-       grelha de catálogo de uma folha de contactos: o objecto respira dentro
-       da caixa. Não afecta o piso de 26 mm — `marcaMinima()` divide pela
-       escala antes de converter para milímetros. */
-    const k = Math.min(cw / wpx, ch / hpx) * 0.96;
+    /* 7% de folga. Metade é respiração — o que separa uma grelha de catálogo
+       de uma folha de contactos — e metade é espaço para a sombra da folha,
+       que de outro modo seria cortada pelo `overflow: hidden` da janela.
+       Não afecta o piso de 26 mm: `marcaMinima()` divide pela escala antes de
+       converter para milímetros. */
+    const k = Math.min(cw / wpx, ch / hpx) * 0.93;
     w.style.setProperty('--escala', k);
     w.style.setProperty('--desvio', ((cw - wpx * k) / 2) + 'px');
     w.style.setProperty('--desvio-y', ((ch - hpx * k) / 2) + 'px');
@@ -2834,11 +2835,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .peca { min-width: 0; display: flex; }
 .peca-corpo { display: flex; flex-direction: column; gap: 10px; min-width: 0; width: 100%; }
 
+/* A moldura não se vê. Só reserva espaço.
+   Enquanto era um rectângulo branco com borda, a folha — também branca —
+   desaparecia dentro dela, e um A4 deitado era indistinguível de um A4 em pé.
+   O quadrado continua lá a garantir que cada peça ocupa o mesmo lugar na
+   grelha; quem se vê é o papel. */
 .moldura {
   position: relative;
-  background: var(--papel);
-  border: 1.5px solid var(--tinta);
-  padding: 8px;
   min-width: 0;
 }
 /* A proporção da janela. Uma só, para as quinze peças.
@@ -2857,6 +2860,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
    a centrar e isso partiu vinte e três testes de uma vez: são eles que
    garantem que um A4 tem mesmo 210 mm, e uma folha fora do fluxo deixa de ter
    medida nenhuma para eles medirem. O centrar faz-se no `translate`. */
+/* `overflow: hidden` NÃO é decoração: sem ele o `aspect-ratio` é ignorado.
+   A folha está no fluxo com as medidas reais (1123 px de altura para um A4) e
+   só é encolhida por `transform`, que não conta para o layout — por isso, com
+   `overflow: visible`, a caixa cresce até ao conteúdo e a proporção quadrada
+   deixa de valer. Foi assim que a galeria passou de 3400 px para 10 500 px de
+   altura numa linha de CSS. A sombra da folha cabe dentro do corte por causa
+   da folga que o `escalar()` deixa. */
 .folha-wrap { position: relative; overflow: hidden; min-width: 0; }
 .folha {
   transform-origin: top left;
@@ -2864,14 +2874,23 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   background: var(--papel);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 0 0 1px var(--tenue);
+  /* Dividido pela escala: a sombra é desenhada ANTES do `transform`, por isso
+     um contorno de 1 px numa folha reduzida a 30% chegava ao ecrã com 0,3 px e
+     desaparecia. Compensado, a folha tem sempre um fio de 1 px e a mesma
+     sombra, seja A3 ou cartão de visita. */
+  box-shadow:
+    0 0 0 calc(1px / var(--escala, 1)) var(--fio),
+    0 calc(2px / var(--escala, 1)) calc(6px / var(--escala, 1)) rgba(0, 0, 0, .18);
 }
 
 /* O selo da primeira peça de cada família. A hierarquia que antes era um
    cartão maior, agora sem custar geometria à grelha. */
+/* O selo vive no texto e não sobre a folha: com a moldura invisível, um selo
+   ancorado ao canto do quadrado ficava a pairar no vazio por cima de uma folha
+   deitada. Em cima do título é onde um catálogo o põe. */
 .selo {
-  position: absolute; top: 0; left: 0; z-index: 2;
-  padding: 5px 9px;
+  align-self: flex-start;
+  padding: 4px 8px;
   font: 700 10px/1 var(--fonte); text-transform: uppercase; letter-spacing: .08em;
   background: var(--tinta); color: var(--papel);
 }

@@ -1062,9 +1062,9 @@ function cartao(p, primeira) {
 
   return `<article class="${classes.join(' ')}" id="peca-${p.id}" data-peca="${p.id}">
     <div class="peca-corpo">
-      <div class="moldura">${chapas}${
-        primeira ? '<span class="selo">Comece por esta</span>' : ''}</div>
+      <div class="moldura">${chapas}</div>
       <div class="peca-txt">
+        ${primeira ? '<span class="selo">Comece por esta</span>' : ''}
         <header>
           <h3>${esc(p.titulo)}</h3>
           <span class="fmt">${esc(p.fmt)}${folhas.length > 1 ? ` · ${folhas.length} folhas` : ''}</span>
@@ -1100,11 +1100,12 @@ function escalar() {
     const cw = w.clientWidth, ch = w.clientHeight;
     if (!cw || !ch || !wpx || !hpx) return;
 
-    /* 4% de folga para a folha não encostar à moldura. É o que separa uma
-       grelha de catálogo de uma folha de contactos: o objecto respira dentro
-       da caixa. Não afecta o piso de 26 mm — `marcaMinima()` divide pela
-       escala antes de converter para milímetros. */
-    const k = Math.min(cw / wpx, ch / hpx) * 0.96;
+    /* 7% de folga. Metade é respiração — o que separa uma grelha de catálogo
+       de uma folha de contactos — e metade é espaço para a sombra da folha,
+       que de outro modo seria cortada pelo `overflow: hidden` da janela.
+       Não afecta o piso de 26 mm: `marcaMinima()` divide pela escala antes de
+       converter para milímetros. */
+    const k = Math.min(cw / wpx, ch / hpx) * 0.93;
     w.style.setProperty('--escala', k);
     w.style.setProperty('--desvio', ((cw - wpx * k) / 2) + 'px');
     w.style.setProperty('--desvio-y', ((ch - hpx * k) / 2) + 'px');

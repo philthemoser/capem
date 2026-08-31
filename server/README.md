@@ -161,24 +161,37 @@ Publicar uma lista vazia sem marcar "não estamos recebendo" é permitido — qu
 manda é o coordenador — mas a página avisa, porque nesse estado ela não responde
 à única pergunta que lhe fazem.
 
-### Avisar que a página ficou no ar
+### O código nasce na aprovação
 
-A aprovação era silenciosa. O coordenador pedia a página, recebia o código na
-hora, e depois **nada lhe dizia que já estava no ar** — tinha de ir espreitar o
-endereço de vez em quando. Era o único passo do processo que só o administrador
-via acontecer.
+Antes nascia no pedido e aparecia no ecrã de quem preencheu o formulário. Isso
+queria dizer que **qualquer pessoa que soubesse o nome de uma paróquia recebia,
+na hora, uma chave de escrita para uma página com esse nome** — a aprovação
+travava a página, não a chave. E a aprovação em si era silenciosa: nada dizia
+ao centro que já estava no ar.
 
-Aprovar traz agora um cartão ao topo da fila com um botão de WhatsApp para o
-telefone do centro. A mensagem leva o endereço da página, onde se atualiza, e
-pede que guardem o contacto.
+Agora a ordem é a certa:
 
-**Essa última parte é metade do valor.** Manda-se à mão, do telemóvel de quem
-aprova, e o centro fica com um contacto humano guardado. No dia em que o código
-se perder — e vai perder-se — há para onde ligar que não depende de encontrar a
-página certa num site.
+1. `/novo` — o pedido é registado. Sem código. A página diz o que vem a seguir,
+   e manda imprimir entretanto: **o kit nunca precisou de código, só do nome do
+   centro.**
+2. Você confere, e aprova. **O código é gerado nesse momento** e aparece uma
+   vez, com um botão de WhatsApp já apontado ao telefone que acabou de
+   conferir.
+3. A mensagem leva o endereço, o código, onde se atualiza, e pede que guardem o
+   contacto.
 
-Recusar não oferece cartão nenhum: não há nada de bom para dizer, e a mensagem
-seria a última coisa que alguém quer receber de uma ferramenta.
+**A mensagem é mandada à mão, e isso é deliberado.** O centro fica com um
+contacto humano guardado. No dia em que o código se perder — e vai perder-se —
+há para onde ligar que não depende de encontrar a página certa num site.
+
+Recusar não gera código nenhum: seria uma chave para uma página que não vai
+existir. Aprovar duas vezes também não gera outro — a chave que já está num
+telemóvel não pode ser invalidada por um clique repetido. E um centro sem
+telefone utilizável recebe um aviso em vez de um botão morto, porque nesse caso
+a página fica no ar e ninguém a poderá atualizar.
+
+Se a página se fechar antes de mandar o código, a recuperação é o botão
+**Código novo** na fila.
 
 ### Emitir um código novo
 
@@ -406,7 +419,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 221 verificações
+node tools/server-test.js    # 223 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 

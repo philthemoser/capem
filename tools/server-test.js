@@ -89,25 +89,21 @@ const DIA = 86400000;
   });
   html = await r.text();
   ok('o pedido é aceite', r.status === 200, String(r.status));
-  const codigo = (html.match(/class="codigo">([A-Z0-9-]+)</) || [])[1];
-  ok('devolve um código', !!codigo, codigo);
-  /* Sem O, I, S, 0, 1, 5: este código vai ser ditado ao telefone. */
-  ok('sem caracteres que se confundem ao telefone', codigo && !/[OIS015]/.test(codigo), codigo);
   const slug = 'paroquia-sao-sebastiao';
+  let codigo;
   ok('o endereço é legível', html.includes(slug), slug);
 
-  /* O código aparece uma vez e mais nenhuma. Um papel colado à parede de um
-     ginásio perde-se, e quem entra ao turno seguinte não viu este ecrã — por
-     isso há como o mandar para onde ele vai ser procurado. Sem servidor de
-     e-mail, sem domínio com SPF, e sem guardar mais um dado pessoal. */
-  ok('a página do código oferece mandá-lo no WhatsApp', /wa\.me\/\?text=/.test(html));
-  const waCod = decodeURIComponent(((html.match(/href="([^"]*wa\.me[^"]*)"/) || [])[1] || '')
-    .replace(/&amp;/g, '&').split('text=')[1] || '');
-  ok('a mensagem leva o código', waCod.includes(codigo), waCod.slice(0, 60));
-  /* Fora de contexto, uma semana depois, para alguém que não pediu a página:
-     oito caracteres soltos não dizem nada. */
-  ok('e diz de que centro é', waCod.includes('Paróquia São Sebastião'));
-  ok('e onde se usa', waCod.includes('/atualizar'));
+  /* NÃO devolve código nenhum. Antes devolvia, e isso queria dizer que quem
+     soubesse o nome de uma paróquia recebia na hora uma chave de escrita para
+     uma página com esse nome — a aprovação travava a página, não a chave. */
+  ok('mas NÃO devolve um código', !/class="codigo">[A-Z0-9]{4}-/.test(html));
+  ok('e diz que o código chega depois, por WhatsApp',
+    /código do centro/i.test(html) && /WhatsApp/.test(html));
+  /* Não é um beco: imprimir nunca precisou de código, só do nome do centro. */
+  ok('e manda imprimir entretanto', /href="\/kit"/.test(html));
+  ok('e diz que o silêncio não é rejeição', /24 horas/.test(html));
+  ok('a página não é servida como código guardado',
+    S.db.ler(slug).codigo_hash === '', S.db.ler(slug).codigo_hash.slice(0, 12));
 
 
   r = await form('/pedir', { nome: 'Paróquia São Sebastião', endereco: 'Outra rua, 1', contato: '(51) 90000-0000' });
@@ -127,35 +123,12 @@ const DIA = 86400000;
   ok('mas explica que está à espera', /ainda não está no ar/i.test(html));
   ok('e não é indexada', (r.headers.get('x-robots-tag') || '').includes('noindex'));
 
-  r = await get(`/${slug}?codigo=${encodeURIComponent(codigo)}`);
-  ok('o coordenador pode pré-ver com o seu código', r.status === 200, String(r.status));
+  /* Um centro por aprovar não tem código nenhum, por isso não há
+     pré-visualização para abrir — e sobretudo, um palpite não pode abri-la. */
   r = await get(`/${slug}?codigo=AAAA-BBBB`);
-  ok('um código errado não abre a pré-visualização', r.status === 404, String(r.status));
-
-  console.log('\npublicar');
-  r = await api('/api/publicar', { slug, codigo: 'ZZZZ-9999', dados: { precisa: ['agua'] } });
-  ok('código errado é recusado', r.status === 403, String(r.status));
-  r = await api('/api/publicar', { slug: 'nao-existe', codigo, dados: {} });
-  ok('centro inexistente é recusado', r.status === 404, String(r.status));
-
-  r = await api('/api/publicar', {
-    slug, codigo: codigo.toLowerCase().replace('-', ' '),
-    dados: { precisa: ['agua', 'alimento', { texto: 'Luva de borracha', marca: 'botas' }],
-             naoTraga: ['roupa-usada', 'moveis'], horario: 'Todos os dias, 8h às 18h' }
-  });
-  ok('o código funciona em minúsculas e com outro separador', r.status === 200, String(r.status));
-
-  console.log('\no que a aprovação protege');
-  r = await api('/api/publicar', {
-    slug, codigo,
-    dados: { nome: 'Centro Falso', endereco: 'Rua Inventada, 999',
-             contato: '(00) 00000-0000', precisa: ['agua'] }
-  });
-  ok('publicar aceita a lista', r.status === 200, String(r.status));
-  const guardado = S.db.ler(slug).dados;
-  ok('mas não deixa mudar o nome verificado', guardado.nome === 'Paróquia São Sebastião', guardado.nome);
-  ok('nem o endereço verificado', /Bento Gonçalves/.test(guardado.endereco), guardado.endereco);
-  ok('nem o telefone verificado', guardado.contato === '(51) 99612-0044', guardado.contato);
+  ok('um palpite não abre uma página por aprovar', r.status === 404, String(r.status));
+  ok('e um código vazio também não',
+    (await get(`/${slug}?codigo=`)).status === 404);
 
   console.log('\naprovar');
   r = await get('/admin');
@@ -171,6 +144,34 @@ const DIA = 86400000;
 
   ok('a fila deixa editar o endereço antes de aprovar', /name="novo_slug"/.test(html));
 
+  /* O código nasce AQUI, não no pedido: verifica-se primeiro, e a chave vai
+     depois para o número que foi conferido. */
+  r = await form('/admin/decidir', { t: ADMIN, slug, decisao: 'aprovado' });
+  html = await r.text();
+  ok('aprovar mostra o código, uma vez', r.status === 200, String(r.status));
+  ok('e o centro fica aprovado', S.db.ler(slug).estado === 'aprovado');
+  codigo = (html.match(/class="codigo">([A-Z0-9-]+)</) || [])[1];
+  ok('o código só existe a partir daqui', !!codigo, codigo);
+  /* Sem O, I, S, 0, 1, 5: este código vai ser ditado ao telefone. */
+  ok('sem caracteres que se confundem ao telefone', codigo && !/[OIS015]/.test(codigo), codigo);
+  /* Para o telefone conferido, não para "escolha um contacto". */
+  ok('e oferece mandá-lo para o telefone do centro',
+    /wa\.me\/5551996120044\?text=/.test(html));
+  const waAp = decodeURIComponent(((html.match(/href="(https:\/\/wa\.me\/55[^"]*)"/) || [])[1] || '')
+    .replace(/&amp;/g, '&').split('text=')[1] || '');
+  ok('a mensagem leva o código', waAp.includes(codigo), waAp.slice(0, 60));
+  ok('e o endereço da página', waAp.includes(slug));
+  ok('e onde se atualiza', waAp.includes('/atualizar'));
+  /* Metade do valor: o centro fica com um contacto humano guardado. */
+  ok('e pede que guardem o contacto', /[Gg]uarde também este contacto/.test(waAp));
+
+  /* Aprovar outra vez não pode invalidar a chave que já está num telemóvel. */
+  S.db.decidir(slug, 'pendente');
+  r = await form('/admin/decidir', { t: ADMIN, slug, decisao: 'aprovado' });
+  ok('aprovar de novo não emite outro código', r.status === 303, String(r.status));
+  ok('e o código continua a valer',
+    S.db.codigoConfere(codigo, S.db.ler(slug).codigo_hash));
+
   /* Um campo de endereço vazio, ou só com pontuação, tem de ser "não mexer".
      O recurso do gerador de slugs é "centro" — sem esta guarda, aprovar sem
      tocar no campo renomeava o centro para /centro. */
@@ -180,9 +181,6 @@ const DIA = 86400000;
     S.db.decidir(slug, 'pendente');
   }
 
-  r = await form('/admin/decidir', { t: ADMIN, slug, decisao: 'aprovado' });
-  ok('aprovar redireciona de volta à fila', r.status === 303, String(r.status));
-  ok('e o centro fica aprovado', S.db.ler(slug).estado === 'aprovado');
 
   console.log('\nencurtar o endereço na aprovação');
   /* O ponto: "paroquia-sao-sebastiao" é longo de ditar; "canoas-ss" não é.
@@ -211,6 +209,33 @@ const DIA = 86400000;
   ok('não se pode renomear para um nome reservado', !!S.db.ler('canoas-ss'));
 
   const slugFinal = 'canoas-ss';
+
+  console.log('\npublicar');
+  r = await api('/api/publicar', { slug, codigo: 'ZZZZ-9999', dados: { precisa: ['agua'] } });
+  ok('código errado é recusado', r.status === 403, String(r.status));
+  r = await api('/api/publicar', { slug: 'nao-existe', codigo, dados: {} });
+  ok('centro inexistente é recusado', r.status === 404, String(r.status));
+
+  r = await api('/api/publicar', {
+    slug, codigo: codigo.toLowerCase().replace('-', ' '),
+    dados: { precisa: ['agua', 'alimento', { texto: 'Luva de borracha', marca: 'botas' }],
+             naoTraga: ['roupa-usada', 'moveis'], horario: 'Todos os dias, 8h às 18h' }
+  });
+  ok('o código funciona em minúsculas e com outro separador', r.status === 200, String(r.status));
+
+  console.log('\no que a aprovação protege');
+  r = await api('/api/publicar', {
+    slug, codigo,
+    dados: { nome: 'Centro Falso', endereco: 'Rua Inventada, 999',
+             contato: '(00) 00000-0000', precisa: ['agua'] }
+  });
+  ok('publicar aceita a lista', r.status === 200, String(r.status));
+  /* `slug` já é um alias: a secção de encurtar o endereço corre antes desta
+     agora que a aprovação subiu. Resolve-se, como o servidor faz. */
+  const guardado = S.db.ler(S.db.resolver(slug)).dados;
+  ok('mas não deixa mudar o nome verificado', guardado.nome === 'Paróquia São Sebastião', guardado.nome);
+  ok('nem o endereço verificado', /Bento Gonçalves/.test(guardado.endereco), guardado.endereco);
+  ok('nem o telefone verificado', guardado.contato === '(51) 99612-0044', guardado.contato);
 
   console.log('\na página pública');
   /* Republica com um item escrito à mão que tem marca escolhida — o passo
@@ -626,56 +651,28 @@ const DIA = 86400000;
     (html.match(/https:\/\/capem[^"< ]*/) || [])[0]);
 
   let novoCod;
-  console.log('\navisar que a página ficou no ar');
-  /* A aprovação era silenciosa: o coordenador pedia a página, recebia o código,
-     e nada lhe dizia que já estava no ar — tinha de ir espreitar o endereço de
-     vez em quando. Um passo do processo que só o administrador via. */
+  console.log('\naprovar, recusar, e quem não tem telefone');
   {
-    S.db.criar('aviso-teste', { nome: 'Centro do Aviso', tipo: 'Ponto de arrecadação',
-      endereco: 'Rua do Aviso, 1', contato: '(51) 99612-0044',
-      precisa: ['agua'], naoTraga: [] });
-    r = await form('/admin/decidir', { t: ADMIN, slug: 'aviso-teste',
-      novo_slug: 'aviso-teste', decisao: 'aprovado' });
-    ok('aprovar leva de volta à fila com o centro em mão',
-      /avisar=aviso-teste/.test(r.headers.get('location') || ''),
-      r.headers.get('location'));
-
-    html = await (await get('/admin?t=' + encodeURIComponent(ADMIN) + '&avisar=aviso-teste')).text();
-    ok('a fila mostra o cartão de avisar', /class="acabou-aprovar"/.test(html));
-    ok('com o nome do centro', /Centro do Aviso/.test(html));
-    /* Para o telefone do centro, e a mensagem tem de se explicar sozinha. */
-    ok('e um link de WhatsApp para o telefone do centro',
-      /wa\.me\/5551996120044\?text=/.test(html));
-    const msg = decodeURIComponent(((html.match(/href="(https:\/\/wa\.me\/55[^"]*)"/) || [])[1] || '')
-      .replace(/&amp;/g, '&').split('text=')[1] || '');
-    ok('a mensagem leva o endereço da página', msg.includes('/aviso-teste'), msg.slice(0, 80));
-    ok('e diz onde se atualiza', msg.includes('/atualizar'));
-    /* Metade do valor: o centro fica com um contacto humano guardado, para o
-       dia em que o código se perder e o site não chegar. */
-    ok('e pede que guardem o contacto', /[Gg]uarde este contacto/.test(msg));
-
-    /* Recusar não traz cartão nenhum: não há nada de bom para dizer, e a
-       mensagem seria a última coisa que alguém quer receber de uma ferramenta. */
+    /* Recusar não gera código nenhum: uma chave para uma página que não vai
+       existir, e não há nada de bom para mandar a ninguém. */
     S.db.criar('recusa-teste', { nome: 'Centro Recusado', endereco: 'R. X',
       contato: '(51) 90000-0000', precisa: [], naoTraga: [] });
     r = await form('/admin/decidir', { t: ADMIN, slug: 'recusa-teste',
       novo_slug: 'recusa-teste', decisao: 'recusado' });
-    ok('recusar não oferece avisar ninguém',
-      !/avisar=/.test(r.headers.get('location') || ''), r.headers.get('location'));
+    ok('recusar volta à fila sem mostrar código', r.status === 303, String(r.status));
+    ok('e não gera chave nenhuma', S.db.ler('recusa-teste').codigo_hash === '');
 
-    /* Um centro sem telefone utilizável não pode ser avisado — e a fila tem de
-       o dizer em vez de mostrar um botão morto. */
+    /* Sem telefone utilizável não há para onde mandar — e a página tem de o
+       dizer, porque a página fica no ar e ninguém a poderá atualizar. */
     S.db.criar('sem-tel', { nome: 'Centro Sem Telefone', endereco: 'R. Y',
       contato: 'ligar na portaria', precisa: [], naoTraga: [] });
-    S.db.decidir('sem-tel', 'aprovado');
-    html = await (await get('/admin?t=' + encodeURIComponent(ADMIN) + '&avisar=sem-tel')).text();
-    ok('sem telefone utilizável, diz que não dá', /não tem um telefone utilizável/.test(html));
-    ok('e não mostra um botão morto',
-      !/class="btn btn-wa largo"[^>]*acabou/.test(html) && !/wa\.me\/\?text=[^"]*Sem%20Telefone/.test(html));
-
-    /* Um slug inventado no endereço não pode partir a fila. */
-    r = await get('/admin?t=' + encodeURIComponent(ADMIN) + '&avisar=nao-existe-de-todo');
-    ok('um centro inventado no endereço não parte a fila', r.status === 200, String(r.status));
+    r = await form('/admin/decidir', { t: ADMIN, slug: 'sem-tel',
+      novo_slug: 'sem-tel', decisao: 'aprovado' });
+    html = await r.text();
+    ok('sem telefone utilizável, avisa que não há para onde mandar',
+      /não tem um telefone utilizável/.test(html));
+    ok('e diz o que está em jogo', /ninguém a pode atualizar/.test(html));
+    ok('mas o código é gerado na mesma', /class="codigo">[A-Z0-9]{4}-/.test(html));
   }
 
   /* Um centro acabado de aprovar não está parado — está a começar. Sem isto
@@ -684,13 +681,13 @@ const DIA = 86400000;
   {
     const recentes = S.db.parados(S.DIAS_PARADO).map(c => c.slug);
     ok('um centro aprovado agora não entra nos empurrões',
-      !recentes.includes('aviso-teste'), recentes.join(', '));
+      !recentes.includes('sem-tel'), recentes.join(', '));
     const c4 = new (require('node:sqlite').DatabaseSync)(ficheiro);
     c4.prepare('UPDATE centros SET decidido=? WHERE slug=?')
-      .run(Date.now() - 30 * DIA, 'aviso-teste');
+      .run(Date.now() - 30 * DIA, 'sem-tel');
     c4.close();
     ok('mas entra se for aprovado há um mês e continuar sem lista',
-      S.db.parados(S.DIAS_PARADO).map(c => c.slug).includes('aviso-teste'));
+      S.db.parados(S.DIAS_PARADO).map(c => c.slug).includes('sem-tel'));
   }
 
   console.log('\npedir um código novo (público)');

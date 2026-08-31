@@ -176,6 +176,10 @@ const hash = c => crypto.createHash('sha256')
 
 /** Comparação em tempo constante: um código adivinha-se byte a byte se não for. */
 function codigoConfere(codigo, guardado) {
+  /* Um centro por aprovar tem o hash vazio. Sem esta linha, a comparação de
+     comprimentos já o rejeitava por acidente; explicitamente é melhor, porque
+     "ainda não há chave" nunca deve depender de um acaso aritmético. */
+  if (!guardado) return false;
   const a = Buffer.from(hash(codigo));
   const b = Buffer.from(guardado);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -184,13 +188,24 @@ function codigoConfere(codigo, guardado) {
 /* ---------------------------------------------------------------------------
  * Operações
  * -------------------------------------------------------------------------*/
+/**
+ * Criar um centro — SEM código.
+ *
+ * O código nasce na aprovação e não aqui. Antes nascia no momento do pedido e
+ * aparecia no ecrã de quem preencheu o formulário, o que queria dizer que
+ * qualquer pessoa que soubesse o nome de uma paróquia recebia, na hora, uma
+ * chave de escrita para uma página com esse nome. A aprovação travava a página,
+ * não o código.
+ *
+ * Agora a ordem é a certa: verifica-se primeiro, e a chave vai depois para o
+ * telefone que foi verificado. Não custa nada a quem pede — imprimir o material
+ * nunca precisou de código nenhum, só do nome do centro.
+ */
 function criar(slug, dados) {
-  const codigo = novoCodigo();
   db.prepare(`INSERT INTO centros (slug, estado, codigo_hash, dados, criado,
                                    busca, nome_ord, pausado)
-              VALUES (?, 'pendente', ?, ?, ?, ?, ?, ?)`)
-    .run(slug, hash(codigo), JSON.stringify(dados), Date.now(), ...derivadas(dados));
-  return codigo;
+              VALUES (?, 'pendente', '', ?, ?, ?, ?, ?)`)
+    .run(slug, JSON.stringify(dados), Date.now(), ...derivadas(dados));
 }
 
 function ler(slug) {
@@ -252,6 +267,20 @@ function publicar(slug, dados) {
  * razão: um código perdido pode estar perdido *para alguém*. Emitir sem
  * invalidar seria acumular chaves da mesma porta.
  */
+/**
+ * O código do momento da aprovação.
+ *
+ * Devolve o código novo se o centro ainda não tinha nenhum, e `null` se já
+ * tinha — aprovar duas vezes por engano não pode invalidar a chave que já está
+ * num telemóvel.
+ */
+function garantirCodigo(slug) {
+  const r = db.prepare('SELECT codigo_hash FROM centros WHERE slug = ?').get(slug);
+  if (!r) throw new Error('centro não existe: ' + slug);
+  if (r.codigo_hash) return null;
+  return novoCodigoPara(slug);
+}
+
 function novoCodigoPara(slug) {
   const codigo = novoCodigo();
   const r = db.prepare('UPDATE centros SET codigo_hash = ? WHERE slug = ?')
@@ -367,4 +396,4 @@ function contar() {
 module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
                    decidir, listar, procurar, parados, contar, lerEstado,
                    escreverEstado, definirDerivacao, reindexar,
-                   novoCodigo, novoCodigoPara, codigoConfere, ESTADOS };
+                   novoCodigo, novoCodigoPara, garantirCodigo, codigoConfere, ESTADOS };

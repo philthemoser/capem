@@ -337,7 +337,7 @@ async function encaminhar(req, res) {
       }));
     }
     const slug = slugLivre(dados.nome);
-    const codigo = db.criar(slug, dados);
+    db.criar(slug, dados);
     console.log(`[pedido] ${slug} — ${dados.nome}`);
     /* Fire-and-forget de propósito: um bot em baixo não pode impedir um centro
        de pedir a sua página. */
@@ -349,8 +349,8 @@ async function encaminhar(req, res) {
       url: `${base}/admin?t=${encodeURIComponent(ADMIN)}`,
       slug
     });
-    return responder(res, 200, P.paginaCodigo({ slug, codigo, base,
-      url: urlDoCentro(slug, base), nome: dados.nome }));
+    return responder(res, 200, P.paginaPedidoRecebido({
+      slug, url: urlDoCentro(slug, base), base }));
   }
 
   /* --- publicar (o botão do kit) --- */
@@ -570,16 +570,6 @@ async function encaminhar(req, res) {
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       parados: db.parados(DIAS_PARADO).map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       erro: url.searchParams.get('erro'),
-      /* Quem acabou de ser aprovado, para o cartão de "avise a pessoa". Vem do
-         endereço e não de estado guardado: se a página for recarregada o cartão
-         volta, e isso é melhor do que desaparecer antes de se ter avisado. */
-      avisar: (() => {
-        const a = texto(url.searchParams.get('avisar'), 60);
-        if (!a) return null;
-        const c = db.ler(db.resolver(a) || '');
-        return c && c.estado === 'aprovado'
-          ? { ...c, url: urlDoCentro(c.slug, base) } : null;
-      })(),
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
   }
@@ -640,11 +630,26 @@ async function encaminhar(req, res) {
     }
     db.decidir(alvo, decisao);
     console.log(`[${decisao}] ${alvo}`);
-    /* Aprovar traz o cartão de "avise a pessoa" de volta na fila. Recusar não:
-       não há nada de bom para dizer, e a mensagem seria a última coisa que
-       alguém quer receber de uma ferramenta. */
-    return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN)
-      + (decisao === 'aprovado' ? '&avisar=' + encodeURIComponent(alvo) : ''));
+
+    /* O código nasce aqui e não no pedido. Mostra-se uma vez, com o botão de o
+       mandar para o telefone que acabou de ser conferido — é o único momento em
+       que ele existe em texto. Se esta página se fechar antes de o mandar, a
+       recuperação é o botão "Código novo" na fila.
+
+       Recusar não gera nada: uma chave para uma página que não vai existir. */
+    if (decisao === 'aprovado') {
+      const codigo = db.garantirCodigo(alvo);
+      if (codigo) {
+        const centro = db.ler(alvo);
+        const d = centro.dados || {};
+        return responder(res, 200, P.paginaCodigo({
+          slug: alvo, codigo, base, url: urlDoCentro(alvo, base),
+          nome: d.nome, contato: d.contato,
+          voltar: '/admin?t=' + encodeURIComponent(ADMIN)
+        }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+      }
+    }
+    return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
   }
 
   /* --- a página de um centro --- */

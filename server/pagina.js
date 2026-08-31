@@ -878,52 +878,114 @@ function textoCodigo(nome, slug, codigo, base, url) {
   ].join('\n');
 }
 
-function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, reemitido, voltar, contato }) {
+/**
+ * O ecrã do código, do lado de quem aprova.
+ *
+ * Duas situações, o mesmo ecrã: um centro acabado de aprovar, e um centro a
+ * quem se emite um código novo. Nos dois casos o código aparece UMA vez e o
+ * destino certo é o telefone que foi verificado à mão — não "escolha um
+ * contacto", não quem quer que tenha preenchido um formulário.
+ *
+ * Esta página não existe do lado público. O código deixou de nascer no pedido:
+ * antes, quem soubesse o nome de uma paróquia recebia na hora uma chave de
+ * escrita para uma página com esse nome, e a aprovação travava a página mas não
+ * a chave. Agora verifica-se primeiro e a chave vai a seguir, para o número
+ * conferido.
+ */
+function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, contato,
+                        reemitido, voltar }) {
   const url = urlCanonica || `${base}/${slug}`;
-  const txt = textoCodigo(nome, slug, codigo, base, url);
-  const wa = 'https://wa.me/?text=' + encodeURIComponent(txt);
-  /* Ao reemitir, o destino certo é o telefone do centro e não "escolha um
-     contacto": foi esse número que foi conferido à mão na aprovação. Mandá-lo
-     para lá é o que faz um pedido de código feito por um impostor terminar no
-     telemóvel do centro em vez de no dele. */
-  const waDirecto = reemitido ? linkWhatsApp(contato, txt) : '';
+  const txt = reemitido
+    ? textoCodigo(nome, slug, codigo, base, url)
+    : textoAprovado({ nome }, url, base, codigo);
+  const waDirecto = linkWhatsApp(contato, txt);
+  const waOutro = 'https://wa.me/?text=' + encodeURIComponent(txt);
+
   return molde({
-    aqui: reemitido ? false : '/centro',
-    migalhas: reemitido ? null : [['Sou de um centro', '/centro'], ['Pedido recebido']],
-    titulo: reemitido ? 'Código novo emitido' : 'Pedido recebido — guarde o código',
+    aqui: false,
+    titulo: reemitido ? 'Código novo emitido' : 'Centro aprovado — mande o código',
     corpo: `
 <main class="inicial">
-  <h1>${reemitido ? 'Código novo' : 'Pedido recebido'}</h1>
+  <h1>${reemitido ? 'Código novo' : 'Está no ar'}</h1>
   ${reemitido
-    ? `<p class="entrada">Emitido para <b>${esc(nome || slug)}</b>.
+    ? `<p class="entrada"><b>${esc(nome || slug)}</b>.
         <b>O código anterior deixou de funcionar</b> — se estava perdido, podia
         estar perdido para alguém.</p>`
-    : `<p class="entrada">A página de <b>${esc(slug)}</b> fica no ar assim que for verificada.</p>`}
+    : `<p class="entrada">A página de <b>${esc(nome || slug)}</b> está no ar.
+        Falta a única coisa que este ecrã pode fazer e mais ninguém: mandar o
+        código a quem o vai usar.</p>`}
 
   <section class="codigo-caixa">
-    <p class="rotulo">O seu código</p>
+    <p class="rotulo">Código do centro</p>
     <p class="codigo">${esc(codigo)}</p>
-    <p class="dica"><b>Esta é a única vez que ele aparece.</b> É o que deixa
-      publicar a lista todos os dias. Não é guardado em lado nenhum de onde se
-      possa recuperar — só se emite outro.</p>
+    <p class="dica"><b>Esta é a única vez que ele aparece.</b> Guarda-se apenas
+      o resumo criptográfico — nem nós o conseguimos ler outra vez. Se esta
+      página se fechar antes de o mandar, emita outro na fila.</p>
   </section>
 
   <div class="guardar-codigo">
-    ${waDirecto ? `<a class="btn btn-wa largo" href="${esc(waDirecto)}" target="_blank" rel="noopener">
-      Mandar para ${esc(contato)}</a>
-    <p class="ajuda">É o telefone que está na página do centro — o que foi
-      conferido quando o centro foi aprovado.</p>` : ''}
-    <a class="btn ${waDirecto ? '' : 'btn-wa'} largo" href="${esc(wa)}" target="_blank" rel="noopener">
-      ${waDirecto ? 'Mandar para outro número' : 'Mandar o código no WhatsApp'}</a>
-    <p class="ajuda">Mande-o ao grupo do centro, ou a si próprio. Quem entrar ao
-      turno de amanhã não esteve aqui a ver este ecrã — e um papel colado à
-      parede de um ginásio perde-se. <b>Escreva-o também num papel</b>: é o que
-      continua a funcionar quando a bateria acaba.</p>
+    ${waDirecto
+      ? `<a class="btn btn-wa largo" href="${esc(waDirecto)}" target="_blank" rel="noopener">
+           Mandar para ${esc(contato)}</a>
+         <p class="ajuda">É o telefone que está na página do centro — o que foi
+           conferido na aprovação. A mensagem leva o endereço, o código, e onde
+           se atualiza${reemitido ? '' : ', e deixa o seu contacto guardado no telemóvel do centro'}.</p>`
+      : `<p class="erro-form">Este centro não tem um telefone utilizável, por
+           isso não há para onde mandar. Ligue-lhe de outra forma — sem o
+           código, a página fica no ar e ninguém a pode atualizar.</p>`}
+    <a class="btn largo" href="${esc(waOutro)}" target="_blank" rel="noopener">
+      Mandar para outro número</a>
   </div>
 
-  <p>${reemitido ? 'O endereço da página:' : 'O endereço da sua página será:'}<br><code>${esc(url)}</code></p>
-  <p><a class="btn" href="${reemitido ? esc(voltar || '/') : '/kit'}">${
-    reemitido ? 'Voltar aos pedidos' : 'Ir para o kit e gerar o material impresso'}</a></p>
+  <p>O endereço da página:<br><code>${esc(url)}</code></p>
+  <p><a class="btn" href="${esc(voltar || '/')}">Voltar aos pedidos</a></p>
+</main>`
+  });
+}
+
+/**
+ * O que quem pede uma página vê agora: nada de código.
+ *
+ * É mais honesto do que o ecrã anterior — nada está no ar ainda — e é o que
+ * torna possível verificar antes de entregar a chave. Em troca, esta página tem
+ * de deixar claro que o silêncio não é rejeição, e que há trabalho útil para
+ * fazer entretanto.
+ */
+function paginaPedidoRecebido({ slug, url, base }) {
+  return molde({
+    aqui: '/centro',
+    migalhas: [['Sou de um centro', '/centro'], ['Pedido recebido']],
+    titulo: 'Pedido recebido — CAPEM',
+    corpo: `
+<main class="inicial">
+  <h1>Pedido recebido</h1>
+  <p class="entrada">Vamos conferir os dados e ligar para o telefone que
+    escreveu. Quando a página ficar no ar, mandamos por WhatsApp o endereço e o
+    <b>código do centro</b> — é o código que deixa publicar a lista todos os
+    dias.</p>
+
+  <section class="codigo-caixa">
+    <p class="rotulo">O endereço será</p>
+    <p class="codigo endereco-previsto">${esc(url)}</p>
+    <p class="dica">Ainda não abre. Fica a funcionar quando o pedido for
+      verificado.</p>
+  </section>
+
+  <div class="aviso-caixa">
+    <p><b>Entretanto, imprima o material.</b> Não precisa de código nenhum para
+      isso — só do nome do centro. Cartaz de porta, etiquetas de caixa,
+      panfletos: quinze peças a partir dos mesmos dados.</p>
+    <p>Deixe o campo do link em branco por agora. Quando tiver o código, o kit
+      preenche-se sozinho e os QR passam a apontar para a sua página.</p>
+  </div>
+
+  <p><a class="btn btn-primario largo" href="/kit">Ir para o kit e imprimir</a></p>
+
+  <footer class="pe">
+    <p>Se ninguém ligar em 24 horas, ligue-nos — ou peça outra vez. Um centro
+      parado à espera de uma verificação é o pior sítio para esta ferramenta
+      falhar.</p>
+  </footer>
 </main>`
   });
 }
@@ -968,7 +1030,7 @@ Se o centro fechou ou parou de receber, diga só — marcamos a página e ningu�
  * vai perder-se — há para onde ligar que não depende de encontrar a página
  * certa num site.
  */
-function textoAprovado(d, url, base) {
+function textoAprovado(d, url, base, codigo) {
   return [
     'Olá! Aqui é do CAPEM.',
     '',
@@ -977,14 +1039,18 @@ function textoAprovado(d, url, base) {
     '',
     'É este endereço que o QR das peças impressas abre, e é esta a lista que os vizinhos veem.',
     '',
-    `Para atualizar o que precisam hoje: ${base}/atualizar`,
-    'Use o código que recebeu quando pediu a página. Leva meio minuto, e é o que impede o papel colado na porta de ficar velho.',
+    `*Código do centro: ${codigo}*`,
     '',
-    'Guarde este contacto. Se perder o código, ou precisar de alguma coisa, é por aqui.'
+    `Para atualizar o que precisam hoje: ${base}/atualizar`,
+    'Escreva o endereço da página e este código. Leva meio minuto, e é o que impede o papel colado na porta de ficar velho.',
+    '',
+    'Guarde esta mensagem — e escreva o código também num papel, para o dia em que a bateria acabar. Quem estiver de turno vai precisar dele.',
+    '',
+    'Guarde também este contacto. Se perder o código, ou precisar de alguma coisa, é por aqui.'
   ].join('\n');
 }
 
-function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, erro, avisar }) {
+function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, erro }) {
   const linha = c => {
     const d = c.dados || {};
     return `<article class="pedido">
@@ -1021,26 +1087,7 @@ function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, err
     ${contagem.recusado} recusados</p>
   ${erro === 'ocupado' ? '<p class="erro-form">Esse endereço já está ocupado. Escolha outro.</p>' : ''}
 
-  ${avisar ? (() => {
-    const d = avisar.dados || {};
-    const u = avisar.url || base + '/' + avisar.slug;
-    const wa = linkWhatsApp(d.contato, textoAprovado(d, u, base));
-    return `<section class="acabou-aprovar">
-      <h2>${esc(d.nome || avisar.slug)} está no ar</h2>
-      <p>Avise a pessoa. Ela não sabe — até aqui a aprovação era silenciosa, e
-        ninguém fica a olhar para o endereço à espera que apareça.</p>
-      ${wa
-        ? `<a class="btn btn-wa largo" href="${esc(wa)}" target="_blank" rel="noopener">
-             Avisar ${esc(d.contato)} no WhatsApp</a>
-           <p class="meta">A mensagem leva o endereço da página e onde atualizar.
-             E deixa o seu contacto guardado no telemóvel do centro — é para onde
-             vão ligar no dia em que perderem o código.</p>`
-        : `<p class="meta">Este centro não tem um telefone utilizável, por isso
-             não há como avisar por aqui. Vale a pena ligar-lhe de outra forma:
-             ninguém lhe disse que a página existe.</p>`}
-      <p><a href="${esc(u)}" target="_blank" rel="noopener">Ver a página</a></p>
-    </section>`;
-  })() : ''}
+
 
   ${pendentes.length
     ? `<div class="pedidos">${pendentes.map(linha).join('')}</div>`
@@ -1381,13 +1428,9 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 .pedido .botoes{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
 .pedido .botoes .btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
 .pedido .btn{flex:1;margin-top:0;text-align:center}
-/* O cartão que aparece logo depois de aprovar. Verde e no topo porque a acção
-   seguinte tem prazo: se ninguém avisar agora, o centro fica no ar sem saber. */
-.acabou-aprovar{margin:0 20px 24px;padding:18px;border:3px solid var(--permitido)}
-.acabou-aprovar h2{margin:0 0 8px}
-.acabou-aprovar p{margin:0 0 10px;font:500 14px/1.5 var(--fonte)}
-.acabou-aprovar .meta{color:var(--texto-2);font-size:13px}
-.acabou-aprovar .btn{margin-top:4px}
+/* O endereço que ainda não abre, na página de pedido recebido: mesmo lugar de
+   destaque do código, sem o peso tipográfico de um segredo. */
+.endereco-previsto{font-size:clamp(15px,4.5vw,22px);word-break:break-all}
 .lista-no-ar{list-style:none;margin:0;padding:0}
 .lista-no-ar li{display:flex;justify-content:space-between;gap:12px;
   padding:11px 0;border-bottom:1px solid var(--tenue);font:600 15px/1.3 var(--fonte)}
@@ -1406,5 +1449,5 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
                    paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
-                   paginaPedirCodigo,
+                   paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
                    paginaCodigo, paginaAdmin, idade, esc, CSS };

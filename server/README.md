@@ -132,6 +132,31 @@ não há uma terceira: ou tem alguma coisa para dar, ou está a montar um centro
 Um formulário na entrada obrigava a primeira — que aparece às centenas — a
 passar por cima da segunda.
 
+### Encerrar um centro
+
+Um centro que acaba e continua na lista manda alguém carregar cinco quilos de
+arroz até uma porta fechada — a falha exacta que esta ferramenta existe para
+evitar. Até aqui a única saída era uma alteração à mão na base de dados.
+
+No fim de `/atualizar` há **Encerrar o centro**, em dois passos. O primeiro só
+mostra o que vai acontecer: a diferença entre "fechámos hoje" e "fechámos de
+vez" é grande demais para caber num clique ao lado dos outros, e as duas coisas
+parecem-se o suficiente para se trocarem.
+
+`encerrado` é um **estado** e não um sinal dentro dos dados, porque muda quem o
+vê: sai da lista, sai da procura, sai dos empurrões.
+
+**A página continua a responder, com 200 e não 404.** Há cartazes com esse
+endereço colados em portas, e um QR impresso não se corrige. O que muda é o
+conteúdo: diz que fechou, não mostra a lista que lá estava, e manda para os
+centros abertos. O endereço e o telefone ficam — quem já vai a caminho pode
+ligar. Um 404 mandava a pessoa embora sem lhe dizer para onde ir.
+
+**Reabrir não se faz com o código.** Um código que ainda ande num celular não
+pode desfazer isto sozinho; a fila de aprovação tem os encerrados numa lista
+com um botão de reabrir. E o encerramento manda um aviso — é a única mudança de
+estado que mais ninguém vê acontecer.
+
 ### O menu: duas portas, e mais nenhuma
 
 O menu tem **Quero ajudar** e **Meu centro**, que são as mesmas duas portas da
@@ -494,7 +519,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 228 verificações
+node tools/server-test.js    # 250 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 node tools/goteira.js        # a mesma goteira em todas as páginas
 node tools/pt-br.js          # nada de português europeu no texto visível

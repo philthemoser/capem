@@ -48,6 +48,8 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     precisa: ['cobertor'], pausado: true, motivoPausa: 'Cheios até segunda.' });
   fazer('bela-vista', { nome: 'Centro Bela Vista', endereco: 'Rua Alta, 3 — Novo Hamburgo/RS',
     precisa: [{ texto: 'Ração para cães', marca: 'caixa' }] }, 20);
+  fazer('fechou', { nome: 'Ponto que Encerrou', endereco: 'Rua Final, 1', precisa: [] });
+  S.db.decidir('fechou', 'encerrado');
   for (let i = 0; i < 45; i++) {
     fazer('extra-' + i, { nome: 'Ponto ' + String(i).padStart(2, '0'),
       endereco: 'Rua Exemplo ' + i, precisa: ['agua'] });
@@ -71,6 +73,7 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     ['página de um centro', '/sao-sebastiao'],
     ['centro em pausa', '/zona-norte'],
     ['centro com lista velha', '/bela-vista'],
+    ['centro encerrado', '/fechou'],
     ['fila de aprovação', '/admin?t=' + encodeURIComponent(process.env.CAPEM_ADMIN)]
   ];
 

@@ -18,7 +18,11 @@ const { DatabaseSync } = require('node:sqlite');
 const crypto = require('node:crypto');
 const path = require('node:path');
 
-const ESTADOS = ['pendente', 'aprovado', 'recusado'];
+/* `encerrado` é o fim da vida de um centro, e é um estado e não um sinal dentro
+   dos dados porque muda quem o vê: sai da lista pública, sai da procura, sai
+   dos empurrões. A página continua a responder — há cartazes impressos a
+   apontar para ela — mas passa a dizer que fechou. */
+const ESTADOS = ['pendente', 'aprovado', 'recusado', 'encerrado'];
 
 let db;
 

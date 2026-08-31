@@ -445,6 +445,43 @@ async function encaminhar(req, res) {
         erro: 'Endereço ou código errados. Confira as letras — no código não há O, nem I, nem S.'
       }));
     }
+    /* Um centro encerrado não volta a abrir por aqui: reabrir é uma decisão de
+       quem aprova, e um código que ainda ande num telemóvel não a pode tomar. */
+    if (centro.estado === 'encerrado') {
+      return responder(res, 403, P.paginaAtualizarEntrada({
+        slug: pedido,
+        erro: 'Este centro está encerrado. Se voltou a abrir, fale connosco — '
+            + 'reabrir não se faz com o código.'
+      }));
+    }
+
+    /* Encerrar, em dois passos. O primeiro só mostra o que vai acontecer: a
+       diferença entre "fechámos hoje" e "fechámos de vez" é grande demais para
+       caber num clique ao lado dos outros. */
+    const querEncerrar = campos.get('encerrar');
+    if (querEncerrar === 'pedir') {
+      centro.codigoDado = codigo;
+      return responder(res, 200, P.paginaConfirmarEncerrar({
+        centro, url: urlDoCentro(centro.slug, base) }));
+    }
+    if (querEncerrar === 'confirmar') {
+      db.decidir(centro.slug, 'encerrado');
+      console.log(`[encerrado] ${centro.slug}`);
+      /* Vale um aviso: um centro que fecha é a única mudança de estado que
+         ninguém mais vê acontecer, e é a que mais interessa a quem coordena
+         uma resposta. */
+      A.avisar({
+        tipo: 'encerrado',
+        titulo: 'Centro encerrado',
+        corpo: [(centro.dados || {}).nome || centro.slug,
+                (centro.dados || {}).endereco,
+                'saiu da lista pública'].filter(Boolean).join('\n'),
+        url: urlDoCentro(centro.slug, base),
+        slug: centro.slug
+      });
+      return responder(res, 200, P.paginaEncerrado({ centro, base }),
+        'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
 
     let feito = false, erro = '';
     if (campos.get('publicar') === '1') {
@@ -568,6 +605,7 @@ async function encaminhar(req, res) {
     return responder(res, 200, P.paginaAdmin({
       pendentes: db.listar('pendente'),
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
+      encerrados: db.listar('encerrado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       parados: db.parados(DIAS_PARADO).map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       erro: url.searchParams.get('erro'),
       token: ADMIN, contagem: db.contar(), base
@@ -673,6 +711,17 @@ function servirCentro(req, res, slug, url, base) {
   }
   const centro = db.ler(slug);
   if (!centro) return responder(res, 404, P.paginaNaoExiste());
+
+  /* Encerrado responde 200 e não 404: há cartazes com este endereço colados em
+     portas, e um QR impresso não se corrige. O que muda é o conteúdo — em vez
+     de uma lista de necessidades, diz que fechou e manda para os que estão
+     abertos. Um 404 aqui mandava a pessoa embora sem saber para onde ir. */
+  if (centro.estado === 'encerrado') {
+    return responder(res, 200, P.paginaEncerrado({ centro, base }),
+      'text/html; charset=utf-8',
+      { 'X-Robots-Tag': 'noindex', 'Cache-Control': 'public, max-age=300' });
+  }
+
   if (centro.estado !== 'aprovado') {
     /* O coordenador pode ver a sua página antes de estar no ar, com o código.
        Sem isso teria de imprimir o QR às cegas. */

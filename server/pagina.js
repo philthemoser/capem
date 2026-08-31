@@ -489,6 +489,105 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
   });
 }
 
+/**
+ * Confirmar o encerramento.
+ *
+ * Um ecrã só para isto, e não uma caixa de seleção ao lado das outras: encerrar
+ * tira o centro da lista pública e não é o mesmo que a pausa que está três
+ * secções acima. As duas coisas parecem-se o suficiente para se trocarem, e
+ * trocá-las custa a um centro real ficar invisível numa manhã de trabalho.
+ *
+ * Diz o que vai acontecer e o que NÃO vai, e a saída é maior do que a entrada.
+ */
+function paginaConfirmarEncerrar({ centro, url }) {
+  const d = centro.dados || {};
+  return molde({
+    aqui: '/centro',
+    migalhas: [['Meu centro', '/centro'], ['Atualizar a lista', '/atualizar'],
+               ['Encerrar']],
+    titulo: `Encerrar ${d.nome || centro.slug}?`,
+    corpo: `
+<main class="entrar">
+  <header>
+    <h1>Encerrar ${esc(d.nome || centro.slug)}?</h1>
+  </header>
+
+  <div class="aviso-caixa">
+    <p><b>O que acontece:</b></p>
+    <p>O centro sai da lista pública e deixa de aparecer nas buscas. Quem abrir
+      o endereço — pelo QR de um cartaz, por exemplo — vê que o ponto fechou e é
+      mandado para os centros que estão abertos.</p>
+    <p><b>O que não acontece:</b> o endereço não desaparece, e os cartazes já
+      impressos não passam a apontar para o nada.</p>
+    <p><b>Para voltar atrás</b> é preciso falar connosco. Do seu lado não há
+      como reabrir.</p>
+  </div>
+
+  <p class="entrada">Se o centro só parou por uns dias, <a href="/atualizar">volte
+    atrás</a> e marque <b>não estamos recebendo</b>. É reversível e mantém o
+    centro na lista.</p>
+
+  <form method="post" action="/atualizar">
+    <input type="hidden" name="slug" value="${esc(centro.slug)}">
+    <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
+    <input type="hidden" name="encerrar" value="confirmar">
+    <button class="btn btn-recusar largo" type="submit">Sim, o centro fechou</button>
+  </form>
+
+  <p><a class="btn btn-primario largo" href="/atualizar">Não, voltar à lista</a></p>
+</main>`
+  });
+}
+
+/**
+ * A página de um centro que fechou.
+ *
+ * Continua a responder, e tem de continuar: há cartazes com este endereço
+ * colados em portas e postes, e um QR já impresso não se corrige. O que não
+ * pode é continuar a mostrar uma lista de necessidades — mandaria alguém
+ * carregar cinco quilos de arroz até uma porta fechada, que é exactamente a
+ * falha que esta ferramenta existe para evitar.
+ *
+ * Por isso diz o que aconteceu, em voz alta, e manda a pessoa para os outros
+ * centros. O endereço e o telefone ficam: quem vai a caminho pode ligar.
+ */
+function paginaEncerrado({ centro, base }) {
+  const d = centro.dados || {};
+  return molde({
+    aqui: false,
+    classe: 'mono-ok',
+    titulo: `${d.nome || centro.slug} — encerrado`,
+    descricao: 'Este ponto de arrecadação encerrou.',
+    corpo: `
+<main class="centro faixas">
+  <header class="topo-c">
+    <p class="tipo">${esc(d.tipo || 'Ponto de arrecadação')}</p>
+    <h1>${esc(d.nome || centro.slug)}</h1>
+  </header>
+
+  <p class="idade velha">Este ponto de arrecadação <b>encerrou</b>. Não traga
+    nada para aqui.</p>
+
+  <section class="fechou">
+    ${svgProibido('caixa')}
+    <p>O centro avisou que fechou${centro.decidido
+      ? ` em ${dataCurta(centro.decidido)}` : ''}. A página fica no ar porque há
+      cartazes impressos com este endereço — mas a lista que estava aqui já não
+      vale.</p>
+    <a class="btn btn-primario largo" href="/centros">Ver os centros que estão abertos</a>
+  </section>
+
+  ${d.endereco || d.contato ? `
+  <section class="contato">
+    <h2>Se você já está a caminho</h2>
+    ${d.endereco ? `<p class="lin">${svgIcone('pino')}<span>${esc(d.endereco)}</span></p>` : ''}
+    ${d.contato ? `<p class="lin">${svgIcone('telefone')}<a href="tel:${esc(String(d.contato).replace(/[^+\d]/g, ''))}"><span>${esc(d.contato)}</span></a></p>` : ''}
+    <p class="porque">O telefone pode já não atender. Ligue antes de sair.</p>
+  </section>` : ''}
+</main>`
+  });
+}
+
 /* ---------------------------------------------------------------------------
  * PEDIR UM CÓDIGO NOVO
  *
@@ -748,6 +847,21 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     <p class="ajuda">Depois de publicar, mande o link no grupo — é por aí que a
       lista chega mais longe, e um link nunca fica velho como uma imagem.</p>
   </form>
+
+  <section class="bloco-a encerrar">
+    <h2>O centro fechou de vez?</h2>
+    <p class="ajuda">Se for só por hoje ou por uns dias, use <b>não estamos
+      recebendo</b> lá em cima — é reversível e mantém o centro na lista.</p>
+    <p class="ajuda">Encerrar é para quando o ponto acabou. A página sai da
+      lista e passa a dizer que fechou, para ninguém aparecer com coisas à
+      porta. O endereço continua a responder, porque há cartazes impressos.</p>
+    <form method="post" action="/atualizar">
+      <input type="hidden" name="slug" value="${esc(centro.slug)}">
+      <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
+      <input type="hidden" name="encerrar" value="pedir">
+      <button class="btn btn-recusar" type="submit">Encerrar o centro</button>
+    </form>
+  </section>
 
   <footer class="pe">
     <p><b>O nome, o endereço e o telefone não mudam aqui.</b> Foram conferidos
@@ -1067,7 +1181,7 @@ function textoAprovado(d, url, base, codigo) {
   ].join('\n');
 }
 
-function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, erro }) {
+function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contagem, base, erro }) {
   const linha = c => {
     const d = c.dados || {};
     return `<article class="pedido">
@@ -1153,6 +1267,26 @@ function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, err
       </form>
     </li>`;
   }).join('')}</ul>` : '<p class="vazio">Nenhum centro no ar.</p>'}
+
+  ${encerrados && encerrados.length ? `
+  <h2>Encerrados <span class="conta-n">${encerrados.length}</span></h2>
+  <p class="entrada">Fecharam-se a si próprios. A página de cada um continua a
+    responder e diz que fechou — há cartazes impressos com esses endereços.
+    <b>Reabrir só se faz aqui</b>: um código que ainda ande num celular não
+    pode desfazer isto sozinho.</p>
+  <ul class="lista-no-ar">${encerrados.map(c => `
+    <li>
+      <div class="na-txt">
+        <a href="${esc(c.url || base + '/' + c.slug)}">${esc((c.dados || {}).nome || c.slug)}</a>
+        <span>${c.decidido ? 'fechou em ' + dataCurta(c.decidido) : 'encerrado'}</span>
+      </div>
+      <form method="POST" action="/admin/decidir" class="na-form">
+        <input type="hidden" name="t" value="${esc(token)}">
+        <input type="hidden" name="slug" value="${esc(c.slug)}">
+        <input type="hidden" name="novo_slug" value="">
+        <button class="btn pequeno" name="decisao" value="aprovado">Reabrir</button>
+      </form>
+    </li>`).join('')}</ul>` : ''}
 </main>`
   });
 }
@@ -1477,6 +1611,16 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 /* O endereço que ainda não abre, na página de pedido recebido: mesmo lugar de
    destaque do código, sem o peso tipográfico de um segredo. */
 .endereco-previsto{font-size:clamp(15px,4.5vw,22px);word-break:break-all}
+/* A secção de um centro que fechou. Vermelha e com a marca proibida: é a mesma
+   gramática do "não traga", e quem chega aqui vem com coisas no carro. */
+/* O botão de encerrar é vermelho e está no fim, depois de tudo o que se faz
+   todos os dias. Não é escondido — é preciso — mas também não compete com o
+   botão de publicar. */
+.encerrar{border-top-color:var(--proibido)}
+.encerrar .btn{margin-top:12px}
+.fechou{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.fechou svg{width:52px;height:52px;color:var(--proibido)}
+.fechou p{margin:0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 .lista-no-ar{list-style:none;margin:0;padding:0}
 .lista-no-ar li{display:flex;justify-content:space-between;gap:12px;
   padding:11px 0;border-bottom:1px solid var(--tenue);font:600 15px/1.3 var(--fonte)}
@@ -1496,4 +1640,5 @@ module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
                    paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
                    paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
+                   paginaEncerrado, paginaConfirmarEncerrar,
                    paginaCodigo, paginaAdmin, idade, esc, CSS };

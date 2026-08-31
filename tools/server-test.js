@@ -672,6 +672,72 @@ const DIA = 86400000;
     (html.match(/https:\/\/capem[^"< ]*/) || [])[0]);
 
   let novoCod;
+  console.log('\nencerrar um centro');
+  /* A falha que esta ferramenta existe para evitar: alguém carregar cinco
+     quilos de arroz até uma porta fechada. Até aqui, um centro que acabasse
+     ficava na lista para sempre — ou alguém mexia na base de dados à mão. */
+  {
+    S.db.criar('vai-fechar', { nome: 'Ponto que Vai Fechar', tipo: 'Ponto de arrecadação',
+      endereco: 'Rua Final, 1', contato: '(51) 90000-0009', precisa: ['agua'], naoTraga: [] });
+    r = await form('/admin/decidir', { t: ADMIN, slug: 'vai-fechar',
+      novo_slug: 'vai-fechar', decisao: 'aprovado' });
+    const cod = ((await r.text()).match(/class="codigo">([A-Z0-9-]+)</) || [])[1];
+    S.db.publicar('vai-fechar', S.db.ler('vai-fechar').dados);
+
+    html = await (await formN('/atualizar', { slug: 'vai-fechar', codigo: cod }, '198.51.100.4')).text();
+    ok('a lista aberta oferece encerrar', /name="encerrar" value="pedir"/.test(html));
+    /* A pausa e o encerramento parecem-se o suficiente para se trocarem, e
+       trocá-los custa a um centro real ficar invisível numa manhã. */
+    ok('e explica a diferença para a pausa', /Se for só por hoje/.test(html));
+
+    r = await formN('/atualizar', { slug: 'vai-fechar', codigo: cod, encerrar: 'pedir' }, '198.51.100.4');
+    html = await r.text();
+    ok('pedir para encerrar mostra uma confirmação', /encerrar=|name="encerrar" value="confirmar"/.test(html));
+    ok('que diz o que acontece', /sai da lista pública/.test(html));
+    ok('e que não há como voltar atrás do lado do centro', /não há\s+como reabrir/.test(html));
+    ok('mas o centro ainda NÃO está encerrado',
+      S.db.ler('vai-fechar').estado === 'aprovado', S.db.ler('vai-fechar').estado);
+
+    r = await formN('/atualizar', { slug: 'vai-fechar', codigo: cod, encerrar: 'confirmar' }, '198.51.100.4');
+    html = await r.text();
+    ok('confirmar encerra', S.db.ler('vai-fechar').estado === 'encerrado');
+    ok('e a resposta já é a página de encerrado', /encerrou/.test(html));
+
+    /* Sai da lista e da procura, mas o endereço continua a responder: há
+       cartazes impressos a apontar para ele. Um 404 mandava a pessoa embora
+       sem lhe dizer para onde ir. */
+    ok('sai da lista pública',
+      !(await (await get('/centros')).text()).includes('Ponto que Vai Fechar'));
+    ok('e da procura',
+      !(await (await get('/centros?q=fechar')).text()).includes('Ponto que Vai Fechar'));
+    r = await get('/vai-fechar');
+    html = await r.text();
+    ok('mas o endereço continua a responder', r.status === 200, String(r.status));
+    ok('a dizer que fechou', /encerrou/.test(html) && /Não traga/.test(html));
+    ok('sem mostrar a lista de necessidades que lá estava', !/Precisamos hoje/.test(html));
+    ok('e a mandar para os que estão abertos', /href="\/centros"/.test(html));
+    ok('e não é indexado', (r.headers.get('x-robots-tag') || '').includes('noindex'));
+    /* Quem vai a caminho pode ligar antes de dar a volta. */
+    ok('o telefone continua lá', /90000-0009/.test(html));
+
+    /* Não entra nos empurrões: não está parado, acabou. */
+    ok('não entra na lista de empurrões',
+      !S.db.parados(0).map(c => c.slug).includes('vai-fechar'));
+
+    /* Reabrir é decisão de quem aprova. Um código que ande num telemóvel não a
+       pode tomar. */
+    r = await formN('/atualizar', { slug: 'vai-fechar', codigo: cod }, '198.51.100.4');
+    ok('o código já não abre a lista de um centro encerrado', r.status === 403, String(r.status));
+    ok('e diz porquê', /encerrado/.test(await r.text()));
+
+    html = await (await get('/admin?t=' + encodeURIComponent(ADMIN))).text();
+    ok('a fila mostra os encerrados', /Encerrados/.test(html) && html.includes('Ponto que Vai Fechar'));
+    ok('com um botão de reabrir', /Reabrir/.test(html));
+    await form('/admin/decidir', { t: ADMIN, slug: 'vai-fechar', novo_slug: '', decisao: 'aprovado' });
+    ok('reabrir devolve o centro ao ar', S.db.ler('vai-fechar').estado === 'aprovado');
+    S.db.decidir('vai-fechar', 'encerrado');
+  }
+
   console.log('\naprovar, recusar, e quem não tem telefone');
   {
     /* Recusar não gera código nenhum: uma chave para uma página que não vai

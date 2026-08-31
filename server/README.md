@@ -119,7 +119,7 @@ para uma dúzia de centros a conta é praticamente zero.
 |---|---|
 | `/` | Duas portas: **quero ajudar** e **sou de um centro**. Nada mais. |
 | `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Procura, filtros, ordem e páginas — tudo no servidor, tudo no endereço. |
-| `/centro` | A porta de quem gere um centro: atualizar, imprimir, ou pedir uma página. |
+| `/centro` | **Meu centro** — a porta de quem gere um: atualizar, imprimir, ou pedir uma página. |
 | `/pedir-codigo` | Pedir um código novo. **Não emite nada** — manda um recado. |
 | `/atualizar` | **A actualização diária.** Endereço + código, e a lista abre para edição. 30 KB, sem JavaScript obrigatório. |
 | `/novo` | O formulário de pedido. |
@@ -131,6 +131,29 @@ A entrada não tem formulário de propósito. Quem chega é uma de duas pessoas 
 não há uma terceira: ou tem alguma coisa para dar, ou está a montar um centro.
 Um formulário na entrada obrigava a primeira — que aparece às centenas — a
 passar por cima da segunda.
+
+### O menu: duas portas, e mais nenhuma
+
+O menu tem **Quero ajudar** e **Meu centro**, que são as mesmas duas portas da
+entrada. Quem chega tem alguma coisa para dar, ou tem um centro para tratar;
+não há uma terceira pessoa.
+
+Chegou a ter três — *ajudar · atualizar · imprimir* — e o problema não era o
+nome do meio. Era misturar dois públicos na mesma fila, e pôr uma tarefa
+(imprimir) ao lado de quem a contém (o centro). Só um dos três estava na
+primeira pessoa, o que fazia o conjunto ler-se como acaso.
+
+Duas portas é também a forma que aguenta o que falta construir:
+
+| | hoje | a seguir | depois |
+|---|---|---|---|
+| **Quero ajudar** | ver os centros | preparar um saco, receber o código | donativo em dinheiro |
+| **Meu centro** | atualizar, imprimir | receber sacos à porta | |
+
+Cada coisa nova entra pela porta a que pertence e o menu não cresce. O custo é
+um toque a mais para um coordenador que chegue sem link — e ele quase nunca
+chega assim: a mensagem de aprovação leva o endereço de `/atualizar`, e é essa
+a página que fica nos favoritos.
 
 ### `/atualizar` — a página que se abre todas as manhãs
 
@@ -419,7 +442,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 223 verificações
+node tools/server-test.js    # 228 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 

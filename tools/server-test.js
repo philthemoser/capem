@@ -61,6 +61,27 @@ const DIA = 86400000;
      montar um centro. Um formulário aqui obrigava a primeira — que aparece às
      centenas — a passar por cima da segunda. */
   ok('mostra as duas portas', /href="\/centros"/.test(html) && /href="\/centro"/.test(html));
+  /* O menu tem as MESMAS duas portas e mais nenhuma. Chegou a ter três —
+     ajudar, atualizar, imprimir — e o problema não era o nome do meio: era
+     misturar dois públicos na mesma fila, e pôr uma tarefa (imprimir) ao lado
+     de quem a contém (o centro). Duas portas é também a forma que aguenta o
+     código do saco e o donativo de um lado, e receber sacos do outro. */
+  {
+    const h = await (await get('/centros')).text();
+    const links = (h.match(/<div class="nav-links">([\s\S]*?)<\/div>/) || [])[1] || '';
+    const quantos = (links.match(/<a /g) || []).length;
+    ok('o menu tem duas portas e mais nenhuma', quantos === 2, String(quantos));
+    ok('e são ajudar e o centro',
+      /href="\/centros"/.test(links) && /href="\/centro"/.test(links), links.trim().slice(0, 120));
+    ok('nada de tarefas soltas no menu',
+      !/href="\/kit"/.test(links) && !/href="\/atualizar"/.test(links));
+    /* Registo consistente: "Quero ajudar" e "Meu centro" são os dois a voz de
+       quem chega. Misturar primeira pessoa com imperativo lia-se como acaso. */
+    ok('e o registo é o mesmo nos dois', /Quero ajudar/.test(links) && /Meu centro/.test(links));
+  }
+  /* As páginas do lado do centro marcam a porta do centro, não uma tarefa. */
+  ok('a página de atualizar marca "Meu centro" no menu',
+    /href="\/centro" aria-current="page"/.test(await (await get('/atualizar')).text()));
   ok('e não pede dados logo à entrada', !/<form/.test(html));
 
   /* A porta de quem gere um centro: faltava, e sem ela quem já tinha página

@@ -75,10 +75,25 @@ const dataCurta = ms => {
  * ter passado pela entrada. Sem uma barra, a única forma de ir de um sítio ao
  * outro era escrever o endereço de cor.
  *
- * Três destinos e mais nenhum, porque são três os motivos para estar aqui:
- * ajudar alguém, atualizar o meu centro, imprimir material. A fila de aprovação
- * não entra — quem a pode abrir sabe o endereço, e um link para uma página que
- * responde 404 a 99% das pessoas é ruído.
+ * DUAS portas, e são as mesmas da entrada: quem chega tem alguma coisa para
+ * dar, ou tem um centro para tratar. Não há uma terceira pessoa.
+ *
+ * Chegou a haver três destinos — ajudar, atualizar, imprimir — e o problema não
+ * era o nome do meio: era misturar dois públicos na mesma fila. "Quero ajudar"
+ * é para um vizinho com cobertores no carro; "atualizar" e "imprimir" são
+ * tarefas de um coordenador, e uma delas é parte da outra.
+ *
+ * Duas portas também é a forma que aguenta o que falta construir. Do lado de
+ * quem ajuda vêm o código do saco e, mais tarde, o donativo em dinheiro; do
+ * lado do centro vem receber sacos à porta. Cada coisa nova entra pela porta a
+ * que pertence, e o menu não cresce.
+ *
+ * O custo é um toque a mais para o coordenador que chegue sem link. Paga-se
+ * porque ele quase nunca chega assim: a mensagem de aprovação leva o endereço
+ * de /atualizar, e é essa a página que fica nos favoritos.
+ *
+ * A fila de aprovação não entra — quem a pode abrir sabe o endereço, e um link
+ * que responde 404 a 99% das pessoas é ruído.
  *
  * As migalhas aparecem só onde há profundidade a sério (a página de um centro,
  * a lista aberta para editar). Numa página de primeiro nível seriam uma linha
@@ -86,8 +101,7 @@ const dataCurta = ms => {
  * -------------------------------------------------------------------------*/
 const DESTINOS = [
   ['/centros', 'Quero ajudar'],
-  ['/atualizar', 'Atualizar a lista'],
-  ['/kit', 'Imprimir material']
+  ['/centro', 'Meu centro']
 ];
 
 function nav(aqui, migalhas) {
@@ -317,9 +331,9 @@ function paginaInicial({ contagem, base }) {
     </a>
     <a class="porta" href="/centro">
       ${svgIcone('cartaz')}
-      <span class="porta-t">Sou de um centro</span>
-      <span class="porta-d">Gere o material impresso e publique a lista de hoje.
-        Peça a sua página se ainda não tiver.</span>
+      <span class="porta-t">Meu centro</span>
+      <span class="porta-d">Publique a lista de hoje, gere o material impresso,
+        ou peça a sua página se ainda não tiver.</span>
     </a>
   </div>
 
@@ -493,8 +507,9 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
  * -------------------------------------------------------------------------*/
 function paginaPedirCodigo({ erro, feito, slug, nome }) {
   return molde({
-    aqui: '/atualizar',
-    migalhas: [['Atualizar a lista', '/atualizar'], ['Pedir um código novo']],
+    aqui: '/centro',
+    migalhas: [['Meu centro', '/centro'], ['Atualizar a lista', '/atualizar'],
+               ['Pedir um código novo']],
     titulo: 'Pedir um código novo — CAPEM',
     descricao: 'Peça um código novo para o seu centro.',
     corpo: `
@@ -571,7 +586,8 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
  * -------------------------------------------------------------------------*/
 function paginaAtualizarEntrada({ erro, slug }) {
   return molde({
-    aqui: '/atualizar',
+    aqui: '/centro',
+    migalhas: [['Meu centro', '/centro'], ['Atualizar a lista']],
     titulo: 'Atualizar a lista — CAPEM',
     descricao: 'Atualize a lista de necessidades do seu centro.',
     corpo: `
@@ -647,8 +663,9 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     </fieldset>`).join('');
 
   return molde({
-    aqui: '/atualizar',
-    migalhas: [['Atualizar a lista', '/atualizar'], [d.nome || centro.slug]],
+    aqui: '/centro',
+    migalhas: [['Meu centro', '/centro'], ['Atualizar a lista', '/atualizar'],
+               [d.nome || centro.slug]],
     titulo: `Atualizar — ${d.nome || centro.slug}`,
     descricao: 'Atualize a lista de necessidades do seu centro.',
     corpo: `
@@ -752,14 +769,14 @@ function paginaAtualizar({ centro, url, erro, feito }) {
 function paginaCentroEntrada({ base }) {
   return molde({
     aqui: '/centro',
-    titulo: 'Sou de um centro — CAPEM',
+    titulo: 'Meu centro — CAPEM',
     descricao: 'Gere o material impresso do seu centro e publique a lista de hoje.',
     corpo: `
 <main class="portas">
   <header>
-    <h1>Sou de um centro</h1>
-    <p class="entrada">Tudo o que um ponto de arrecadação precisa: o material para
-      imprimir, e a lista de hoje que o QR desse material aponta.</p>
+    <h1>Meu centro</h1>
+    <p class="entrada">Tudo o que um ponto de arrecadação precisa. A lista de
+      hoje é a que se faz todos os dias — as outras fazem-se uma vez.</p>
   </header>
 
   <div class="duas-portas">
@@ -802,7 +819,7 @@ function paginaCentroEntrada({ base }) {
 function paginaNovo({ erro }) {
   return molde({
     aqui: '/centro',
-    migalhas: [['Sou de um centro', '/centro'], ['Pedir a página']],
+    migalhas: [['Meu centro', '/centro'], ['Pedir a página']],
     titulo: 'Pedir a página de um centro',
     corpo: `
 <main class="inicial">
@@ -954,7 +971,7 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, contato,
 function paginaPedidoRecebido({ slug, url, base }) {
   return molde({
     aqui: '/centro',
-    migalhas: [['Sou de um centro', '/centro'], ['Pedido recebido']],
+    migalhas: [['Meu centro', '/centro'], ['Pedido recebido']],
     titulo: 'Pedido recebido — CAPEM',
     corpo: `
 <main class="inicial">

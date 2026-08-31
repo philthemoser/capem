@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
-    "check": "node tools/check-i18n.js && node tools/smoke.js && node tools/flow.js && node tools/nav.js && node tools/a11y.js && node tools/kit-test.js && node tools/server-test.js && node tools/a11y-server.js",
+    "check": "node tools/check-i18n.js && node tools/smoke.js && node tools/flow.js && node tools/nav.js && node tools/a11y.js && node tools/kit-test.js && node tools/server-test.js && node tools/a11y-server.js && node tools/goteira.js",
     "check:i18n": "node tools/check-i18n.js",
     "check:screens": "node tools/smoke.js",
     "check:flow": "node tools/flow.js",
@@ -16,7 +16,8 @@
     "start": "node server/server.js",
     "check:server": "node tools/server-test.js",
     "check:kit": "node tools/kit-test.js",
-    "check:a11y-server": "node tools/a11y-server.js"
+    "check:a11y-server": "node tools/a11y-server.js",
+    "check:goteira": "node tools/goteira.js"
   },
   "devDependencies": {
     "axe-core": "^4.10.0",

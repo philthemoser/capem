@@ -193,7 +193,7 @@ function paginaCentro(centro, base, urlCanonica) {
   const url = urlCanonica || `${base}/${centro.slug}`;
 
   const corpo = `
-<main class="centro">
+<main class="centro faixas">
   <header class="topo-c">
     <p class="tipo">${esc(d.tipo || 'Ponto de arrecadação')}</p>
     <h1>${esc(d.nome || centro.slug)}</h1>
@@ -669,7 +669,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     titulo: `Atualizar — ${d.nome || centro.slug}`,
     descricao: 'Atualize a lista de necessidades do seu centro.',
     corpo: `
-<main class="atualizar">
+<main class="atualizar faixas">
   <header class="topo-c">
     <h1>${esc(d.nome || centro.slug)}</h1>
     <p class="morada">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
@@ -1165,6 +1165,9 @@ const CSS = `
   --tinta:#16130F; --proibido:#C8102E; --permitido:#007A33; --atencao:#F2C500;
   --fio:#B8B4AE; --papel:#FFF; --texto-2:#3B3831; --texto-3:#6E6A63;
   --tenue:#E4E2DD; --fundo:#DEDCD7; --claro:#F4F3F0;
+  /* A goteira: a distância entre o texto e a beira do ecrã. Um valor só, em
+     vez dos seis 20px espalhados que havia — e que uma página não tinha. */
+  --goteira:20px;
   --fonte:Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif;
   --preta:'Archivo Black',Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -1176,12 +1179,33 @@ html,body{margin:0;padding:0;background:var(--fundo);color:var(--tinta);
   font-family:var(--fonte);-webkit-text-size-adjust:100%}
 svg{display:block}
 a{color:var(--tinta)}
-main{max-width:760px;margin:0 auto;padding:0 0 48px;background:var(--papel);
-  min-height:100vh}
+/* ---------------------------------------------------------------------------
+ * DOIS MODELOS DE PÁGINA, e só dois. Escolha-se um.
+ *
+ * A) COM GOTEIRA (o normal). O main afasta o conteúdo das beiras e nada lá
+ *    dentro volta a afastá-lo. É o que quase todas as páginas querem.
+ *
+ * B) EM FAIXAS (main.faixas). O main não tem goteira nenhuma, para as faixas
+ *    — cabeçalho do centro, aviso de idade, blocos com risco em cima —
+ *    poderem atravessar o ecrã de beira a beira com o seu próprio traço. Cada
+ *    faixa põe a goteira por dentro.
+ *
+ * A goteira vive no main e é o modelo B que a tira, e não ao contrário. Antes
+ * era ao contrário: o main não tinha goteira e cada classe de página punha a
+ * sua, o que quer dizer que uma classe que se esquecesse ficava colada à beira
+ * do ecrã. Foi o que aconteceu a .entrar — as duas páginas que um coordenador
+ * mais abre ao telemóvel, encostadas à borda, sem ninguém dar por isso.
+ *
+ * Com o modelo A por omissão, esquecer-se dá o comportamento certo.
+ * -------------------------------------------------------------------------*/
+main{max-width:760px;margin:0 auto;padding:24px var(--goteira) 48px;
+  background:var(--papel);min-height:100vh}
+main.faixas{padding:0 0 48px}
+main.faixas .pe{padding-left:var(--goteira);padding-right:var(--goteira)}
 @media(min-width:800px){main{margin:24px auto;min-height:0;border:2px solid var(--tinta)}}
 
 /* --- cabeçalho do centro --- */
-.topo-c{padding:22px 20px 18px;border-bottom:6px solid var(--tinta)}
+.topo-c{padding:22px var(--goteira) 18px;border-bottom:6px solid var(--tinta)}
 .topo-c .tipo{margin:0 0 6px;font:700 12px/1 var(--fonte);text-transform:uppercase;
   letter-spacing:.18em;color:var(--texto-2)}
 .topo-c h1{margin:0;font:400 clamp(30px,8vw,52px)/0.94 var(--preta);letter-spacing:-.025em;
@@ -1191,12 +1215,16 @@ main{max-width:760px;margin:0 auto;padding:0 0 48px;background:var(--papel);
 .horas svg{width:24px;height:24px;flex:none}
 
 /* --- a idade da lista --- */
-.idade{margin:0;padding:14px 20px;font:600 15px/1.45 var(--fonte)}
+.idade{margin:0;padding:14px var(--goteira);font:600 15px/1.45 var(--fonte)}
 .idade.a-envelhecer{background:var(--atencao);color:var(--tinta)}
 .idade.velha,.idade.nunca{background:var(--proibido);color:#fff}
 
 /* --- listas de marcas --- */
-section{padding:20px}
+/* Só nas páginas em faixas. Era um selector de elemento solto — cada secção de
+   cada página levava 20 px — e numa página com goteira isso somava-se à do
+   main. Sobreviveu porque quase todas as secções têm uma classe com padding
+   próprio que o tapava. */
+main.faixas > section{padding:20px var(--goteira)}
 section h2{display:flex;align-items:center;gap:12px;margin:0 0 4px;
   font:400 clamp(22px,6vw,32px)/1 var(--preta);letter-spacing:-.02em}
 section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
@@ -1219,7 +1247,7 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .vazio{margin:8px 0 0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 
 /* --- pausa --- */
-.pausa{display:flex;align-items:center;gap:18px;padding:26px 20px}
+.pausa{display:flex;align-items:center;gap:18px;padding:26px var(--goteira)}
 .pausa svg{width:clamp(64px,18vw,110px);height:clamp(64px,18vw,110px);flex:none}
 .pausa h2{margin:0;display:block;font-size:clamp(24px,6.5vw,38px);line-height:.98}
 .pausa p{margin:8px 0 0;font:500 clamp(15px,4vw,18px)/1.35 var(--fonte);color:var(--texto-2)}
@@ -1240,13 +1268,14 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .nota-partilha{margin:10px 0 0;font:500 13px/1.45 var(--fonte);color:var(--texto-2)}
 
 /* --- pé --- */
-.pe{padding:20px;border-top:2px solid var(--tinta);
+/* Sem goteira própria: numa página com goteira somava-se à do main e dava
+   40 px. As páginas em faixas devolvem-lha na regra ao pé de main.faixas. */
+.pe{padding:20px 0 0;border-top:2px solid var(--tinta);
   font:500 13px/1.6 var(--fonte);color:var(--texto-2)}
 .pe p{margin:0 0 6px}
 .pe .creditos{color:var(--texto-3)}
 
 /* --- as duas portas --- */
-.portas,.lista-centros{padding:24px 20px}
 .duas-portas{display:grid;gap:14px;margin:8px 0 28px}
 /* Chamava-se "duas portas" e passaram a ser três quando a actualização diária
    ganhou a sua. auto-fit em vez de dois fixos, para não ficar uma órfã. */
@@ -1316,7 +1345,7 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
    meio de uma página qualquer: sem barra, ir de um sítio ao outro era escrever
    o endereço de cor. */
 .nav-topo{position:sticky;top:0;z-index:40;display:flex;align-items:center;
-  gap:8px 16px;flex-wrap:wrap;padding:10px 20px;
+  gap:8px 16px;flex-wrap:wrap;padding:10px var(--goteira);
   background:var(--tinta);color:var(--papel)}
 .nav-topo .marca{font:400 20px/1 var(--preta);letter-spacing:-.01em;
   color:var(--papel);text-decoration:none;flex:none}
@@ -1329,11 +1358,11 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .nav-links a[aria-current=page]{color:var(--papel);
   box-shadow:inset 0 -3px 0 var(--papel)}
 .migalhas{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
-  max-width:760px;margin:0 auto;padding:10px 20px;
+  max-width:760px;margin:0 auto;padding:10px var(--goteira);
   font:600 12px/1.3 var(--mono);color:var(--texto-2);background:var(--papel)}
 .migalhas a{color:var(--texto-2)}
 .migalhas b{color:var(--tinta);font-weight:700}
-@media(min-width:800px){.migalhas{padding:14px 20px 0}}
+@media(min-width:800px){.migalhas{padding:14px var(--goteira) 0}}
 
 /* --- actualização diária ---
    Alvos grandes e poucos por linha. Isto usa-se de manhã, de pé, com uma mão,
@@ -1345,13 +1374,14 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .idade.fresca-ok{background:var(--claro);color:var(--texto-2);
   border-left:6px solid var(--permitido)}
 .atualizar .morada{margin:6px 0 0;font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
-.bloco-a{padding:18px 20px;border-top:6px solid var(--tinta)}
+.bloco-a{padding:18px var(--goteira);border-top:6px solid var(--tinta)}
 .bloco-a h2{margin:0 0 10px}
 /* Mais específico do que ".btn.largo{width:100%}", que de outro modo ganha e
    soma 100% à margem de 20 px — o botão saía 20 px fora do ecrã e a página
    passava a deslizar de lado. */
-.form-atualizar > .btn.largo{margin:18px 20px 0;width:calc(100% - 40px);box-sizing:border-box}
-.form-atualizar .ajuda{padding:0 20px}
+.form-atualizar > .btn.largo{margin:18px var(--goteira) 0;
+  width:calc(100% - var(--goteira) * 2);box-sizing:border-box}
+.form-atualizar .ajuda{padding:0 var(--goteira)}
 .bloco-a .ajuda{padding:0}
 .grupo{margin:0 0 14px;padding:0;border:0}
 .grupo legend{padding:0;font:700 11px/1 var(--fonte);text-transform:uppercase;
@@ -1385,7 +1415,6 @@ textarea{width:100%;padding:12px;font:500 15px/1.45 var(--fonte);color:var(--tin
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
 /* --- inicial, admin, avisos --- */
-.inicial,.admin,.aviso-pagina{padding:24px 20px}
 .inicial h1,.admin h1,.aviso-pagina h1{margin:0 0 10px;
   font:400 clamp(26px,7vw,42px)/1.02 var(--preta);letter-spacing:-.025em;text-wrap:balance}
 .inicial .tipo{margin:0 0 8px;font:700 12px/1 var(--fonte);text-transform:uppercase;
@@ -1414,7 +1443,7 @@ input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{
 /* O que vai acontecer a seguir, dito antes de se carregar no botão: haverá um
    telefonema, e o código antigo morre. As duas coisas surpreendem se não forem
    ditas, e uma delas estraga um papel que alguém guardou. */
-.aviso-caixa{margin:22px 20px;padding:16px;background:var(--claro);
+.aviso-caixa{margin:22px var(--goteira);padding:16px;background:var(--claro);
   border-left:6px solid var(--tinta)}
 .aviso-caixa p{margin:0 0 8px;font:500 14px/1.5 var(--fonte);color:var(--texto-2)}
 .aviso-caixa p:last-child{margin-bottom:0}

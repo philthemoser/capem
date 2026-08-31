@@ -429,6 +429,35 @@ telefone de um edifício — informação que o centro já quer ver colada na po
 Isso mantém a posição de proteção de dados simples, ao contrário do protótipo
 (ver `docs/data-protection.md`).
 
+## O CSS, e como não o desarrumar
+
+A folha de estilos vive num template literal no fim de `server/pagina.js` — uma
+só, para todas as páginas, servida dentro do HTML. Duas regras chegam para
+manter isto arrumado.
+
+**Uma página escolhe um de dois modelos, e só há dois.**
+
+| | |
+|---|---|
+| **com goteira** (por omissão) | O `main` afasta o conteúdo das beiras e nada lá dentro volta a afastá-lo. É o que quase todas as páginas querem. |
+| **em faixas** (`main.faixas`) | O `main` não tem goteira, para as faixas — cabeçalho do centro, aviso de idade, blocos com risco em cima — atravessarem o ecrã de beira a beira. Cada faixa põe a goteira por dentro. |
+
+A goteira vive no `main` e é o modelo em faixas que a tira, e **não** ao
+contrário. Era ao contrário: cada classe de página punha a sua, e uma classe que
+se esquecesse ficava colada à beira do ecrã. Foi o que aconteceu a `.entrar` —
+`/atualizar` e `/pedir-codigo`, as duas páginas que um coordenador mais abre ao
+telemóvel — sem ninguém dar por isso, porque cada página estava certa em
+relação a si própria. `node tools/goteira.js` mede-as todas e compara-as umas
+com as outras, que é o único ângulo de onde o erro se vê.
+
+**A distância chama-se `--goteira`.** Havia seis `20px` escritos à mão em sítios
+diferentes. Se um dia mudar, muda numa linha.
+
+**Nada de crases dentro do CSS.** É um template literal: uma crase num
+comentário fecha-o e o servidor deixa de arrancar, com um erro que aponta para
+o comentário e não diz porquê. Aconteceu quatro vezes. O `tools/goteira.js`
+verifica isso antes de mais nada, e diz a linha.
+
 ## Ficheiros
 
 ```
@@ -444,6 +473,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ```bash
 node tools/server-test.js    # 228 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
+node tools/goteira.js        # a mesma goteira em todas as páginas
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas

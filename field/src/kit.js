@@ -959,13 +959,14 @@ function render() {
   raiz.innerHTML = FAMILIAS.map(f => {
     const lista = PECAS.filter(p => p.fam === f.n);
     /* A primeira peça de cada família manda: é a que se imprime se só se
-       imprimir uma. Dar-lhe o mesmo tamanho das outras seria esconder isso. */
-    const [primeira, ...resto] = lista;
+       imprimir uma. Isso era dito com um cartão maior e o texto ao lado — e o
+       preço era uma grelha com três geometrias diferentes, que nunca chegava a
+       ganhar ritmo nenhum. Passou a ser um selo: a hierarquia mantém-se, o
+       alinhamento também. */
     return `<section class="familia">
       <h2>${esc(f.nome)} <span class="conta">${lista.length}</span></h2>
       <p>${esc(f.desc)}</p>
-      ${primeira ? cartao(primeira, true) : ''}
-      ${resto.length ? `<div class="pecas">${resto.map(p => cartao(p)).join('')}</div>` : ''}
+      ${lista.length ? `<div class="pecas">${lista.map((p, i) => cartao(p, i === 0)).join('')}</div>` : ''}
     </section>`;
   }).join('');
 
@@ -1021,14 +1022,18 @@ function ajustarCartaz() {
   }
 }
 
-function cartao(p, destaque) {
+/**
+ * Um cartão de peça. Todos iguais, de propósito.
+ *
+ * Havia três geometrias — normal, destaque (texto ao lado) e larga (linha
+ * inteira) — e a grelha saltava entre elas conforme a peça. Nenhum catálogo
+ * decente põe um cartão herói no meio da grelha: a ênfase vem de um selo ou da
+ * posição, nunca de uma forma diferente. O que distingue uma peça está dentro
+ * da janela, e a janela é sempre a mesma.
+ */
+function cartao(p, primeira) {
   const folhas = p.folhas ? p.folhas() : [p.html()];
   const classes = ['peca'];
-  if (destaque) classes.push('destaque');
-  /* "Larga" é sobre papel, não sobre píxeis: uma peça de papel mais larga do
-     que A4 retrato fica ilegível numa coluna estreita e ocupa a linha toda.
-     As peças de WhatsApp são altas e estreitas e cabem na grelha normal. */
-  if (p.un === 'mm' && p.w > 210) classes.push('larga');
 
   /* Duas acções e não uma.
      Imprimir logo é o que se quer quando falta UMA peça — o cartaz caiu da
@@ -1049,17 +1054,16 @@ function cartao(p, destaque) {
      só a primeira. Todas ficam no DOM porque todas têm de sair na impressão;
      o que não pode acontecer é a galeria virar um rolo de dois metros por
      causa de uma peça que é sempre a mesma folha com outro item. */
+  /* A nota de "+1 folha igual" vivia aqui dentro e fazia as molduras terem
+     alturas diferentes conforme a peça. A linha de formato já diz "· 2 folhas",
+     que é o mesmo facto sem custar geometria. */
   const chapas = folhas.map(h =>
-    `<div class="folha-wrap" data-w="${p.w}" data-h="${p.h}" data-un="${p.un}">${h}</div>`).join('') +
-    (folhas.length > 1
-      ? `<div class="mais-folhas">${folhas.length - 1 === 1
-          ? '+1 folha igual'
-          : `+${folhas.length - 1} folhas iguais`}, com os outros itens</div>`
-      : '');
+    `<div class="folha-wrap" data-w="${p.w}" data-h="${p.h}" data-un="${p.un}">${h}</div>`).join('');
 
   return `<article class="${classes.join(' ')}" id="peca-${p.id}" data-peca="${p.id}">
     <div class="peca-corpo">
-      <div class="moldura">${chapas}</div>
+      <div class="moldura">${chapas}${
+        primeira ? '<span class="selo">Comece por esta</span>' : ''}</div>
       <div class="peca-txt">
         <header>
           <h3>${esc(p.titulo)}</h3>
@@ -1073,50 +1077,37 @@ function cartao(p, destaque) {
 }
 
 /**
- * Encolhe cada folha para caber na moldura, sem lhe tocar nas medidas.
+ * Encolhe cada folha para caber na janela, sem lhe tocar nas medidas.
  *
  * A folha continua a ter as medidas reais em milímetros — só é vista mais
- * pequena. É por isso que a impressão sai certa mesmo com a pré-visualização
- * encolhida, e é a razão de o `transform:scale()` existir aqui em vez de haver
+ * pequena. É por isso que a impressão sai certa com a pré-visualização
+ * encolhida, e a razão de o `transform:scale()` existir aqui em vez de haver
  * duas medidas para a mesma peça.
  *
- * Duas armadilhas, ambas já pagas:
+ * A janela tem uma proporção fixa (ver `--proporcao` no CSS) e é o CSS que a
+ * dimensiona; aqui só se mede o que ele decidiu. Chegou a haver uma altura em
+ * píxeis definida no CSS e lida aqui, e isso obrigava a três valores diferentes
+ * para três tipos de cartão — que era exactamente o problema a resolver.
  *
- * 1. `clientWidth` INCLUI o padding. A moldura tem 8 px de cada lado, por isso
- *    medir assim desenhava todas as quinze peças 17 px mais largas do que a
- *    caixa que as segura — a folha passava por cima da moldura à direita e em
- *    baixo. Parecia um problema de A4 contra Letter e não era: era isto.
- * 2. Cabe na largura não é cabe. Encolher só pela largura dá molduras de
- *    alturas todas diferentes — um A3 retrato fica com o dobro da altura de um
- *    cartão. Agora usa-se o menor dos dois factores, e a folha é centrada no
- *    espaço que sobra: a grelha passa a ler-se como uma prateleira.
+ * Cabe na largura NÃO é cabe: usa-se o menor dos dois factores e centra-se o
+ * que sobra, para um A3 retrato e um cartão de visita ocuparem a mesma caixa.
  */
 function escalar() {
   document.querySelectorAll('.folha-wrap').forEach(w => {
     const un = w.dataset.un;
     const wpx = parseFloat(w.dataset.w) * (un === 'mm' ? MM : 1);
     const hpx = parseFloat(w.dataset.h) * (un === 'mm' ? MM : 1);
+    const cw = w.clientWidth, ch = w.clientHeight;
+    if (!cw || !ch || !wpx || !hpx) return;
 
-    const mold = w.parentElement;
-    const cs = getComputedStyle(mold);
-    const disp = (mold.clientWidth || w.clientWidth)
-      - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
-    if (!disp || disp <= 0) return;
-
-    /* A altura da janela vem do CSS (--altura-previa). Sem ela — impressão, ou
-       um browser que não a resolva — volta-se ao comportamento antigo de caber
-       só pela largura, que nunca corta nada. */
-    const alvo = parseFloat(cs.getPropertyValue('--altura-previa')) || 0;
-    const k = alvo > 0 ? Math.min(disp / wpx, alvo / hpx) : disp / wpx;
-
+    /* 4% de folga para a folha não encostar à moldura. É o que separa uma
+       grelha de catálogo de uma folha de contactos: o objecto respira dentro
+       da caixa. Não afecta o piso de 26 mm — `marcaMinima()` divide pela
+       escala antes de converter para milímetros. */
+    const k = Math.min(cw / wpx, ch / hpx) * 0.96;
     w.style.setProperty('--escala', k);
-    w.style.width = disp + 'px';
-    w.style.height = (alvo > 0 ? alvo : hpx * k) + 'px';
-    /* Centrar o que sobra. Sem isto as folhas estreitas — o cartão de visita, a
-       faixa de braço — encostavam à esquerda e a grelha ficava torta. */
-    w.style.setProperty('--desvio', Math.max(0, (disp - wpx * k) / 2) + 'px');
-    w.style.setProperty('--desvio-y',
-      Math.max(0, ((alvo > 0 ? alvo : hpx * k) - hpx * k) / 2) + 'px');
+    w.style.setProperty('--desvio', ((cw - wpx * k) / 2) + 'px');
+    w.style.setProperty('--desvio-y', ((ch - hpx * k) / 2) + 'px');
 
     const f = w.querySelector('.folha');
     if (f) f.style.setProperty('--escala', k);

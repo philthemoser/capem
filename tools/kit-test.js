@@ -108,13 +108,27 @@ const CENTRO = {
   });
   ok('nenhuma peça transborda a folha', trans.length === 0, trans.join(' · '));
 
+  /* Dez etiquetas de caixa são cinco folhas. Todas têm de estar no DOM, porque
+     todas saem na impressão; só uma pode aparecer no ecrã, senão a galeria vira
+     um rolo de dois metros feito da mesma folha com outro item.
+
+     `visiveis` conta pelo estilo COMPUTADO. A versão anterior procurava
+     `style*="none"` no atributo — e como a regra que as esconde vive na folha
+     de estilos e não em atributos, essa contagem dava sempre o total e nunca
+     podia falhar. Um teste que não podia falhar não estava a verificar nada.
+
+     Quantas folhas são passou a estar na linha do formato ("· 2 folhas"): a
+     nota que vivia dentro da moldura dava-lhe alturas diferentes conforme a
+     peça, e era o mesmo facto a custar geometria. */
   const multi = await p.evaluate(() => ({
-    visiveis: document.querySelectorAll('#peca-etiqueta .folha-wrap:not([style*="none"])').length,
+    visiveis: [...document.querySelectorAll('#peca-etiqueta .folha-wrap')]
+      .filter(w => getComputedStyle(w).display !== 'none').length,
     total: document.querySelectorAll('#peca-etiqueta .folha-wrap').length,
-    aviso: !!document.querySelector('#peca-etiqueta .mais-folhas')
+    fmt: (document.querySelector('#peca-etiqueta .fmt') || {}).textContent || ''
   }));
-  ok('peça multi-folha mostra uma folha e diz quantas há',
-    multi.total > 1 && multi.aviso, JSON.stringify(multi));
+  ok('uma peça multi-folha tem todas as folhas no DOM', multi.total > 1, JSON.stringify(multi));
+  ok('mas mostra uma só no ecrã', multi.visiveis === 1, JSON.stringify(multi));
+  ok('e diz quantas são na linha do formato', /\d+ folhas/.test(multi.fmt), multi.fmt);
 
   console.log('\npiso do ícone');
   const NOMES = [

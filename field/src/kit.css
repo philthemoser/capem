@@ -369,32 +369,35 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .familia > p { margin: 0 0 18px; font: 500 13.5px/1.55 var(--fonte); color: var(--texto-2); max-width: 68ch; }
 
+/* `align-items: stretch` (o valor por omissão, agora que `start` saiu) é o que
+   faz os cartões de uma linha terem todos a mesma altura. Com o botão preso ao
+   fundo, as acções alinham-se de linha para linha sem ser preciso cortar uma
+   única descrição. */
 .pecas {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 20px; align-items: start;
+  gap: 20px 18px;
 }
 
-.peca { min-width: 0; }
-.peca-corpo { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.peca { min-width: 0; display: flex; }
+.peca-corpo { display: flex; flex-direction: column; gap: 10px; min-width: 0; width: 100%; }
 
 .moldura {
+  position: relative;
   background: var(--papel);
   border: 1.5px solid var(--tinta);
   padding: 8px;
-  display: flex; flex-direction: column; gap: 8px;
   min-width: 0;
 }
-/* A altura fixa da janela de pré-visualização.
-   Lê-se no JS (`--altura-previa`) e é o que faz todas as molduras terem a mesma
-   altura, independentemente de a peça ser um A3 retrato ou um cartão de visita.
-   Na impressão é retirada, porque aí a folha é a folha. */
-.moldura { --altura-previa: 300px; }
-.peca.destaque .moldura { --altura-previa: 380px; }
-/* Uma peça que ocupa a linha toda tem espaço para ser vista. A placa de rua é
-   um A3 RETRATO — numa janela de 300 px ficava do tamanho de um selo dentro de
-   uma moldura de 780 px de largura. */
-.peca.larga .moldura { --altura-previa: 440px; }
-@media (max-width: 700px) { .moldura { --altura-previa: 260px; } }
+/* A proporção da janela. Uma só, para as quinze peças.
+   Um A3 retrato, um A5 paisagem e um cartão de visita caem todos na mesma
+   caixa e leem-se como comparáveis — é o que um catálogo faz com uma garrafa
+   alta e uma caixa baixa. O tamanho real continua escrito por baixo, na linha
+   do formato, que é onde a informação de tamanho pertence. */
+/* Quadrada, e a matemática é a razão: numa janela 3:4, um A4 retrato ocupava
+   0,707 da altura ao quadrado e um A4 PAISAGEM só 0,398 — 56% da área do
+   irmão, pela mesma folha virada de lado. Numa janela quadrada os dois ocupam
+   exactamente a mesma área. É o que faz a grelha assentar. */
+.folha-wrap { aspect-ratio: 1 / 1; }
 
 /* A folha fica no fluxo, com as medidas reais, e é a janela que a corta
    (`overflow: hidden`) e a encolhe (`transform`). Chegou a ser `absolute` para
@@ -411,6 +414,15 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   box-shadow: 0 0 0 1px var(--tenue);
 }
 
+/* O selo da primeira peça de cada família. A hierarquia que antes era um
+   cartão maior, agora sem custar geometria à grelha. */
+.selo {
+  position: absolute; top: 0; left: 0; z-index: 2;
+  padding: 5px 9px;
+  font: 700 10px/1 var(--fonte); text-transform: uppercase; letter-spacing: .08em;
+  background: var(--tinta); color: var(--papel);
+}
+
 /* Só a primeira folha aparece no ecrã; na impressão aparecem todas. */
 .moldura .folha-wrap:not(:first-child) { display: none; }
 .mais-folhas {
@@ -418,12 +430,15 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   padding: 2px 2px 0; text-align: center;
 }
 
-.peca-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.peca-txt { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
 .peca-txt header { display: flex; flex-direction: column; gap: 3px; }
 .peca-txt h3 { margin: 0; font: 700 14px/1.25 var(--fonte); }
 .peca-txt .fmt { font: 500 11px/1.3 var(--mono); color: var(--texto-2); }
 .peca-txt p { margin: 0; font: 500 12.5px/1.5 var(--fonte); color: var(--texto-2); }
-.peca-acoes { margin-top: 2px; }
+/* `auto` e não 2 px: empurra as acções para o fundo do cartão, e como os
+   cartões de uma linha têm a mesma altura, os botões ficam todos alinhados
+   mesmo com descrições de duas, três ou quatro linhas. */
+.peca-acoes { margin-top: auto; padding-top: 4px; }
 .acao {
   padding: 8px 12px;
   font: 700 11.5px/1 var(--fonte); text-transform: uppercase; letter-spacing: .06em;
@@ -432,23 +447,8 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .acao:hover { background: var(--papel); color: var(--tinta); }
 
-/* A peça em destaque: folha à esquerda, texto à direita, ambos maiores. */
-.peca.destaque { margin: 0 0 24px; }
-.peca.destaque .peca-txt h3 { font-size: 19px; }
-.peca.destaque .peca-txt p { font-size: 14px; max-width: 52ch; }
-.peca.destaque .acao { padding: 11px 16px; font-size: 12.5px; }
-@media (min-width: 760px) {
-  .peca.destaque .peca-corpo {
-    flex-direction: row; align-items: flex-start; gap: 24px;
-  }
-  .peca.destaque .moldura { flex: none; width: 300px; }
-  .peca.destaque .peca-txt { flex: 1; min-width: 0; padding-top: 4px; }
-}
-/* Peças mais largas do que A4 retrato: a folha por cima, o texto por baixo. */
-.peca.larga { grid-column: 1 / -1; }
-.peca.larga .moldura { max-width: 780px; }
-.peca.destaque.larga .peca-corpo { flex-direction: column; }
-.peca.destaque.larga .moldura { width: auto; max-width: 780px; }
+/* (As antigas regras de .destaque e .larga saíram daqui: a grelha passou a ter
+   uma geometria só, e a ênfase vive no selo.) */
 
 .rodape {
   padding: 26px 18px 0; margin-top: 24px;
@@ -829,7 +829,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .familia > h2, .familia > p, .zona, .alerta-boot, .modal { display: none !important; }
   .tela, .colunas, .painel, .familia, .pecas { display: block; padding: 0; margin: 0; max-width: none; }
   .moldura { box-shadow: none; overflow: visible; }
-  .folha-wrap { width: auto !important; height: auto !important; overflow: visible; }
+  .selo { display: none !important; }
+  .folha-wrap { width: auto !important; height: auto !important; overflow: visible;
+    aspect-ratio: auto !important; }
   /* A folha é absoluta no ecrã para poder ser centrada dentro de uma janela de
      altura fixa. Na impressão volta ao fluxo, senão sai uma página em branco
      com a peça encostada ao canto. */

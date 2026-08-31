@@ -225,7 +225,7 @@ function paginaCentro(centro, base, urlCanonica) {
     <ul class="marcas">${nao.map(i => `<li>${svgProibido(i.id)}<span>${esc(i.rotulo)}</span></li>`).join('')}</ul>
   </section>
 
-  <section class="contacto">
+  <section class="contato">
     ${d.endereco ? `<p class="lin">${svgIcone('pino')}<span>${esc(d.endereco)}</span></p>` : ''}
     ${tel ? `<p class="lin"><a href="tel:${esc(telLink)}">${svgIcone('telefone')}<span>${esc(tel)}</span></a></p>` : ''}
     ${centro.publicado ? `<p class="carimbo">Lista de ${dataCurta(centro.publicado)}</p>` : ''}
@@ -338,8 +338,8 @@ function paginaInicial({ contagem, base }) {
   </div>
 
   <footer class="pe">
-    <p class="creditos">Nada aqui recolhe dados de quem é atendido — só a morada,
-      o horário e o telefone de um edifício.
+    <p class="creditos">Nada aqui coleta dados de quem é atendido — só o endereço,
+      o horário e o telefone de um prédio.
       <a href="https://github.com/philthemoser/capem">O código é aberto.</a></p>
   </footer>
 </main>`
@@ -379,7 +379,7 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
     return `<li class="c-item ${i.nivel}">
       <a href="${esc(x.url || base + '/' + x.slug)}">
         <span class="c-nome">${esc(d.nome || x.slug)}</span>
-        <span class="c-morada">${esc(d.endereco || '')}</span>
+        <span class="c-endereco">${esc(d.endereco || '')}</span>
         <span class="c-quando">${esc(quando)}</span>
         ${d.pausado
           ? `<span class="c-pausa">${svgIcone('fechado')} Não está recebendo agora</span>`
@@ -421,7 +421,7 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
   <header>
     <h1>Centros de apoio</h1>
     <p class="entrada">Procure pelo nome do centro, pelo lugar, ou pelo que
-      quer doar — escreva <b>cobertor</b> e vê quem está a pedir cobertores.
+      quer doar — escreva <b>cobertor</b> e veja quem está pedindo cobertores.
       <b>Ligue antes de vir</b> se a lista não for de hoje.</p>
   </header>
 
@@ -458,7 +458,7 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
     : total === 0 && filtrada
       ? `<p class="sem-resultado">Nenhum centro com isso. Tente uma palavra só
           — "agua" em vez de "água mineral" — ou <a href="/centros">veja todos</a>.</p>`
-      : `<p class="vazio">Ainda não há centros no ar. Se está a montar um,
+      : `<p class="vazio">Ainda não há centros no ar. Se você está montando um,
           <a href="/novo">peça a página do seu centro</a>.</p>`}
 
   <footer class="pe">
@@ -525,7 +525,7 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
 
   ${feito ? '' : `
   <p class="entrada">Escreva o endereço da página do seu centro. Não precisa de
-    saber o código — é isso que está a pedir.</p>
+    saber o código — é isso que você está pedindo.</p>
 
   <form method="post" action="/pedir-codigo">
     <label class="campo" for="slug">Endereço da sua página</label>
@@ -574,7 +574,7 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
  *
  * Três decisões que valem a pena:
  *
- *   · **O nome, a morada e o telefone aparecem, mas não se editam.** Foram
+ *   · **O nome, a endereco e o telefone aparecem, mas não se editam.** Foram
  *     verificados à mão e a publicação já os ignorava; mostrá-los apagados diz
  *     isso sem uma frase de explicação, e evita que alguém escreva por cima à
  *     espera que mude.
@@ -672,7 +672,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
 <main class="atualizar faixas">
   <header class="topo-c">
     <h1>${esc(d.nome || centro.slug)}</h1>
-    <p class="morada">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
+    <p class="endereco">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
   </header>
 
   ${feito ? `<p class="feito">Publicado. A sua página já mostra esta lista.
@@ -680,7 +680,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
   ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
   ${faixaIdade(centro.publicado)}
   ${i.nivel === 'fresca' && !feito
-    ? '<p class="idade fresca-ok">A sua lista é de hoje. Se nada mudou, não precisa de fazer nada.</p>'
+    ? '<p class="idade fresca-ok">A sua lista é de hoje. Se nada mudou, não precisa fazer nada.</p>'
     : ''}
 
   <form method="post" action="/atualizar" class="form-atualizar">
@@ -716,7 +716,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
         português.</p>
       <label class="sr-only" for="livres">Outros itens, um por linha</label>
       <textarea id="livres" name="livres" rows="3" maxlength="600"
-        placeholder="Ração para cães&#10;Carregador de telemóvel">${esc(livres.map(x => x.rotulo + (x.q ? ' | ' + x.q : '')).join('\n'))}</textarea>
+        placeholder="Ração para cães&#10;Carregador de celular">${esc(livres.map(x => x.rotulo + (x.q ? ' | ' + x.q : '')).join('\n'))}</textarea>
       <p class="ajuda">Para pôr quantidade, escreva <b>Ração para cães | 20 kg</b>.</p>
     </section>
 
@@ -750,7 +750,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
   </form>
 
   <footer class="pe">
-    <p><b>O nome, a morada e o telefone não se mudam aqui.</b> Foram conferidos
+    <p><b>O nome, o endereço e o telefone não mudam aqui.</b> Foram conferidos
       à mão quando o centro foi aprovado. Se estiverem errados, fale com quem
       aprovou — mudá-los sem ninguém ver tirava o valor à verificação.</p>
     <p><a href="${esc(url)}">Ver a minha página</a> · <a href="/kit">Imprimir material novo</a></p>
@@ -828,7 +828,7 @@ function paginaNovo({ erro }) {
     <p class="entrada">Recebe um código na hora — é o que lhe deixa publicar a lista
       todos os dias, a partir do <a href="/kit">kit</a>. Cada pedido é verificado à
       mão antes de a página ir para o ar: um endereço errado numa emergência manda
-      pessoas para o sítio errado.</p>
+      pessoas para o lugar errado.</p>
   </header>
 
   ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
@@ -901,7 +901,7 @@ function textoCodigo(nome, slug, codigo, base, url) {
  * Duas situações, o mesmo ecrã: um centro acabado de aprovar, e um centro a
  * quem se emite um código novo. Nos dois casos o código aparece UMA vez e o
  * destino certo é o telefone que foi verificado à mão — não "escolha um
- * contacto", não quem quer que tenha preenchido um formulário.
+ * contato", não quem quer que tenha preenchido um formulário.
  *
  * Esta página não existe do lado público. O código deixou de nascer no pedido:
  * antes, quem soubesse o nome de uma paróquia recebia na hora uma chave de
@@ -929,7 +929,7 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, contato,
         <b>O código anterior deixou de funcionar</b> — se estava perdido, podia
         estar perdido para alguém.</p>`
     : `<p class="entrada">A página de <b>${esc(nome || slug)}</b> está no ar.
-        Falta a única coisa que este ecrã pode fazer e mais ninguém: mandar o
+        Falta a única coisa que esta tela pode fazer e mais ninguém: mandar o
         código a quem o vai usar.</p>`}
 
   <section class="codigo-caixa">
@@ -946,7 +946,7 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, contato,
            Mandar para ${esc(contato)}</a>
          <p class="ajuda">É o telefone que está na página do centro — o que foi
            conferido na aprovação. A mensagem leva o endereço, o código, e onde
-           se atualiza${reemitido ? '' : ', e deixa o seu contacto guardado no telemóvel do centro'}.</p>`
+           se atualiza${reemitido ? '' : ', e deixa o seu contato salvo no celular do centro'}.</p>`
       : `<p class="erro-form">Este centro não tem um telefone utilizável, por
            isso não há para onde mandar. Ligue-lhe de outra forma — sem o
            código, a página fica no ar e ninguém a pode atualizar.</p>`}
@@ -999,8 +999,8 @@ function paginaPedidoRecebido({ slug, url, base }) {
   <p><a class="btn btn-primario largo" href="/kit">Ir para o kit e imprimir</a></p>
 
   <footer class="pe">
-    <p>Se ninguém ligar em 24 horas, ligue-nos — ou peça outra vez. Um centro
-      parado à espera de uma verificação é o pior sítio para esta ferramenta
+    <p>Se ninguém ligar em 24 horas, ligue para nós — ou peça outra vez. Um centro
+      parado esperando uma verificação é o pior lugar para esta ferramenta
       falhar.</p>
   </footer>
 </main>`
@@ -1028,9 +1028,9 @@ function textoEmpurrao(centro, url) {
     : `A lista do seu centro está com ${dias} dias.`;
   return `Olá! Aqui é do CAPEM.
 
-${quando} Quem lê o QR dos cartazes vê essa data, e a página já está a avisar que pode não valer.
+${quando} Quem lê o QR dos cartazes vê essa data, e a página já está avisando que pode não valer.
 
-Atualizar leva meio minuto: abra ${url.replace(/\/[^/]*$/, '')}/kit no telemóvel, marque o que precisam hoje e carregue em Publicar. O código é o mesmo de sempre.
+Atualizar leva meio minuto: abra ${url.replace(/\/[^/]*$/, '')}/kit no celular, marque o que precisam hoje e clique em Publicar. O código é o mesmo de sempre.
 
 Se o centro fechou ou parou de receber, diga só — marcamos a página e ninguém aparece à porta em vão.`;
 }
@@ -1043,7 +1043,7 @@ Se o centro fechou ou parou de receber, diga só — marcamos a página e ningu�
  * de vez em quando. Um passo do processo que só o administrador via.
  *
  * Manda-se à mão, do telemóvel de quem aprova, e isso é metade do valor: o
- * centro fica com um contacto humano guardado. Quando o código se perder — e
+ * centro fica com um contato humano guardado. Quando o código se perder — e
  * vai perder-se — há para onde ligar que não depende de encontrar a página
  * certa num site.
  */
@@ -1063,7 +1063,7 @@ function textoAprovado(d, url, base, codigo) {
     '',
     'Guarde esta mensagem — e escreva o código também num papel, para o dia em que a bateria acabar. Quem estiver de turno vai precisar dele.',
     '',
-    'Guarde também este contacto. Se perder o código, ou precisar de alguma coisa, é por aqui.'
+    'Salve também este contato. Se perder o código, ou precisar de alguma coisa, é por aqui.'
   ].join('\n');
 }
 
@@ -1134,7 +1134,7 @@ function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, err
   <h2>No ar</h2>
   <p class="entrada">Se alguém ligar a dizer que perdeu o código, emita outro
     aqui — <b>depois de confirmar ao telefone que é mesmo do centro</b>. O número
-    guardado está no cartão do pedido. Emitir um código é dar acesso de escrita
+    está no cartão do pedido. Emitir um código é dar acesso de escrita
     à página; essa confirmação é a única que existe, e não há formulário que a
     faça por si.</p>
   ${aprovados.length ? `<ul class="lista-no-ar">${aprovados.map(c => {
@@ -1252,13 +1252,13 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .pausa h2{margin:0;display:block;font-size:clamp(24px,6.5vw,38px);line-height:.98}
 .pausa p{margin:8px 0 0;font:500 clamp(15px,4vw,18px)/1.35 var(--fonte);color:var(--texto-2)}
 
-/* --- contacto --- */
-.contacto{border-top:6px solid var(--tinta)}
-.contacto .lin{display:flex;align-items:center;gap:11px;margin:0 0 10px}
-.contacto .lin a{display:flex;align-items:center;gap:11px;text-decoration:none}
-.contacto .lin svg{width:22px;height:22px;flex:none}
-.contacto .lin span{font:700 clamp(17px,4.6vw,22px)/1.25 var(--fonte)}
-.contacto .lin a span{text-decoration:underline;text-underline-offset:3px}
+/* --- contato --- */
+.contato{border-top:6px solid var(--tinta)}
+.contato .lin{display:flex;align-items:center;gap:11px;margin:0 0 10px}
+.contato .lin a{display:flex;align-items:center;gap:11px;text-decoration:none}
+.contato .lin svg{width:22px;height:22px;flex:none}
+.contato .lin span{font:700 clamp(17px,4.6vw,22px)/1.25 var(--fonte)}
+.contato .lin a span{text-decoration:underline;text-underline-offset:3px}
 .carimbo{margin:16px 0 0;font:600 13px/1.2 var(--mono);color:var(--texto-2)}
 
 /* --- partilhar --- */
@@ -1325,7 +1325,7 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .c-item:last-child{border-bottom:2px solid var(--tinta)}
 .c-item a{display:grid;gap:4px;padding:15px 0;text-decoration:none}
 .c-nome{font:800 17px/1.25 var(--fonte)}
-.c-morada{font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
+.c-endereco{font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
 .c-quando{font:600 12px/1.2 var(--mono);color:var(--texto-2)}
 /* Um centro que não toca na página há semanas é uma viagem em vão à espera de
    acontecer. Fica no fim da lista e diz-se em vermelho. */
@@ -1373,7 +1373,7 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .feito a{color:#fff}
 .idade.fresca-ok{background:var(--claro);color:var(--texto-2);
   border-left:6px solid var(--permitido)}
-.atualizar .morada{margin:6px 0 0;font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
+.atualizar .endereco{margin:6px 0 0;font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
 .bloco-a{padding:18px var(--goteira);border-top:6px solid var(--tinta)}
 .bloco-a h2{margin:0 0 10px}
 /* Mais específico do que ".btn.largo{width:100%}", que de outro modo ganha e

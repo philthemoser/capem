@@ -429,6 +429,29 @@ telefone de um edifício — informação que o centro já quer ver colada na po
 Isso mantém a posição de proteção de dados simples, ao contrário do protótipo
 (ver `docs/data-protection.md`).
 
+## A língua da interface é o português do Brasil
+
+Quem usa isto é um coordenador em Canoas e um vizinho com cobertores no carro.
+O kit impresso trabalha muito para ser reconhecido como local — as marcas, o
+"não traga", os rótulos do catálogo. Uma interface que diz **telemóvel** desfaz
+isso numa palavra: percebe-se à mesma, e percebe-se também que foi feita por
+alguém que não está lá.
+
+Foi exactamente o que aconteceu. O texto visível acumulou seis *telemóvel*,
+nove *ficheiro*, quatro *morada* e nove gerúndios à portuguesa antes de alguém
+reparar — porque cada frase estava bem escrita, só não estava escrita no lugar
+certo.
+
+`node tools/pt-br.js` lê **só o que o utilizador vê** — fora comentários, fora
+selectores de CSS, fora nomes de variáveis — e falha em: telemóvel, ecrã,
+ficheiro, morada, contacto, utilizador, equipa, autocarro, descarregar,
+"carregue em", sítio, "está a fazer", "precisa de fazer", "tem de fazer".
+
+**Os comentários do código continuam em português europeu**, de propósito: são
+para quem mexe no código e não para quem o usa. Se um dia isso incomodar quem
+mantém o projecto, muda-se — mas é ruído a mais para juntar a um diff de texto
+visível.
+
 ## O CSS, e como não o desarrumar
 
 A folha de estilos vive num template literal no fim de `server/pagina.js` — uma
@@ -474,6 +497,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 node tools/server-test.js    # 228 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 node tools/goteira.js        # a mesma goteira em todas as páginas
+node tools/pt-br.js          # nada de português europeu no texto visível
 ```
 
 Por ordem do que interessa: uma página que mente sobre a sua idade; as marcas

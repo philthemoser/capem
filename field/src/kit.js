@@ -215,7 +215,7 @@ const PASSOS = [
   { ic: 'cartaz', t: 'Cartaz de porta',
     d: 'Cole na entrada, à altura dos olhos. É a peça que faz mais diferença — se só imprimir uma, imprima esta.' },
   { ic: 'aberto', t: 'Sinal da mesa de triagem',
-    d: 'Em cima da mesa onde recebe as doações, virado para quem chega. É ele que dá cobertura a quem tem de recusar.' },
+    d: 'Em cima da mesa onde recebe as doações, virado para quem chega. É ele que dá cobertura a quem precisa recusar.' },
   { ic: 'caixa', t: 'Etiquetas de caixa',
     d: 'Uma por caixa, colada de fora. A partir daí um voluntário novo separa sozinho, sem perguntar nada a ninguém.' },
   { ic: 'pessoa', t: 'Crachás e faixas de braço',
@@ -236,12 +236,12 @@ const PECAS = [
   {
     id: 'instrucoes', fam: 0, titulo: 'Folha de instruções', fmt: 'A4 retrato · para a parede do fundo',
     w: 210, h: 297, un: 'mm',
-    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipa passa — não é para o doador, é para quem está a trabalhar.',
+    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipe passa — não é para o doador, é para quem está trabalhando.',
     html: () => `<div class="folha f-instr">
       <div class="topo-c">
         <div class="tipo">${esc(V.nome())}</div>
         <div class="nome preta">COMO USAR ESTE KIT</div>
-        <div class="sub">Pregue esta folha onde a equipa passa. Não é para o doador.</div>
+        <div class="sub">Pregue esta folha onde a equipe passa. Não é para o doador.</div>
       </div>
 
       <div class="bloco-i">
@@ -451,7 +451,7 @@ const PECAS = [
           <div class="g2">${V.nao().map(i => mi(i, true)).join('')}</div>
         </div>
       </div>
-      <div class="protege">Quem está a recusar uma doação está a seguir esta folha. Não é uma decisão pessoal — e é para isso que ela está aqui.</div>
+      <div class="protege">Quem recusa uma doação está seguindo esta folha. Não é uma decisão pessoal — e é para isso que ela está aqui.</div>
     </div>`
   },
 
@@ -529,7 +529,7 @@ const PECAS = [
         <div class="h preta">PRECISAMOS HOJE</div>
         <div class="g4">${V.precisa8().map(i => mi(i)).join('')}</div>
       </div>
-      <div class="leve"><b>Leve o contacto</b>${carimbo()}</div>
+      <div class="leve"><b>Leve o contato</b>${carimbo()}</div>
       <div class="tiras">${Array.from({ length: 8 }, () =>
         `<div class="tira"><span>${esc(V.tel() || V.nome())}</span></div>`).join('')}</div>
     </div>`

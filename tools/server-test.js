@@ -184,7 +184,7 @@ const DIA = 86400000;
   ok('e o endereço da página', waAp.includes(slug));
   ok('e onde se atualiza', waAp.includes('/atualizar'));
   /* Metade do valor: o centro fica com um contacto humano guardado. */
-  ok('e pede que guardem o contacto', /[Gg]uarde também este contacto/.test(waAp));
+  ok('e pede que salvem o contato', /[Ss]alve também este contato/.test(waAp));
 
   /* Aprovar outra vez não pode invalidar a chave que já está num telemóvel. */
   S.db.decidir(slug, 'pendente');
@@ -481,7 +481,7 @@ const DIA = 86400000;
      dava a entender que se podia mudar, e a publicação ignora-o na mesma. */
   ok('o nome não é um campo editável', !/name="nome"/.test(html));
   ok('nem a morada', !/name="endereco"/.test(html));
-  ok('e a página diz porquê', /não se mudam aqui/.test(html));
+  ok('e a página diz porquê', /não mudam aqui/.test(html));
 
   r = await formN('/atualizar', { slug: slugFinal, codigo, publicar: '1',
     precisa: ['cobertor', 'fralda'], 'q-cobertor': '20 caixas', 'q-fralda': '',

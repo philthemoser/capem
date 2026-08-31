@@ -878,7 +878,7 @@ const PASSOS = [
   { ic: 'cartaz', t: 'Cartaz de porta',
     d: 'Cole na entrada, à altura dos olhos. É a peça que faz mais diferença — se só imprimir uma, imprima esta.' },
   { ic: 'aberto', t: 'Sinal da mesa de triagem',
-    d: 'Em cima da mesa onde recebe as doações, virado para quem chega. É ele que dá cobertura a quem tem de recusar.' },
+    d: 'Em cima da mesa onde recebe as doações, virado para quem chega. É ele que dá cobertura a quem precisa recusar.' },
   { ic: 'caixa', t: 'Etiquetas de caixa',
     d: 'Uma por caixa, colada de fora. A partir daí um voluntário novo separa sozinho, sem perguntar nada a ninguém.' },
   { ic: 'pessoa', t: 'Crachás e faixas de braço',
@@ -899,12 +899,12 @@ const PECAS = [
   {
     id: 'instrucoes', fam: 0, titulo: 'Folha de instruções', fmt: 'A4 retrato · para a parede do fundo',
     w: 210, h: 297, un: 'mm',
-    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipa passa — não é para o doador, é para quem está a trabalhar.',
+    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipe passa — não é para o doador, é para quem está trabalhando.',
     html: () => `<div class="folha f-instr">
       <div class="topo-c">
         <div class="tipo">${esc(V.nome())}</div>
         <div class="nome preta">COMO USAR ESTE KIT</div>
-        <div class="sub">Pregue esta folha onde a equipa passa. Não é para o doador.</div>
+        <div class="sub">Pregue esta folha onde a equipe passa. Não é para o doador.</div>
       </div>
 
       <div class="bloco-i">
@@ -1114,7 +1114,7 @@ const PECAS = [
           <div class="g2">${V.nao().map(i => mi(i, true)).join('')}</div>
         </div>
       </div>
-      <div class="protege">Quem está a recusar uma doação está a seguir esta folha. Não é uma decisão pessoal — e é para isso que ela está aqui.</div>
+      <div class="protege">Quem recusa uma doação está seguindo esta folha. Não é uma decisão pessoal — e é para isso que ela está aqui.</div>
     </div>`
   },
 
@@ -1192,7 +1192,7 @@ const PECAS = [
         <div class="h preta">PRECISAMOS HOJE</div>
         <div class="g4">${V.precisa8().map(i => mi(i)).join('')}</div>
       </div>
-      <div class="leve"><b>Leve o contacto</b>${carimbo()}</div>
+      <div class="leve"><b>Leve o contato</b>${carimbo()}</div>
       <div class="tiras">${Array.from({ length: 8 }, () =>
         `<div class="tira"><span>${esc(V.tel() || V.nome())}</span></div>`).join('')}</div>
     </div>`
@@ -3400,13 +3400,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
      é porque o JavaScript não correu — e é melhor dizê-lo do que deixar um
      formulário morto que parece apenas estranho. -->
 <div id="sem-js" class="alerta-boot">
-  <b>Esta página não está a funcionar como devia.</b>
+  <b>Esta página não está funcionando como devia.</b>
   <p>O JavaScript não correu, por isso as listas estão vazias e nada é gerado.
-    Quase sempre é porque o ficheiro está a ser aberto dentro de um
-    visualizador (uma pré-visualização de anexo, um leitor de ficheiros) em vez
+    Quase sempre é porque o arquivo está sendo aberto dentro de um
+    visualizador (uma pré-visualização de anexo, um leitor de arquivos) em vez
     de um navegador.</p>
-  <p><b>Guarde o ficheiro e abra-o no navegador</b> — Safari, Chrome ou Firefox.
-    No telemóvel: descarregar, depois abrir a partir de <i>Ficheiros</i>.</p>
+  <p><b>Salve o arquivo e abra no navegador</b> — Safari, Chrome ou Firefox.
+    No celular: baixar, depois abrir pelo aplicativo <i>Arquivos</i>.</p>
   <pre id="sem-js-erro" hidden></pre>
 </div>
 
@@ -3454,9 +3454,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
         <p class="estado-pub" id="estado-carga" hidden></p>
         <p class="ajuda">Ainda não tem página? <a id="link-pedir" href="/">Peça uma aqui</a> —
           recebe um código na hora. Ou preencha à mão, aqui abaixo: o kit imprime
-          na mesma, sem servidor e sem cadastro. O código não é guardado neste
+          do mesmo jeito, sem servidor e sem cadastro. O código não fica salvo neste
           aparelho a não ser que o escreva aqui, e nunca sai daqui para outro
-          sítio sem ser o seu servidor.</p>
+          lugar que não seja o seu servidor.</p>
       </section>
 
       <section class="bloco">
@@ -3564,7 +3564,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 
     <main class="painel">
       <!-- A lista de impressão. Só aparece quando tem alguma coisa dentro:
-           uma barra fixa e vazia rouba espaço ao que interessa num telemóvel. -->
+           uma barra fixa e vazia rouba espaço do que interessa num celular. -->
       <div class="barra-lista" id="barra-lista" hidden>
         <div class="bl-txt">
           <b id="lista-conta"></b>
@@ -3624,7 +3624,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
           <div>
             <h4>Nenhuma peça depende do QR</h4>
             <p>Endereço, horário e telefone estão sempre escritos. Numa enchente a
-              bateria acaba e o telemóvel molha-se; o papel continua.</p>
+              bateria acaba e o celular molha; o papel continua.</p>
           </div>
           <div>
             <h4>A data está lá para denunciar</h4>
@@ -3642,7 +3642,7 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 
   <footer class="rodape">
     <p><b>Nada sai deste aparelho.</b> Não há cadastro, servidor nem internet envolvidos.
-      O que escrever fica guardado só aqui, para não ter de repetir amanhã. O ficheiro
+      O que escrever fica salvo só aqui, para não ter que repetir amanhã. O arquivo
       funciona aberto de uma pen, sem rede.</p>
     <p style="margin-top:8px"><b>Antes de imprimir cem folhas, imprima uma.</b>
       Ligue “ver a preto e branco”, imprima o cartaz de porta e leia-o a dois metros.

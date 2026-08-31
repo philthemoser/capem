@@ -12,7 +12,7 @@
  *     o papel obviamente envelhece. Uma página web parece sempre nova, e essa
  *     é precisamente a mentira que aqui é perigosa.
  * ==========================================================================*/
-const { svgIcone, svgProibido, svgAnel, item, ROTULO_BR, ICONES } = require('./compartilhado');
+const { svgIcone, svgProibido, svgAnel, item, ROTULO_BR, ICONES, GRUPOS, RECUSAS } = require('./compartilhado');
 const { linkWhatsApp } = require('./avisos');
 const B = require('./busca');
 
@@ -427,6 +427,203 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
 }
 
 /* ---------------------------------------------------------------------------
+ * A ACTUALIZAÇÃO DIÁRIA
+ *
+ * A página que um coordenador abre todas as manhãs, e a única cujo êxito se
+ * mede em segundos. Tudo o resto neste projecto existe para que esta seja
+ * usada: uma lista que não é tocada envelhece, e uma lista velha manda um
+ * vizinho carregar cinco quilos de arroz até um centro que já não os quer.
+ *
+ * Por isso NÃO é o kit. O kit é a ferramenta de montar um centro — quinze peças,
+ * fontes embutidas, 273 KB. Abri-lo para trocar dois itens é atravessar uma
+ * gráfica para escrever um recado. Esta página são 30 KB, abre com uma barra de
+ * rede, e mostra exactamente uma coisa: o que precisamos hoje.
+ *
+ * Três decisões que valem a pena:
+ *
+ *   · **O nome, a morada e o telefone aparecem, mas não se editam.** Foram
+ *     verificados à mão e a publicação já os ignorava; mostrá-los apagados diz
+ *     isso sem uma frase de explicação, e evita que alguém escreva por cima à
+ *     espera que mude.
+ *   · **Formulário normal, sem JavaScript obrigatório.** Um POST, um redirect.
+ *     O telemóvel do coordenador é o pior aparelho da cadeia toda.
+ *   · **A idade da lista está no topo, a dizer-se em voz alta.** É a única
+ *     razão para ele estar aqui, e a única coisa que a página sabe melhor do
+ *     que ele.
+ * -------------------------------------------------------------------------*/
+function paginaAtualizarEntrada({ erro, slug }) {
+  return molde({
+    titulo: 'Atualizar a lista — CAPEM',
+    descricao: 'Atualize a lista de necessidades do seu centro.',
+    corpo: `
+<main class="entrar">
+  <header>
+    <p class="tipo"><a href="/">CAPEM</a></p>
+    <h1>Atualizar a lista de hoje</h1>
+    <p class="entrada">Trinta segundos. Escreva o endereço da sua página e o
+      código que recebeu — o mesmo que está no papel colado ao lado do
+      computador.</p>
+  </header>
+
+  ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
+
+  <form method="post" action="/atualizar">
+    <label class="campo" for="slug">Endereço da sua página</label>
+    <input id="slug" name="slug" type="text" value="${esc(slug || '')}"
+      placeholder="canoas-ss" autocomplete="off" spellcheck="false"
+      inputmode="url" maxlength="60" required>
+    <p class="ajuda">Só o nome chega — a parte depois da barra. Está no rodapé
+      de todas as peças que imprimiu.</p>
+
+    <label class="campo" for="codigo">Código</label>
+    <input id="codigo" name="codigo" type="text" placeholder="ABCD-2345"
+      autocomplete="off" spellcheck="false" maxlength="20" required>
+    <p class="ajuda">Oito letras e números. Não há O, nem I, nem S — se parecer
+      um desses, é zero, um ou cinco.</p>
+
+    <button class="btn btn-primario largo" type="submit">Ver a minha lista</button>
+  </form>
+
+  <footer class="pe">
+    <p><b>Ainda não tem página?</b> <a href="/novo">Peça uma aqui.</a></p>
+    <p><b>Perdeu o código?</b> Não há como recuperá-lo — só emitir outro. Fale
+      com quem aprovou o seu centro.</p>
+    <p><b>Quer imprimir material novo?</b> <a href="/kit">O kit está aqui</a> —
+      e puxa os seus dados com o mesmo código, sem escrever tudo outra vez.</p>
+  </footer>
+</main>`
+  });
+}
+
+/**
+ * A lista, aberta para edição.
+ *
+ * O estado vem todo do servidor a cada carregamento: não há nada guardado no
+ * aparelho, o que significa que funciona igual no telemóvel do coordenador, no
+ * computador da secretaria e no telemóvel de quem o está a substituir hoje.
+ */
+function paginaAtualizar({ centro, url, erro, feito }) {
+  const d = centro.dados || {};
+  const i = idade(centro.publicado);
+  const escolhidos = new Map();
+  (d.precisa || []).forEach(v => { const x = item(v); if (!x.livre) escolhidos.set(x.id, x.q || ''); });
+  const livres = (d.precisa || []).map(item).filter(x => x.livre);
+  const naoTraga = new Set((d.naoTraga || []).map(v => item(v).id));
+
+  const grupos = GRUPOS.map(g => `
+    <fieldset class="grupo">
+      <legend>${esc(g.g)}</legend>
+      <div class="itens">
+        ${g.ids.map(id => {
+          const on = escolhidos.has(id);
+          return `<label class="item${on ? ' ligado' : ''}">
+            <input type="checkbox" name="precisa" value="${esc(id)}"${on ? ' checked' : ''}>
+            ${svgIcone(id)}
+            <span class="it-nome">${esc(ROTULO_BR[id] || id)}</span>
+            <input class="it-q" type="text" name="q-${esc(id)}" value="${esc(escolhidos.get(id) || '')}"
+              placeholder="quantos?" maxlength="12" autocomplete="off"
+              aria-label="Quantidade de ${esc(ROTULO_BR[id] || id)}">
+          </label>`;
+        }).join('')}
+      </div>
+    </fieldset>`).join('');
+
+  return molde({
+    titulo: `Atualizar — ${d.nome || centro.slug}`,
+    descricao: 'Atualize a lista de necessidades do seu centro.',
+    corpo: `
+<main class="atualizar">
+  <header class="topo-c">
+    <p class="tipo"><a href="/">CAPEM</a> · atualizar</p>
+    <h1>${esc(d.nome || centro.slug)}</h1>
+    <p class="morada">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
+  </header>
+
+  ${feito ? `<p class="feito">Publicado. A sua página já mostra esta lista.
+    <a href="${esc(url)}">Ver a página</a></p>` : ''}
+  ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
+  ${faixaIdade(centro.publicado)}
+  ${i.nivel === 'fresca' && !feito
+    ? '<p class="idade fresca-ok">A sua lista é de hoje. Se nada mudou, não precisa de fazer nada.</p>'
+    : ''}
+
+  <form method="post" action="/atualizar" class="form-atualizar">
+    <input type="hidden" name="slug" value="${esc(centro.slug)}">
+    <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
+    <input type="hidden" name="publicar" value="1">
+
+    <section class="bloco-a">
+      <h2>Estamos recebendo?</h2>
+      <label class="caixa grande">
+        <input type="checkbox" name="pausado" value="1"${d.pausado ? ' checked' : ''}>
+        <span>Não estamos recebendo agora</span>
+      </label>
+      <p class="ajuda">A página passa a dizer isso em vez da lista. Um centro
+        cheio que não consegue pedir para parar continua a receber.</p>
+      <label class="campo" for="motivo">Porquê (opcional)</label>
+      <input id="motivo" name="motivoPausa" type="text" value="${esc(d.motivoPausa || '')}"
+        placeholder="Estamos cheios. Ligue antes de vir." maxlength="140" autocomplete="off">
+    </section>
+
+    <section class="bloco-a">
+      <h2>Precisamos hoje</h2>
+      <p class="ajuda">Toque para ligar e desligar. A quantidade é opcional —
+        cabe <b>200</b>, <b>500 L</b>, <b>20 caixas</b>. Ela só aparece aqui na
+        página, nunca no papel: um número impresso não se corrige.</p>
+      ${grupos}
+    </section>
+
+    <section class="bloco-a">
+      <h2>Outros itens</h2>
+      <p class="ajuda">Um por linha. O que não está no catálogo sai com uma
+        caixa genérica — use com conta, porque não diz nada a quem não lê
+        português.</p>
+      <label class="sr-only" for="livres">Outros itens, um por linha</label>
+      <textarea id="livres" name="livres" rows="3" maxlength="600"
+        placeholder="Ração para cães&#10;Carregador de telemóvel">${esc(livres.map(x => x.rotulo + (x.q ? ' | ' + x.q : '')).join('\n'))}</textarea>
+      <p class="ajuda">Para pôr quantidade, escreva <b>Ração para cães | 20 kg</b>.</p>
+    </section>
+
+    <section class="bloco-a">
+      <h2>Por favor, não traga</h2>
+      <div class="itens recusas">
+        ${RECUSAS.map(id => {
+          const on = naoTraga.has(id);
+          return `<label class="item${on ? ' ligado' : ''}">
+            <input type="checkbox" name="naoTraga" value="${esc(id)}"${on ? ' checked' : ''}>
+            ${svgProibido(id)}
+            <span class="it-nome">${esc(ROTULO_BR[id] || id)}</span>
+          </label>`;
+        }).join('')}
+      </div>
+      <p class="ajuda">É a parte que quase ninguém desenha e a que mais evita
+        transtorno. Nas enchentes de 2024, roupa chegou a 70% de tudo o que foi
+        arrecadado no país.</p>
+    </section>
+
+    <section class="bloco-a">
+      <h2>Horário</h2>
+      <label class="sr-only" for="horario">Horário</label>
+      <input id="horario" name="horario" type="text" value="${esc(d.horario || '')}"
+        placeholder="Todos os dias, 8h às 20h" maxlength="80" autocomplete="off">
+    </section>
+
+    <button class="btn btn-primario largo" type="submit">Publicar a lista de hoje</button>
+    <p class="ajuda">Depois de publicar, mande o link no grupo — é por aí que a
+      lista chega mais longe, e um link nunca fica velho como uma imagem.</p>
+  </form>
+
+  <footer class="pe">
+    <p><b>O nome, a morada e o telefone não se mudam aqui.</b> Foram conferidos
+      à mão quando o centro foi aprovado. Se estiverem errados, fale com quem
+      aprovou — mudá-los sem ninguém ver tirava o valor à verificação.</p>
+    <p><a href="${esc(url)}">Ver a minha página</a> · <a href="/kit">Imprimir material novo</a></p>
+  </footer>
+</main>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
  * A porta de quem gere um centro
  *
  * Faltava. Quem já tinha página não tinha por onde entrar a partir da
@@ -447,12 +644,21 @@ function paginaCentroEntrada({ base }) {
   </header>
 
   <div class="duas-portas">
+    <!-- Primeiro de propósito. É o que se faz TODOS OS DIAS; o kit é o que se
+         faz uma vez. A ordem da página tem de ser a ordem da vida real. -->
+    <a class="porta" href="/atualizar">
+      ${svgIcone('relogio')}
+      <span class="porta-t">Atualizar a lista</span>
+      <span class="porta-d">Trinta segundos, com o seu código. O que precisam hoje,
+        o que já não precisam, e se pararam de receber. É isto que impede o papel
+        colado na porta de ficar velho.</span>
+    </a>
     <a class="porta" href="/kit">
       ${svgIcone('cartaz')}
       <span class="porta-t">Material impresso</span>
       <span class="porta-d">Quinze peças a partir dos mesmos dados — cartaz de porta,
-        etiquetas de caixa, panfletos, crachás. E o botão para publicar a lista de
-        hoje, se já tiver página.</span>
+        etiquetas de caixa, panfletos, crachás. Com o seu código, preenche-se
+        sozinho.</span>
     </a>
     <a class="porta" href="/novo">
       ${svgIcone('pino')}
@@ -732,7 +938,9 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 /* --- as duas portas --- */
 .portas,.lista-centros{padding:24px 20px}
 .duas-portas{display:grid;gap:14px;margin:8px 0 28px}
-@media(min-width:640px){.duas-portas{grid-template-columns:1fr 1fr;gap:18px}}
+/* Chamava-se "duas portas" e passaram a ser três quando a actualização diária
+   ganhou a sua. auto-fit em vez de dois fixos, para não ficar uma órfã. */
+@media(min-width:640px){.duas-portas{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}}
 .porta{display:flex;flex-direction:column;gap:8px;padding:22px 20px;
   border:3px solid var(--tinta);text-decoration:none;background:var(--papel)}
 .porta:hover{background:var(--claro)}
@@ -792,6 +1000,52 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .sem-resultado{margin:18px 0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 .erro-form{margin:0 0 16px;padding:12px 14px;background:var(--proibido);color:#fff;
   font:600 14px/1.45 var(--fonte)}
+
+/* --- actualização diária ---
+   Alvos grandes e poucos por linha. Isto usa-se de manhã, de pé, com uma mão,
+   por alguém que tem outras dezassete coisas para fazer. */
+.entrar form{margin:0 0 8px}
+.feito{margin:0 0 16px;padding:12px 14px;background:var(--permitido);color:#fff;
+  font:700 14px/1.45 var(--fonte)}
+.feito a{color:#fff}
+.idade.fresca-ok{background:var(--claro);color:var(--texto-2);
+  border-left:6px solid var(--permitido)}
+.atualizar .morada{margin:6px 0 0;font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
+.bloco-a{padding:18px 20px;border-top:6px solid var(--tinta)}
+.bloco-a h2{margin:0 0 10px}
+/* Mais específico do que ".btn.largo{width:100%}", que de outro modo ganha e
+   soma 100% à margem de 20 px — o botão saía 20 px fora do ecrã e a página
+   passava a deslizar de lado. */
+.form-atualizar > .btn.largo{margin:18px 20px 0;width:calc(100% - 40px);box-sizing:border-box}
+.form-atualizar .ajuda{padding:0 20px}
+.bloco-a .ajuda{padding:0}
+.grupo{margin:0 0 14px;padding:0;border:0}
+.grupo legend{padding:0;font:700 11px/1 var(--fonte);text-transform:uppercase;
+  letter-spacing:.16em;color:var(--texto-2)}
+.itens{display:grid;gap:8px;margin-top:8px}
+@media(min-width:560px){.itens{grid-template-columns:1fr 1fr}}
+/* O item inteiro é a área tocável, não só a caixa. Uma caixa de 13 px falha-se
+   com o polegar, e quem falha um toque três vezes desiste da ferramenta. */
+.item{display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 10px;
+  border:2px solid var(--fio);background:var(--papel);cursor:pointer}
+.item.ligado,.item:has(input:checked){border-color:var(--tinta);border-width:3px;padding:7px 9px}
+.item input[type=checkbox]{width:22px;height:22px;flex:none;accent-color:var(--tinta);margin:0}
+.item svg{width:30px;height:30px;flex:none}
+.it-nome{flex:1;min-width:0;font:600 14px/1.25 var(--fonte)}
+/* ".item .it-q" e não ".it-q" sozinho: existe um input[type=text]{width:100%}
+   mais acima, e um selector de atributo ganha a uma classe. Com a regra fraca
+   a caixa da quantidade ficava com 326 px, empurrava o nome do item para zero
+   e a linha passava a ser um quadrado sem legenda. */
+/* 96 px porque "20 caixas" tem de caber à vista e não só na base de dados. */
+.item .it-q{width:96px;flex:none;padding:8px;font:600 14px/1.2 var(--mono);
+  color:var(--tinta);background:var(--papel);border:2px solid var(--fio);
+  border-radius:0;box-sizing:border-box}
+.item:has(input:checked) .it-q{border-color:var(--tinta)}
+.recusas .it-nome{color:var(--proibido)}
+.caixa.grande{min-height:52px;font:700 15px/1.25 var(--fonte)}
+textarea{width:100%;padding:12px;font:500 15px/1.45 var(--fonte);color:var(--tinta);
+  background:var(--papel);border:2px solid var(--tinta);border-radius:0;
+  -webkit-appearance:none;box-sizing:border-box;resize:vertical}
 .btn.largo{width:100%;text-align:center}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -854,4 +1108,5 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
+                   paginaAtualizarEntrada, paginaAtualizar,
                    paginaCodigo, paginaAdmin, idade, esc, CSS };

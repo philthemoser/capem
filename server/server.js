@@ -68,6 +68,11 @@ if (!ADMIN || ADMIN.length < 16) {
 /* ---------------------------------------------------------------------------
  * Utilitários
  * -------------------------------------------------------------------------*/
+/* O tamanho máximo de uma quantidade, vindo do catálogo para não haver dois
+   números diferentes a dizer a mesma coisa. Era 8, o que cortava "20 caixas"
+   — que é literalmente o exemplo que o texto de ajuda dá. */
+const { MAX_Q } = require('./compartilhado');
+
 const LIMITES = { nome: 80, tipo: 60, endereco: 140, horario: 80, contato: 40, link: 140, motivoPausa: 140 };
 
 const texto = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
@@ -233,7 +238,7 @@ function limparDados(d) {
   const lista = v => (Array.isArray(v) ? v : []).slice(0, 24).map(x => {
     if (typeof x === 'string') return texto(x, 40);
     if (!x) return '';
-    const q = texto(x.q, 8);
+    const q = texto(x.q, MAX_Q);
     if (x.id) return q ? { id: texto(x.id, 40), q } : texto(x.id, 40);
     return { texto: texto(x.texto, 40),
              marca: x.marca ? texto(x.marca, 40) : undefined,
@@ -348,6 +353,129 @@ async function encaminhar(req, res) {
   }
 
   /* --- publicar (o botão do kit) --- */
+  /* --- a actualização diária ---
+   *
+   * Um GET mostra o formulário de entrada; um POST com código certo mostra a
+   * lista; um POST com `publicar=1` publica e volta a mostrar a lista.
+   *
+   * O código anda no formulário como campo escondido e NÃO numa sessão. Sem
+   * cookie não há nada para roubar de um telemóvel emprestado, nada para expirar
+   * a meio de uma manhã, e fechar o separador é sair. A troca é que o código
+   * viaja em cada envio — por HTTPS, para o mesmo servidor a que ele já pertence.
+   */
+  if (caminho === '/atualizar' && req.method === 'GET') {
+    return responder(res, 200, P.paginaAtualizarEntrada({ slug: url.searchParams.get('c') || '' }));
+  }
+  if (caminho === '/atualizar' && req.method === 'POST') {
+    /* Mais apertado do que publicar: aqui é onde alguém tentaria adivinhar um
+       código à força. Vinte por hora chega para um coordenador que se engana
+       algumas vezes e não chega para mais nada. */
+    if (demasiado(ip, 20, 3600e3)) {
+      return responder(res, 429, P.paginaAtualizarEntrada({
+        erro: 'Demasiadas tentativas deste aparelho. Espere uma hora.' }));
+    }
+    const campos = new URLSearchParams(await corpo(req));
+    const pedido = texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
+    const codigo = texto(campos.get('codigo'), 20);
+    const real = db.resolver(pedido);
+    const centro = real ? db.ler(real) : null;
+
+    /* Uma mensagem só para "não existe" e para "código errado". Os centros são
+       públicos, por isso isto não esconde grande coisa — mas também não há
+       vantagem nenhuma em confirmar a alguém que adivinhou metade. */
+    if (!centro || !db.codigoConfere(codigo, centro.codigo_hash)) {
+      return responder(res, 403, P.paginaAtualizarEntrada({
+        slug: pedido,
+        erro: 'Endereço ou código errados. Confira as letras — no código não há O, nem I, nem S.'
+      }));
+    }
+
+    let feito = false, erro = '';
+    if (campos.get('publicar') === '1') {
+      const precisa = campos.getAll('precisa').slice(0, 24).map(id => {
+        const q = texto(campos.get('q-' + id), MAX_Q);
+        return q ? { id: texto(id, 40), q } : texto(id, 40);
+      });
+      /* Os itens escritos à mão, um por linha, com "| quantidade" opcional. É a
+         forma mais simples que funciona sem JavaScript, e a que se percebe sem
+         instruções depois do exemplo que está ao lado da caixa. */
+      /* Dividir ANTES de limpar. O `texto()` tira os caracteres de controlo — e
+         a mudança de linha é um deles, por isso limpar primeiro colava as doze
+         linhas todas num item só. Foi assim que este código nasceu e é o género
+         de erro que passa despercebido até alguém escrever a segunda linha. */
+      const livres = String(campos.get('livres') || '').slice(0, 600)
+        .split(/[\r\n]+/)
+        .map(l => texto(l, 60)).filter(Boolean).slice(0, 12)
+        .map(l => {
+          const [t, q] = l.split('|').map(x => (x || '').trim());
+          return q ? { texto: t, q: q.slice(0, MAX_Q) } : { texto: t };
+        }).filter(x => x.texto);
+
+      const dados = {
+        ...centro.dados,
+        precisa: [...precisa, ...livres],
+        naoTraga: campos.getAll('naoTraga').slice(0, 12).map(x => texto(x, 40)),
+        horario: texto(campos.get('horario'), LIMITES.horario) || centro.dados.horario,
+        pausado: campos.get('pausado') === '1',
+        motivoPausa: texto(campos.get('motivoPausa'), LIMITES.motivoPausa)
+      };
+      const limpo = limparDados(dados);
+      db.publicar(centro.slug, { ...centro.dados, ...limpo });
+      console.log(`[publicado] ${centro.slug} — ${limpo.precisa.length} itens${limpo.pausado ? ' (pausado)' : ''} (via /atualizar)`);
+      feito = true;
+      centro.dados = { ...centro.dados, ...limpo };
+      centro.publicado = Date.now();
+      if (!limpo.precisa.length && !limpo.pausado) {
+        erro = 'Publicou uma lista vazia e o centro não está marcado como '
+             + 'fechado. Quem abrir a página não fica a saber o que trazer.';
+      }
+    }
+
+    /* O código volta para o formulário para o envio seguinte não obrigar a
+       escrevê-lo outra vez — é a mesma sessão de trabalho, e uma manhã tem mais
+       do que uma correcção. */
+    centro.codigoDado = codigo;
+    return responder(res, feito ? 200 : 200,
+      P.paginaAtualizar({ centro, url: urlDoCentro(centro.slug, base), feito, erro }));
+  }
+
+  /* --- ler os próprios dados com o código ---
+   *
+   * O código servia só para escrever. Isso obrigava o coordenador a preencher o
+   * formulário inteiro outra vez sempre que abrisse o kit noutro telemóvel, ou
+   * depois de limpar o browser — e a maior parte do que ele escrevia era
+   * deitada fora, porque publicar não mexe no nome, na morada nem no telefone.
+   * Escrever quinze campos para que doze sejam ignorados não é só trabalho a
+   * mais: dá a entender que se pode mudar o que foi verificado à mão.
+   *
+   * O que volta daqui já é todo público — está na página do centro, que
+   * qualquer pessoa abre sem código nenhum. O código continua a ser o que
+   * autoriza a ESCRITA; aqui só evita transformar isto numa lista de todos os
+   * centros de uma vez.
+   */
+  if (caminho === '/api/carregar' && req.method === 'POST') {
+    if (demasiado(ip, 60, 3600e3)) return json(res, 429, { erro: 'demasiados pedidos' });
+    let p;
+    try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
+    const real = db.resolver(texto(p.slug, 60));
+    const centro = real ? db.ler(real) : null;
+    if (!centro) return json(res, 404, { erro: 'centro não encontrado' });
+    if (!db.codigoConfere(p.codigo || '', centro.codigo_hash)) {
+      return json(res, 403, { erro: 'código errado' });
+    }
+    const d = centro.dados || {};
+    return json(res, 200, {
+      ok: true, slug: centro.slug, url: urlDoCentro(centro.slug, base),
+      estado: centro.estado, publicado: centro.publicado || null,
+      dados: {
+        nome: d.nome || '', tipo: d.tipo || '', endereco: d.endereco || '',
+        horario: d.horario || '', contato: d.contato || '', link: d.link || '',
+        precisa: d.precisa || [], naoTraga: d.naoTraga || [],
+        pausado: !!d.pausado, motivoPausa: d.motivoPausa || ''
+      }
+    });
+  }
+
   if (caminho === '/api/publicar' && req.method === 'POST') {
     if (demasiado(ip, 120, 3600e3)) return json(res, 429, { erro: 'demasiados envios' });
     let p;

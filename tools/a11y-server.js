@@ -66,11 +66,23 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     ['lista sem resultados', '/centros?q=zzzznada'],
     ['porta do centro', '/centro'],
     ['pedir página', '/novo'],
+    ['entrada de atualização', '/atualizar'],
     ['página de um centro', '/sao-sebastiao'],
     ['centro em pausa', '/zona-norte'],
     ['centro com lista velha', '/bela-vista'],
     ['fila de aprovação', '/admin?t=' + encodeURIComponent(process.env.CAPEM_ADMIN)]
   ];
+
+  /* A lista aberta para edição só existe depois de um POST com o código certo,
+     por isso o axe chega lá por um formulário e não por um endereço. */
+  const CODIGO = S.db.novoCodigo();
+  const hashDe = require('node:crypto').createHash('sha256')
+    .update(CODIGO.replace('-', '')).digest('hex');
+  {
+    const c = new (require('node:sqlite').DatabaseSync)(ficheiro);
+    c.prepare('UPDATE centros SET codigo_hash=? WHERE slug=?').run(hashDe, 'sao-sebastiao');
+    c.close();
+  }
 
   const browser = await chromium.launch({ executablePath: EXE });
   const todas = {};
@@ -82,8 +94,15 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
       colorScheme: esquema
     });
     const page = await ctx.newPage();
-    for (const [nome, u] of PAGINAS) {
-      await page.goto(base + u, { waitUntil: 'load' });
+    for (const [nome, u] of [...PAGINAS, ['lista aberta para editar', null]]) {
+      if (u) {
+        await page.goto(base + u, { waitUntil: 'load' });
+      } else {
+        await page.goto(base + '/atualizar', { waitUntil: 'load' });
+        await page.fill('#slug', 'sao-sebastiao');
+        await page.fill('#codigo', CODIGO);
+        await Promise.all([page.waitForLoadState('load'), page.click('button[type=submit]')]);
+      }
       await page.addScriptTag({ content: axe });
       const res = await page.evaluate(async () => await axe.run(document, {
         runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }
@@ -111,12 +130,28 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
   await p2.goto(base + '/centros?q=cobertor&aceitando=1&ordem=nome', { waitUntil: 'load' });
   const filtrou = (await p2.locator('.c-item').count()) === 1
     && await p2.inputValue('#q') === 'cobertor';
+
+  /* E a actualização diária, que é a que mais precisa disto: um POST, um
+     formulário, nenhum script. O telemóvel do coordenador é o pior aparelho da
+     cadeia toda, e esta é a página que ele abre todos os dias. */
+  await p2.goto(base + '/atualizar', { waitUntil: 'load' });
+  await p2.fill('#slug', 'sao-sebastiao');
+  await p2.fill('#codigo', CODIGO);
+  await Promise.all([p2.waitForLoadState('load'), p2.click('button[type=submit]')]);
+  const abriu = await p2.isVisible('.form-atualizar')
+    && (await p2.locator('.item').count()) > 10;
+  await p2.check('input[name=precisa][value=cobertor]');
+  await p2.fill('input[name="q-cobertor"]', '20 caixas');
+  await Promise.all([p2.waitForLoadState('load'),
+    p2.click('.form-atualizar button[type=submit]')]);
+  const publicou = await p2.isVisible('.feito');
   await semJs.close();
   await browser.close();
 
-  if (!botao || !filtrou) {
-    console.log(`FALHA — sem JavaScript os filtros deixaram de funcionar ` +
-      `(botão visível: ${botao}, filtrou: ${filtrou})`);
+  if (!botao || !filtrou || !abriu || !publicou) {
+    console.log('FALHA — sem JavaScript alguma coisa deixou de funcionar '
+      + `(botão: ${botao}, filtrou: ${filtrou}, abriu a lista: ${abriu}, `
+      + `publicou: ${publicou})`);
     servidor.close();
     process.exit(1);
   }
@@ -126,7 +161,8 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
   const chaves = Object.keys(todas);
   if (!chaves.length) {
     console.log(`PASS — nenhuma violação WCAG 2.1 A/AA em ${n} páginas ` +
-      '(claro e escuro), e os filtros funcionam sem JavaScript');
+      '(claro e escuro); sem JavaScript, os filtros e a atualização diária '
+      + 'continuam a funcionar');
     process.exit(0);
   }
   chaves.forEach(k => {

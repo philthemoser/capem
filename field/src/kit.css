@@ -828,3 +828,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .peca.a-imprimir:last-of-type .folha-wrap:last-child { break-after: auto; }
   .peca { break-inside: avoid; }
 }
+
+/* O bloco "já tem página?", que abre o formulário. Marcado porque é um atalho
+   que quem já tem centro deve ver antes de começar a escrever à mão — e quem
+   não tem deve conseguir ignorar de relance. */
+.bloco.destaque{border:3px solid var(--tinta);padding:16px;background:var(--papel)}
+.bloco.destaque h2{margin-top:0}

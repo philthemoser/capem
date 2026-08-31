@@ -386,6 +386,97 @@ const DIA = 86400000;
   ok('a página fica pequena o suficiente para uma rede má', bytes < 200000,
     Math.round(bytes / 1024) + ' KB com ' + totalAgora + ' centros');
 
+  console.log('\natualizar a lista com o código');
+  /* A página que se abre todas as manhãs, e a única cujo êxito se mede em
+     segundos. Se esta não for usada, tudo o resto envelhece. */
+  const formN = (p, obj) => {
+    const u = new URLSearchParams();
+    Object.entries(obj).forEach(([k, v]) =>
+      Array.isArray(v) ? v.forEach(x => u.append(k, x)) : u.append(k, v));
+    return fetch(base + p, { method: 'POST', redirect: 'manual',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: u.toString() });
+  };
+
+  r = await get('/atualizar');
+  html = await r.text();
+  ok('a entrada de atualização responde', r.status === 200, String(r.status));
+  ok('e pede só endereço e código', /name="slug"/.test(html) && /name="codigo"/.test(html));
+
+  r = await formN('/atualizar', { slug: slugFinal, codigo: 'ZZZZ-9999' });
+  html = await r.text();
+  ok('um código errado não abre a lista', r.status === 403, String(r.status));
+  /* A mesma mensagem para código errado e centro inexistente: os centros são
+     públicos, mas confirmar metade de um palpite não ajuda ninguém. */
+  const msgErrada = /Endereço ou código errados/.test(html);
+  r = await formN('/atualizar', { slug: 'nao-existe-de-todo', codigo: 'ZZZZ-9999' });
+  ok('e diz o mesmo para um centro que não existe',
+    msgErrada && /Endereço ou código errados/.test(await r.text()));
+
+  r = await formN('/atualizar', { slug: slugFinal, codigo });
+  html = await r.text();
+  ok('o código certo abre a lista', r.status === 200, String(r.status));
+  ok('com o nome do centro visível', html.includes('Paróquia São Sebastião'));
+  /* O que foi verificado à mão aparece, mas não como campo: escrever por cima
+     dava a entender que se podia mudar, e a publicação ignora-o na mesma. */
+  ok('o nome não é um campo editável', !/name="nome"/.test(html));
+  ok('nem a morada', !/name="endereco"/.test(html));
+  ok('e a página diz porquê', /não se mudam aqui/.test(html));
+
+  r = await formN('/atualizar', { slug: slugFinal, codigo, publicar: '1',
+    precisa: ['cobertor', 'fralda'], 'q-cobertor': '20 caixas', 'q-fralda': '',
+    livres: 'Ração para cães | 5 kg\nCarregador de telemóvel',
+    naoTraga: ['roupa-usada'], horario: '9h às 17h' });
+  html = await r.text();
+  ok('publicar daqui funciona', r.status === 200 && /Publicado\./.test(html));
+  const dep = S.db.ler(slugFinal).dados;
+  ok('a lista é a que foi enviada', dep.precisa.length === 4, JSON.stringify(dep.precisa));
+  ok('a quantidade sobrevive inteira',
+    dep.precisa.some(x => x && x.q === '20 caixas'), JSON.stringify(dep.precisa));
+  /* O `texto()` tira caracteres de controlo, e a mudança de linha é um deles.
+     Limpar antes de dividir colava as doze linhas todas num item só — foi
+     exactamente esse o erro, e é este teste que impede o regresso dele. */
+  ok('cada linha escrita à mão é um item',
+    dep.precisa.filter(x => x && x.texto).length === 2, JSON.stringify(dep.precisa));
+  ok('e a quantidade depois da barra também',
+    dep.precisa.some(x => x && x.texto === 'Ração para cães' && x.q === '5 kg'));
+  ok('o horário muda', dep.horario === '9h às 17h', dep.horario);
+  ok('mas o nome verificado continua intacto', dep.nome === 'Paróquia São Sebastião', dep.nome);
+  ok('e o telefone verificado também', dep.contato === '(51) 99612-0044', dep.contato);
+
+  /* Publicar uma lista vazia sem estar fechado é uma página que não responde à
+     única pergunta que lhe fazem. Publica-se na mesma — é o coordenador que
+     manda — mas ele tem de sair dali a saber. */
+  r = await formN('/atualizar', { slug: slugFinal, codigo, publicar: '1', livres: '' });
+  ok('uma lista vazia sem pausa é avisada', /lista vazia/.test(await r.text()));
+  r = await formN('/atualizar', { slug: slugFinal, codigo, publicar: '1',
+    pausado: '1', motivoPausa: 'Cheios.', livres: '' });
+  ok('mas vazia e fechado não é erro nenhum', !/lista vazia/.test(await r.text()));
+  ok('e o centro fica em pausa', S.db.ler(slugFinal).dados.pausado === true);
+
+  /* O código volta ao formulário para a correcção seguinte não obrigar a
+     escrevê-lo outra vez. Uma manhã tem mais do que uma correcção. */
+  r = await formN('/atualizar', { slug: slugFinal, codigo });
+  ok('o código fica no formulário para o envio seguinte',
+    new RegExp('name="codigo" value="' + codigo + '"').test(await r.text()));
+
+  console.log('\npuxar os dados para o kit');
+  r = await api('/api/carregar', { slug: slugFinal, codigo: 'ZZZZ-9999' });
+  ok('código errado não devolve nada', r.status === 403, String(r.status));
+  r = await api('/api/carregar', { slug: 'nao-existe', codigo });
+  ok('centro inexistente também não', r.status === 404, String(r.status));
+  r = await api('/api/carregar', { slug: slugFinal, codigo });
+  const carga = await r.json();
+  ok('o código certo devolve os dados', r.status === 200, String(r.status));
+  ok('com o nome que o kit não precisa de reescrever',
+    carga.dados.nome === 'Paróquia São Sebastião', carga.dados && carga.dados.nome);
+  ok('a morada e o telefone vêm juntos',
+    /Bento Gonçalves/.test(carga.dados.endereco) && carga.dados.contato === '(51) 99612-0044');
+  ok('e o endereço da página, para o QR se preencher sozinho',
+    /\/(paroquia|canoas)/.test(carga.url || ''), carga.url);
+  /* Nada de secreto sai daqui: é o que já está na página pública. O código diz
+     QUAL centro, não destranca um segredo. */
+  ok('não devolve o hash do código', !JSON.stringify(carga).includes('codigo_hash'));
+
   console.log('\navisos e empurrões');
   const A = require('../server/avisos.js');
   /* Um número escrito por uma pessoa não é um número que o WhatsApp aceite. */
@@ -472,9 +563,14 @@ const DIA = 86400000;
   await api('/api/publicar', { slug: slugFinal, codigo, dados: {
     precisa: [{ id: 'cobertor', q: 'duzentos mil cobertores por favor' }],
     naoTraga: ['roupa-usada'] } });
+  /* Contra a constante e não contra um número escrito à mão: o limite já viveu
+     em cinco sítios com dois valores diferentes, e "20 caixas" — o exemplo que
+     o próprio texto de ajuda dá — não cabia nos oito que aqui estavam. */
+  const { MAX_Q } = require('../server/compartilhado');
   ok('uma quantidade comprida é cortada',
-    S.db.ler(slugFinal).dados.precisa[0].q.length <= 8,
+    S.db.ler(slugFinal).dados.precisa[0].q.length <= MAX_Q,
     S.db.ler(slugFinal).dados.precisa[0].q);
+  ok('mas "20 caixas" cabe inteiro', MAX_Q >= '20 caixas'.length, String(MAX_Q));
   await api('/api/publicar', { slug: slugFinal, codigo, dados: {
     precisa: ['agua', 'alimento', { texto: 'Luva de borracha', marca: 'botas' }],
     naoTraga: ['roupa-usada', 'moveis'] } });

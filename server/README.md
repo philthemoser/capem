@@ -119,7 +119,8 @@ para uma dúzia de centros a conta é praticamente zero.
 |---|---|
 | `/` | Duas portas: **quero ajudar** e **sou de um centro**. Nada mais. |
 | `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Procura, filtros, ordem e páginas — tudo no servidor, tudo no endereço. |
-| `/centro` | A porta de quem gere um centro: o material impresso, ou pedir uma página. |
+| `/centro` | A porta de quem gere um centro: atualizar, imprimir, ou pedir uma página. |
+| `/atualizar` | **A actualização diária.** Endereço + código, e a lista abre para edição. 30 KB, sem JavaScript obrigatório. |
 | `/novo` | O formulário de pedido. |
 | `/<centro>` | A página do centro — o destino do QR. |
 | `/kit` | O gerador de material impresso. |
@@ -129,6 +130,56 @@ A entrada não tem formulário de propósito. Quem chega é uma de duas pessoas 
 não há uma terceira: ou tem alguma coisa para dar, ou está a montar um centro.
 Um formulário na entrada obrigava a primeira — que aparece às centenas — a
 passar por cima da segunda.
+
+### `/atualizar` — a página que se abre todas as manhãs
+
+É a única página cujo êxito se mede em segundos, e tudo o resto neste projecto
+existe para que ela seja usada: uma lista que não é tocada envelhece, e uma
+lista velha manda um vizinho carregar cinco quilos de arroz até um centro que já
+não os quer.
+
+Por isso **não é o kit**. O kit é a ferramenta de montar um centro — quinze
+peças, fontes embutidas, 273 KB. Abri-lo para trocar dois itens é atravessar uma
+gráfica para escrever um recado. Esta página são 30 KB.
+
+Três decisões:
+
+- **O nome, a morada e o telefone aparecem, mas não são campos.** A publicação
+  já os ignorava; mostrá-los sem caixa de texto diz isso sem uma frase de
+  explicação, e evita que alguém escreva por cima à espera que mude.
+- **Formulário normal: um POST, um redesenho, zero JavaScript obrigatório.**
+  Há um teste que abre a lista, marca um item, escreve uma quantidade e publica
+  com o JavaScript desligado — porque o telemóvel do coordenador é o pior
+  aparelho da cadeia toda.
+- **O código anda no formulário, não numa sessão.** Sem cookie não há nada para
+  roubar de um telemóvel emprestado, nada para expirar a meio de uma manhã, e
+  fechar o separador é sair. Em troca, o código viaja em cada envio — por HTTPS,
+  para o mesmo servidor a que já pertence.
+
+Publicar uma lista vazia sem marcar "não estamos recebendo" é permitido — quem
+manda é o coordenador — mas a página avisa, porque nesse estado ela não responde
+à única pergunta que lhe fazem.
+
+### `POST /api/carregar` — o código também lê
+
+O código só escrevia. Isso obrigava o coordenador a preencher o formulário
+inteiro outra vez em cada telemóvel novo, para o servidor deitar fora o nome, a
+morada e o telefone — que não se mudam por ali. Escrever doze campos para que
+nove sejam ignorados não é só trabalho a mais: dá a entender que se pode mudar o
+que foi verificado à mão.
+
+```
+POST /api/carregar   { slug, codigo }  →  { dados, url, estado, publicado }
+```
+
+O kit usa-o no bloco **Já tem página?**, que passou para o topo do formulário:
+endereço, código, um botão, e tudo se preenche — incluindo o link que faz o QR
+de todas as peças apontar para a página certa.
+
+Não há exposição nova: o que volta daqui já está na página pública do centro,
+que qualquer pessoa abre sem código nenhum. O código continua a ser o que
+autoriza a **escrita**; aqui só diz *qual* centro, em vez de servir a lista
+toda de uma vez.
 
 ### `/centros`, em detalhe
 
@@ -285,7 +336,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 148 verificações
+node tools/server-test.js    # 177 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 

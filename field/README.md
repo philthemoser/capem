@@ -140,9 +140,17 @@ coordenador publica pelo celular com um código, direto do kit; quem abre o link
 — ou lê o QR de qualquer peça impressa — vê a versão de hoje. **É isso que
 impede o papel de ficar velho.**
 
-No fim do formulário do kit há uma secção **Publicar a lista de hoje**: endereço
-do centro, código, um botão. Depois da primeira publicação, o QR de todas as
-peças passa a apontar sozinho para a página.
+**Para atualizar todos os dias há uma página própria**, `/atualizar`: escreve o
+endereço e o código, a lista abre já preenchida, e liga e desliga itens com o
+polegar. São 30 KB — abre com uma barra de rede. O kit são 273 KB e quinze
+peças; abri-lo para trocar dois itens é atravessar uma gráfica para escrever
+um recado.
+
+No topo do formulário do kit há **Já tem página?**: endereço do centro, código,
+e tudo se preenche sozinho — nome, morada, telefone, a lista de hoje e o link
+que faz o QR de todas as peças apontar para a página certa. Nunca mais é preciso
+escrever tudo outra vez num telemóvel novo. No fim do formulário fica o botão
+de publicar.
 
 A página diz em voz alta a idade da lista: até um dia, nada; de dois a seis
 dias, faixa amarela "ligue antes de vir"; a partir de sete, faixa vermelha
@@ -171,7 +179,7 @@ carrega a própria lista, então funciona mesmo sem sinal.
 
 ```bash
 node build.js               # monta kit.html a partir de src/
-node ../tools/kit-test.js   # 87 verificações (precisa de Playwright)
+node ../tools/kit-test.js   # 97 verificações (precisa de Playwright)
 ```
 
 Sem dependências para usar. O `kit.html` gerado fica no repositório — quem só

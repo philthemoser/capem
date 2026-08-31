@@ -22,7 +22,7 @@ const ler = f => fs.readFileSync(path.join(SRC, f), 'utf8');
 const EXPORTA = [
   'ICONES', 'POR_ID', 'ANEL_D', 'BARRA', 'AO_FUNDO',
   'svgIcone', 'svgProibido', 'svgAnel',
-  'GRUPOS', 'ROTULO_BR', 'RECUSAS', 'FUNCOES', 'item'
+  'GRUPOS', 'ROTULO_BR', 'RECUSAS', 'FUNCOES', 'item', 'MAX_Q'
 ];
 
 const corpo = ler('icones.js') + '\n' + ler('catalogo.js') +

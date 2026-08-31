@@ -72,7 +72,7 @@ const FUNCOES = ['COORDENAÇÃO', 'TRIAGEM', 'ENTREGA', 'COZINHA', 'VOLUNTÁRIO'
  * hoje. Sem sistema de unidades — "200", "20 caixas" e "muitas" servem todos,
  * e o limite de caracteres é o que faz caber no cartaz.
  */
-const MAX_Q = 8;
+const MAX_Q = 12;
 
 function item(v) {
   if (typeof v === 'string') return { id: v, rotulo: ROTULO_BR[v] || v, livre: false, q: '' };

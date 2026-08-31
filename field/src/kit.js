@@ -917,7 +917,7 @@ function montarForm() {
       ${svgIcone(it.id)}
       <span>${esc(it.rotulo)}</span>
       ${tipo === 'precisa' ? `<input class="q" type="text" inputmode="numeric"
-        value="${esc(it.q)}" maxlength="8" placeholder="qtd"
+        value="${esc(it.q)}" maxlength="12" placeholder="qtd"
         data-q="${i}" aria-label="Quantidade de ${esc(it.rotulo)}">` : ''}
       <span class="li-acoes">
         ${it.livre ? `<button type="button" class="marca" data-marca="${i}" data-l="${tipo}"
@@ -1243,6 +1243,107 @@ function estadoPub(msg, tipo) {
   el.className = 'estado-pub' + (tipo ? ' ' + tipo : '');
 }
 
+function estadoCarga(msg, tipo) {
+  const el = document.getElementById('estado-carga');
+  el.hidden = !msg;
+  el.textContent = msg || '';
+  el.className = 'estado-pub' + (tipo ? ' ' + tipo : '');
+}
+
+/**
+ * Puxar os dados do próprio centro com o código.
+ *
+ * O código servia só para escrever, e isso obrigava o coordenador a preencher o
+ * formulário todo outra vez em cada telemóvel novo — para depois o servidor
+ * deitar fora o nome, a morada e o telefone, que não se mudam por aqui. Escrever
+ * doze campos para que nove sejam ignorados não é só trabalho a mais: dá a
+ * entender que se pode mudar o que foi verificado à mão.
+ *
+ * O que vem de lá é o que já está na página pública do centro. O código aqui não
+ * está a destrancar um segredo, está a dizer *qual* centro.
+ */
+async function puxarDados(botao) {
+  const codigo = (S.codigo || '').trim();
+  const alvo = alvoPublicacao();
+  if (!S.slug.trim() || !codigo) {
+    estadoCarga('Escreva o endereço do centro e o código.', 'mau');
+    return;
+  }
+  if (!alvo) {
+    estadoCarga('Não percebemos esse endereço. Cole o endereço completo da página '
+      + 'do seu centro — está impresso no rodapé do cartaz, algo como '
+      + 'capem.org/canoas-ss.', 'mau');
+    return;
+  }
+  const { base, slug } = alvo;
+  const antes = botao.textContent;
+  botao.disabled = true; botao.textContent = 'A puxar…';
+  estadoCarga('');
+  try {
+    const r = await fetch(base + '/api/carregar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, codigo })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      estadoCarga({
+        403: 'Código errado. Confira as letras — não há O nem I nem S no código.',
+        404: 'Não encontrámos esse centro. Confira o endereço.',
+        429: 'Demasiados pedidos. Espere um pouco.'
+      }[r.status] || ('Não deu para puxar os dados' + (j.erro ? ': ' + j.erro : '.')), 'mau');
+      return;
+    }
+    const d = j.dados || {};
+    /* O que estava escrito aqui é substituído. É o que se pede a um botão com
+       este nome — e o que está no servidor é o que saiu impresso da última vez,
+       por isso é a versão que interessa. */
+    ['nome', 'tipo', 'endereco', 'horario', 'contato', 'link'].forEach(k => {
+      if (d[k] != null) S[k] = d[k];
+    });
+    if (Array.isArray(d.precisa)) S.precisa = d.precisa;
+    if (Array.isArray(d.naoTraga)) S.naoTraga = d.naoTraga;
+    S.pausado = !!d.pausado;
+    S.motivoPausa = d.motivoPausa || '';
+    /* Sem link não há QR. Se o centro ainda não tinha um, o endereço da própria
+       página é a resposta certa e está mesmo aqui. */
+    if (!String(S.link || '').trim() && j.url) S.link = j.url;
+    salvar(); montarForm();
+
+    const quantos = S.precisa.length;
+    const idade = j.publicado
+      ? Math.floor((Date.now() - j.publicado) / 86400000)
+      : null;
+    const quando = j.publicado
+      ? (idade <= 0 ? 'publicada hoje'
+        : idade === 1 ? 'publicada ontem'
+        : `publicada há ${idade} dias`)
+      : 'ainda sem lista publicada';
+    estadoCarga(`${S.nome || slug} — ${quantos} ${quantos === 1 ? 'item' : 'itens'}, ${quando}. `
+      + 'Confira a lista e publique quando estiver certa.', 'bom');
+    if (j.estado !== 'aprovado') {
+      estadoCarga(`${S.nome || slug} — dados carregados. A página fica no ar assim `
+        + 'que o pedido for verificado.', 'bom');
+    }
+  } catch (e) {
+    /* Distinguir os dois é o que evita mandar alguém procurar rede num ginásio
+       por causa de um erro nosso. `fetch` só rejeita por causa da rede; tudo o
+       resto que rebente aqui é código, e tem de dizer que é código.
+       (Escrito depois de o catch ter engolido uma função que não existia e ter
+       anunciado uma falha de ligação durante um teste em que a ligação estava
+       perfeita.) */
+    const rede = e instanceof TypeError;
+    estadoCarga(rede
+      ? 'Sem ligação ao servidor. Preencha à mão — a impressão funciona na '
+        + 'mesma, e pode publicar mais tarde.'
+      : 'Os dados vieram, mas alguma coisa correu mal a preenchê-los: '
+        + (e && e.message ? e.message : e) + '. Confira o formulário antes de publicar.',
+      'mau');
+  } finally {
+    botao.disabled = false; botao.textContent = antes;
+  }
+}
+
 async function publicar(botao) {
   const codigo = (S.codigo || '').trim();
   const alvo = alvoPublicacao();
@@ -1515,6 +1616,8 @@ function iniciar() {
 
   document.getElementById('b-publicar')
     .addEventListener('click', e => publicar(e.currentTarget));
+  document.getElementById('b-carregar')
+    .addEventListener('click', e => puxarDados(e.currentTarget));
   document.getElementById('b-partilhar')
     .addEventListener('click', e => partilharLista(e.currentTarget));
   /* Se o kit foi servido pelo servidor, o pedido de página é lá; se foi aberto

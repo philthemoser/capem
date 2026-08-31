@@ -49,6 +49,33 @@
   <div class="colunas">
 
     <form class="painel-form" onsubmit="return false;">
+      <!-- Primeiro bloco de propósito. Quem já tem página não devia escrever
+           nada duas vezes: escreve o endereço e o código, e o resto aparece.
+           Publicar continua a ser o botão do fim, mas o campo que o permite
+           passou para onde é útil ANTES de se preencher o formulário. -->
+      <section class="bloco destaque" id="bloco-publicar">
+        <h2>Já tem página?</h2>
+        <p class="dica">Escreva o endereço e o código uma vez. Puxamos os dados
+          do seu centro e preenchemos tudo — e no fim publica daqui mesmo.</p>
+        <div class="dois">
+          <div>
+            <label class="campo" for="f-slug">Endereço da sua página</label>
+            <input id="f-slug" type="text" placeholder="capem.org/canoas-ss" autocomplete="off" spellcheck="false" inputmode="url">
+          </div>
+          <div>
+            <label class="campo" for="f-codigo">Código</label>
+            <input id="f-codigo" type="text" placeholder="ABCD-2345" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+        <button type="button" class="btn largo" id="b-carregar">Puxar os meus dados</button>
+        <p class="estado-pub" id="estado-carga" hidden></p>
+        <p class="ajuda">Ainda não tem página? <a id="link-pedir" href="/">Peça uma aqui</a> —
+          recebe um código na hora. Ou preencha à mão, aqui abaixo: o kit imprime
+          na mesma, sem servidor e sem cadastro. O código não é guardado neste
+          aparelho a não ser que o escreva aqui, e nunca sai daqui para outro
+          sítio sem ser o seu servidor.</p>
+      </section>
+
       <section class="bloco">
         <h2>O centro</h2>
         <p class="dica">Só o nome é obrigatório. Tudo o resto melhora as peças.</p>
@@ -118,20 +145,12 @@
         </div>
       </section>
 
-      <section class="bloco" id="bloco-publicar">
+
+      <section class="bloco" id="bloco-enviar">
         <h2>Publicar a lista de hoje</h2>
         <p class="dica">O QR de todas as peças aponta para a página do seu centro.
-          Publicar aqui é o que faz o papel impresso continuar a valer amanhã.</p>
-        <div class="dois">
-          <div>
-            <label class="campo" for="f-slug">Endereço da sua página</label>
-            <input id="f-slug" type="text" placeholder="capem.org/canoas-ss" autocomplete="off" spellcheck="false" inputmode="url">
-          </div>
-          <div>
-            <label class="campo" for="f-codigo">Código</label>
-            <input id="f-codigo" type="text" placeholder="ABCD-2345" autocomplete="off" spellcheck="false">
-          </div>
-        </div>
+          Publicar aqui é o que faz o papel impresso continuar a valer amanhã.
+          Usa o endereço e o código que escreveu lá em cima.</p>
         <button type="button" class="btn btn-primario largo" id="b-publicar">Publicar a lista de hoje</button>
         <p class="estado-pub" id="estado-pub" hidden></p>
         <div class="pos-publicar" id="pos-publicar" hidden>
@@ -140,9 +159,6 @@
             link nunca fica velho, ao contrário de uma imagem.</p>
           <button type="button" class="btn btn-wa largo" id="b-partilhar">Mandar no WhatsApp</button>
         </div>
-        <p class="ajuda">Ainda não tem página? <a id="link-pedir" href="/">Peça uma aqui</a> —
-          recebe um código na hora. O código não é guardado neste aparelho a não ser
-          que o escreva aqui, e nunca sai daqui para outro sítio sem ser o seu servidor.</p>
       </section>
 
       <section class="bloco">

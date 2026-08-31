@@ -349,7 +349,8 @@ async function encaminhar(req, res) {
       url: `${base}/admin?t=${encodeURIComponent(ADMIN)}`,
       slug
     });
-    return responder(res, 200, P.paginaCodigo({ slug, codigo, base, url: urlDoCentro(slug, base) }));
+    return responder(res, 200, P.paginaCodigo({ slug, codigo, base,
+      url: urlDoCentro(slug, base), nome: dados.nome }));
   }
 
   /* --- publicar (o botão do kit) --- */

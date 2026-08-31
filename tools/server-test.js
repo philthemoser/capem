@@ -96,6 +96,20 @@ const DIA = 86400000;
   const slug = 'paroquia-sao-sebastiao';
   ok('o endereço é legível', html.includes(slug), slug);
 
+  /* O código aparece uma vez e mais nenhuma. Um papel colado à parede de um
+     ginásio perde-se, e quem entra ao turno seguinte não viu este ecrã — por
+     isso há como o mandar para onde ele vai ser procurado. Sem servidor de
+     e-mail, sem domínio com SPF, e sem guardar mais um dado pessoal. */
+  ok('a página do código oferece mandá-lo no WhatsApp', /wa\.me\/\?text=/.test(html));
+  const waCod = decodeURIComponent(((html.match(/href="([^"]*wa\.me[^"]*)"/) || [])[1] || '')
+    .replace(/&amp;/g, '&').split('text=')[1] || '');
+  ok('a mensagem leva o código', waCod.includes(codigo), waCod.slice(0, 60));
+  /* Fora de contexto, uma semana depois, para alguém que não pediu a página:
+     oito caracteres soltos não dizem nada. */
+  ok('e diz de que centro é', waCod.includes('Paróquia São Sebastião'));
+  ok('e onde se usa', waCod.includes('/atualizar'));
+
+
   r = await form('/pedir', { nome: 'Paróquia São Sebastião', endereco: 'Outra rua, 1', contato: '(51) 90000-0000' });
   ok('um segundo centro com o mesmo nome não rouba o endereço',
     (await r.text()).includes(slug + '-2'));

@@ -774,8 +774,44 @@ function paginaNovo({ erro }) {
   });
 }
 
-function paginaCodigo({ slug, codigo, base, url: urlCanonica }) {
+/**
+ * O texto que leva o código para o WhatsApp.
+ *
+ * O código aparece UMA vez, nesta página, e depois não há como o recuperar —
+ * só emitir outro. "Escreva-o num papel agora" é bom conselho e é o que resiste
+ * a ficar sem bateria, mas um papel num ginásio perde-se, e quem entra ao turno
+ * seguinte não estava aqui quando ele apareceu no ecrã.
+ *
+ * Mandar por WhatsApp resolve isso sem infra-estrutura nenhuma: sem servidor de
+ * e-mail, sem domínio com SPF e DKIM, sem caixa de spam, e sem guardar aqui
+ * mais um dado pessoal de ninguém. Vai para o telemóvel que a pessoa já tem na
+ * mão, e para o grupo do centro, que é onde o turno seguinte o vai procurar.
+ *
+ * A mensagem tem de se explicar sozinha daqui a uma semana, fora de contexto,
+ * a alguém que não pediu a página — por isso diz o que é, para que serve e
+ * onde se usa, e não só oito caracteres soltos.
+ */
+function textoCodigo(nome, slug, codigo, base, url) {
+  return [
+    '*CAPEM — código do centro*',
+    '',
+    `Centro: ${nome || slug}`,
+    `Página: ${url}`,
+    '',
+    `Código: ${codigo}`,
+    '',
+    'Com este código atualiza-se a lista do que o centro precisa hoje, em:',
+    `${base}/atualizar`,
+    '',
+    'Guarde esta mensagem. Quem estiver de turno vai precisar dela — o código',
+    'não se recupera, só se pede outro.'
+  ].join('\n');
+}
+
+function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome }) {
   const url = urlCanonica || `${base}/${slug}`;
+  const wa = 'https://wa.me/?text=' +
+    encodeURIComponent(textoCodigo(nome, slug, codigo, base, url));
   return molde({
     aqui: '/centro',
     migalhas: [['Sou de um centro', '/centro'], ['Pedido recebido']],
@@ -788,10 +824,19 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica }) {
   <section class="codigo-caixa">
     <p class="rotulo">O seu código</p>
     <p class="codigo">${esc(codigo)}</p>
-    <p class="dica"><b>Escreva-o num papel agora.</b> É o que lhe deixa publicar a lista
-      todos os dias. Não é guardado em lado nenhum de onde se possa recuperar — se o
-      perder, tem de pedir outro.</p>
+    <p class="dica"><b>Esta é a única vez que ele aparece.</b> É o que lhe deixa
+      publicar a lista todos os dias. Não é guardado em lado nenhum de onde se
+      possa recuperar — se o perder, tem de pedir outro.</p>
   </section>
+
+  <div class="guardar-codigo">
+    <a class="btn btn-wa largo" href="${esc(wa)}" target="_blank" rel="noopener">
+      Mandar o código no WhatsApp</a>
+    <p class="ajuda">Mande-o ao grupo do centro, ou a si próprio. Quem entrar ao
+      turno de amanhã não esteve aqui a ver este ecrã — e um papel colado à
+      parede de um ginásio perde-se. <b>Escreva-o também num papel</b>: é o que
+      continua a funcionar quando a bateria acaba.</p>
+  </div>
 
   <p>O endereço da sua página será:<br><code>${esc(url)}</code></p>
   <p><a class="btn" href="/kit">Ir para o kit e gerar o material impresso</a></p>
@@ -1153,6 +1198,10 @@ input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{
   cursor:pointer;text-decoration:none}
 .btn-primario{background:var(--tinta);color:var(--papel)}
 .btn-recusar{border-color:var(--proibido);color:var(--proibido)}
+/* O bloco de guardar o código, logo a seguir à caixa que o mostra: é o momento
+   em que a pessoa ainda o tem no ecrã, e o único em que o pode mandar. */
+.guardar-codigo{margin:0 0 22px}
+.guardar-codigo .ajuda{margin-top:10px}
 .codigo-caixa{padding:18px;margin:0 0 20px;border:3px solid var(--tinta);background:var(--claro)}
 .codigo-caixa .rotulo{margin:0;font:700 11px/1 var(--fonte);text-transform:uppercase;
   letter-spacing:.16em;color:var(--texto-2)}
@@ -1186,5 +1235,5 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
-                   paginaAtualizarEntrada, paginaAtualizar,
+                   paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
                    paginaCodigo, paginaAdmin, idade, esc, CSS };

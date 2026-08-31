@@ -68,9 +68,55 @@ const dataCurta = ms => {
 };
 
 /* ---------------------------------------------------------------------------
+ * NAVEGAÇÃO
+ *
+ * Faltava por completo, e isso é mais grave aqui do que num site normal: metade
+ * de quem chega entra pelo QR de um cartaz, no meio de uma página qualquer, sem
+ * ter passado pela entrada. Sem uma barra, a única forma de ir de um sítio ao
+ * outro era escrever o endereço de cor.
+ *
+ * Três destinos e mais nenhum, porque são três os motivos para estar aqui:
+ * ajudar alguém, atualizar o meu centro, imprimir material. A fila de aprovação
+ * não entra — quem a pode abrir sabe o endereço, e um link para uma página que
+ * responde 404 a 99% das pessoas é ruído.
+ *
+ * As migalhas aparecem só onde há profundidade a sério (a página de um centro,
+ * a lista aberta para editar). Numa página de primeiro nível seriam uma linha
+ * que só repete o título.
+ * -------------------------------------------------------------------------*/
+const DESTINOS = [
+  ['/centros', 'Quero ajudar'],
+  ['/atualizar', 'Atualizar a lista'],
+  ['/kit', 'Imprimir material']
+];
+
+function nav(aqui, migalhas) {
+  const links = DESTINOS.map(([href, txt]) => {
+    const actual = href === aqui;
+    return `<a href="${esc(href)}"${actual ? ' aria-current="page"' : ''}>${esc(txt)}</a>`;
+  }).join('');
+
+  /* `migalhas` é uma lista de [texto, href?]. O último não é link: é onde se
+     está, e um link para a própria página só engana quem o segue. */
+  const trilho = (migalhas && migalhas.length)
+    ? `<nav class="migalhas" aria-label="Onde está">
+        <a href="/">Início</a>${migalhas.map(([t, h], i) =>
+          h && i < migalhas.length - 1
+            ? `<span aria-hidden="true">›</span><a href="${esc(h)}">${esc(t)}</a>`
+            : `<span aria-hidden="true">›</span><b>${esc(t)}</b>`).join('')}
+      </nav>`
+    : '';
+
+  return `<nav class="nav-topo" aria-label="Principal">
+  <a class="marca" href="/">CAPEM</a>
+  <div class="nav-links">${links}</div>
+</nav>${trilho}`;
+}
+
+/* ---------------------------------------------------------------------------
  * Molde comum
  * -------------------------------------------------------------------------*/
-function molde({ titulo, descricao, corpo, classe }) {
+function molde({ titulo, descricao, corpo, classe, aqui, migalhas }) {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -84,6 +130,7 @@ function molde({ titulo, descricao, corpo, classe }) {
 <style>${CSS}</style>
 </head>
 <body class="${classe || ''}">
+${aqui === false ? '' : nav(aqui, migalhas)}
 ${corpo}
 </body>
 </html>`;
@@ -200,6 +247,7 @@ function paginaCentro(centro, base, urlCanonica) {
 
   const lista = precisa.slice(0, 6).map(i => i.rotulo).join(', ');
   return molde({
+    migalhas: [['Centros de apoio', '/centros'], [d.nome || centro.slug]],
     titulo: `${d.nome || centro.slug} — o que precisamos hoje`,
     descricao: d.pausado
       ? `${d.nome || centro.slug} não está recebendo doações agora.`
@@ -247,6 +295,7 @@ function paginaNaoExiste() {
  * -------------------------------------------------------------------------*/
 function paginaInicial({ contagem, base }) {
   return molde({
+    aqui: false,
     titulo: 'CAPEM — centros de apoio',
     descricao: 'Veja o que os centros de apoio precisam hoje, ou peça a página do seu centro.',
     corpo: `
@@ -350,12 +399,12 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
   </nav>` : '';
 
   return molde({
+    aqui: '/centros',
     titulo: 'Centros de apoio — o que precisam hoje',
     descricao: 'Lista dos centros de apoio e do que cada um precisa hoje.',
     corpo: `
 <main class="lista-centros">
   <header>
-    <p class="tipo"><a href="/">CAPEM</a></p>
     <h1>Centros de apoio</h1>
     <p class="entrada">Procure pelo nome do centro, pelo lugar, ou pelo que
       quer doar — escreva <b>cobertor</b> e vê quem está a pedir cobertores.
@@ -453,12 +502,12 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
  * -------------------------------------------------------------------------*/
 function paginaAtualizarEntrada({ erro, slug }) {
   return molde({
+    aqui: '/atualizar',
     titulo: 'Atualizar a lista — CAPEM',
     descricao: 'Atualize a lista de necessidades do seu centro.',
     corpo: `
 <main class="entrar">
   <header>
-    <p class="tipo"><a href="/">CAPEM</a></p>
     <h1>Atualizar a lista de hoje</h1>
     <p class="entrada">Trinta segundos. Escreva o endereço da sua página e o
       código que recebeu — o mesmo que está no papel colado ao lado do
@@ -529,12 +578,13 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     </fieldset>`).join('');
 
   return molde({
+    aqui: '/atualizar',
+    migalhas: [['Atualizar a lista', '/atualizar'], [d.nome || centro.slug]],
     titulo: `Atualizar — ${d.nome || centro.slug}`,
     descricao: 'Atualize a lista de necessidades do seu centro.',
     corpo: `
 <main class="atualizar">
   <header class="topo-c">
-    <p class="tipo"><a href="/">CAPEM</a> · atualizar</p>
     <h1>${esc(d.nome || centro.slug)}</h1>
     <p class="morada">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
   </header>
@@ -632,12 +682,12 @@ function paginaAtualizar({ centro, url, erro, feito }) {
  * -------------------------------------------------------------------------*/
 function paginaCentroEntrada({ base }) {
   return molde({
+    aqui: '/centro',
     titulo: 'Sou de um centro — CAPEM',
     descricao: 'Gere o material impresso do seu centro e publique a lista de hoje.',
     corpo: `
 <main class="portas">
   <header>
-    <p class="tipo"><a href="/">CAPEM</a></p>
     <h1>Sou de um centro</h1>
     <p class="entrada">Tudo o que um ponto de arrecadação precisa: o material para
       imprimir, e a lista de hoje que o QR desse material aponta.</p>
@@ -681,11 +731,12 @@ function paginaCentroEntrada({ base }) {
  * -------------------------------------------------------------------------*/
 function paginaNovo({ erro }) {
   return molde({
+    aqui: '/centro',
+    migalhas: [['Sou de um centro', '/centro'], ['Pedir a página']],
     titulo: 'Pedir a página de um centro',
     corpo: `
 <main class="inicial">
   <header>
-    <p class="tipo"><a href="/">CAPEM</a></p>
     <h1>Pedir a página do seu centro</h1>
     <p class="entrada">Recebe um código na hora — é o que lhe deixa publicar a lista
       todos os dias, a partir do <a href="/kit">kit</a>. Cada pedido é verificado à
@@ -726,6 +777,8 @@ function paginaNovo({ erro }) {
 function paginaCodigo({ slug, codigo, base, url: urlCanonica }) {
   const url = urlCanonica || `${base}/${slug}`;
   return molde({
+    aqui: '/centro',
+    migalhas: [['Sou de um centro', '/centro'], ['Pedido recebido']],
     titulo: 'Pedido recebido — guarde o código',
     corpo: `
 <main class="inicial">
@@ -802,6 +855,7 @@ function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, err
   };
 
   return molde({
+    aqui: false,
     titulo: 'CAPEM — pedidos',
     corpo: `
 <main class="admin">
@@ -1000,6 +1054,30 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .sem-resultado{margin:18px 0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 .erro-form{margin:0 0 16px;padding:12px 14px;background:var(--proibido);color:#fff;
   font:600 14px/1.45 var(--fonte)}
+
+/* --- navegação ---
+   Faltava por completo. Metade de quem chega entra pelo QR de um cartaz, no
+   meio de uma página qualquer: sem barra, ir de um sítio ao outro era escrever
+   o endereço de cor. */
+.nav-topo{position:sticky;top:0;z-index:40;display:flex;align-items:center;
+  gap:8px 16px;flex-wrap:wrap;padding:10px 20px;
+  background:var(--tinta);color:var(--papel)}
+.nav-topo .marca{font:400 20px/1 var(--preta);letter-spacing:-.01em;
+  color:var(--papel);text-decoration:none;flex:none}
+.nav-links{display:flex;flex-wrap:wrap;gap:4px 14px;min-width:0}
+.nav-links a{font:600 13px/1.2 var(--fonte);color:var(--fio);text-decoration:none;
+  padding:8px 0;white-space:nowrap}
+.nav-links a:hover{color:var(--papel)}
+/* A página actual sublinhada e não só mais clara: a cor sozinha nunca carrega
+   significado neste projecto, no ecrã como no papel. */
+.nav-links a[aria-current=page]{color:var(--papel);
+  box-shadow:inset 0 -3px 0 var(--papel)}
+.migalhas{display:flex;flex-wrap:wrap;align-items:center;gap:6px;
+  max-width:760px;margin:0 auto;padding:10px 20px;
+  font:600 12px/1.3 var(--mono);color:var(--texto-2);background:var(--papel)}
+.migalhas a{color:var(--texto-2)}
+.migalhas b{color:var(--tinta);font-weight:700}
+@media(min-width:800px){.migalhas{padding:14px 20px 0}}
 
 /* --- actualização diária ---
    Alvos grandes e poucos por linha. Isto usa-se de manhã, de pé, com uma mão,

@@ -1693,9 +1693,20 @@ function cartao(p, destaque) {
      As peças de WhatsApp são altas e estreitas e cabem na grelha normal. */
   if (p.un === 'mm' && p.w > 210) classes.push('larga');
 
+  /* Duas acções e não uma.
+     Imprimir logo é o que se quer quando falta UMA peça — o cartaz caiu da
+     porta, precisa de outro. A lista é para o resto do tempo: escolhem-se seis
+     peças com calma e vão todas num trabalho de impressão só, o que poupa
+     idas à impressora e, mais importante, evita ficar com metade do conjunto
+     porque alguém foi interrompido a meio.
+     As peças de WhatsApp não entram na lista: não são papel. */
+  const naLista = LISTA.has(p.id);
   const acao = p.ecra
     ? `<button type="button" class="acao" data-img="${p.id}">Gerar imagem</button>`
-    : `<button type="button" class="acao" data-print="${p.id}">Imprimir</button>`;
+    : `<button type="button" class="acao" data-print="${p.id}">Imprimir já</button>
+       <button type="button" class="acao acao-lista${naLista ? ' dentro' : ''}"
+         data-lista="${p.id}" aria-pressed="${naLista}">${
+         naLista ? '✓ Na lista' : '+ Juntar à lista'}</button>`;
 
   /* Uma peça multi-folha — dez etiquetas de caixa são cinco folhas — mostra
      só a primeira. Todas ficam no DOM porque todas têm de sair na impressão;
@@ -1724,18 +1735,52 @@ function cartao(p, destaque) {
   </article>`;
 }
 
-/** Encolhe cada folha para caber na coluna sem lhe tocar nas medidas. */
+/**
+ * Encolhe cada folha para caber na moldura, sem lhe tocar nas medidas.
+ *
+ * A folha continua a ter as medidas reais em milímetros — só é vista mais
+ * pequena. É por isso que a impressão sai certa mesmo com a pré-visualização
+ * encolhida, e é a razão de o `transform:scale()` existir aqui em vez de haver
+ * duas medidas para a mesma peça.
+ *
+ * Duas armadilhas, ambas já pagas:
+ *
+ * 1. `clientWidth` INCLUI o padding. A moldura tem 8 px de cada lado, por isso
+ *    medir assim desenhava todas as quinze peças 17 px mais largas do que a
+ *    caixa que as segura — a folha passava por cima da moldura à direita e em
+ *    baixo. Parecia um problema de A4 contra Letter e não era: era isto.
+ * 2. Cabe na largura não é cabe. Encolher só pela largura dá molduras de
+ *    alturas todas diferentes — um A3 retrato fica com o dobro da altura de um
+ *    cartão. Agora usa-se o menor dos dois factores, e a folha é centrada no
+ *    espaço que sobra: a grelha passa a ler-se como uma prateleira.
+ */
 function escalar() {
   document.querySelectorAll('.folha-wrap').forEach(w => {
     const un = w.dataset.un;
     const wpx = parseFloat(w.dataset.w) * (un === 'mm' ? MM : 1);
     const hpx = parseFloat(w.dataset.h) * (un === 'mm' ? MM : 1);
-    const disp = w.parentElement.clientWidth || w.clientWidth;
-    if (!disp) return;
-    const k = disp / wpx;
+
+    const mold = w.parentElement;
+    const cs = getComputedStyle(mold);
+    const disp = (mold.clientWidth || w.clientWidth)
+      - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+    if (!disp || disp <= 0) return;
+
+    /* A altura da janela vem do CSS (--altura-previa). Sem ela — impressão, ou
+       um browser que não a resolva — volta-se ao comportamento antigo de caber
+       só pela largura, que nunca corta nada. */
+    const alvo = parseFloat(cs.getPropertyValue('--altura-previa')) || 0;
+    const k = alvo > 0 ? Math.min(disp / wpx, alvo / hpx) : disp / wpx;
+
     w.style.setProperty('--escala', k);
     w.style.width = disp + 'px';
-    w.style.height = (hpx * k) + 'px';
+    w.style.height = (alvo > 0 ? alvo : hpx * k) + 'px';
+    /* Centrar o que sobra. Sem isto as folhas estreitas — o cartão de visita, a
+       faixa de braço — encostavam à esquerda e a grelha ficava torta. */
+    w.style.setProperty('--desvio', Math.max(0, (disp - wpx * k) / 2) + 'px');
+    w.style.setProperty('--desvio-y',
+      Math.max(0, ((alvo > 0 ? alvo : hpx * k) - hpx * k) / 2) + 'px');
+
     const f = w.querySelector('.folha');
     if (f) f.style.setProperty('--escala', k);
   });
@@ -1748,6 +1793,45 @@ function escalar() {
  * páginas nomeadas não é de confiança fora do Chrome — e este ficheiro tem
  * de sair certo do telemóvel de alguém sem saber qual é.
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * A LISTA DE IMPRESSÃO
+ *
+ * Um carrinho, mas de papel. Escolhem-se as peças com calma e saem todas num
+ * trabalho só.
+ *
+ * Vive na memória e não no localStorage de propósito: uma lista de impressão de
+ * ontem que reaparece hoje faz alguém imprimir o que já tem na parede. O que
+ * merece sobreviver a fechar o separador são os dados do centro, não uma
+ * intenção de há dois dias.
+ * -------------------------------------------------------------------------*/
+const LISTA = new Set();
+
+function alternarLista(id) {
+  if (LISTA.has(id)) LISTA.delete(id); else LISTA.add(id);
+  render();
+  pintarLista();
+}
+
+/** A barra só existe quando há alguma coisa nela. Uma barra vazia é ruído. */
+function pintarLista() {
+  const b = document.getElementById('barra-lista');
+  if (!b) return;
+  const n = LISTA.size;
+  b.hidden = n === 0;
+  /* A barra é fixa e tapa o fim da página. Sem esta folga, a última peça da
+     galeria fica escondida por baixo dela e parece que não existe. */
+  document.body.style.paddingBottom = n ? (b.offsetHeight || 68) + 16 + 'px' : '';
+  if (!n) return;
+  const nomes = [...LISTA].map(id => (PECAS.find(x => x.id === id) || {}).titulo).filter(Boolean);
+  const folhas = [...LISTA].reduce((t, id) => {
+    const p = PECAS.find(x => x.id === id);
+    return t + (p && p.folhas ? p.folhas().length : 1);
+  }, 0);
+  document.getElementById('lista-conta').textContent =
+    `${n} ${n === 1 ? 'peça' : 'peças'} · ${folhas} ${folhas === 1 ? 'folha' : 'folhas'}`;
+  document.getElementById('lista-nomes').textContent = nomes.join(' · ');
+}
+
 function imprimir(id) { imprimirVarias([id]); }
 
 /* O conjunto inicial: o que um centro tem de ter na parede na primeira hora.
@@ -2239,6 +2323,7 @@ function limparTudo() {
 }
 
 function iniciar() {
+  mostrarNav();
   carregar();
 
   document.getElementById('f-tipo').innerHTML =
@@ -2266,7 +2351,7 @@ function iniciar() {
   });
 
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-tog],[data-rm],[data-mv],[data-print],[data-img],[data-marca],[data-pick]');
+    const t = e.target.closest('[data-tog],[data-rm],[data-mv],[data-print],[data-img],[data-marca],[data-pick],[data-lista]');
     if (!t) return;
     if (t.dataset.pick) escolherMarca(t.dataset.pick);
     else if (t.dataset.marca) abrirMarcas(t.dataset.l === 'precisa' ? 'precisa' : 'naoTraga', +t.dataset.marca);
@@ -2274,6 +2359,7 @@ function iniciar() {
     else if (t.dataset.rm) remover(t.dataset.l, +t.dataset.rm);
     else if (t.dataset.mv) mover(+t.dataset.mv, +t.dataset.d);
     else if (t.dataset.print) imprimir(t.dataset.print);
+    else if (t.dataset.lista) alternarLista(t.dataset.lista);
     else if (t.dataset.img) imagem(t.dataset.img, t);
   });
 
@@ -2308,6 +2394,10 @@ function iniciar() {
     S.pausado = e.currentTarget.checked; salvar(); montarForm();
   });
   document.getElementById('b-conjunto').addEventListener('click', () => imprimirVarias(CONJUNTO_INICIAL));
+  document.getElementById('b-lista-imprimir')
+    .addEventListener('click', () => imprimirVarias([...LISTA]));
+  document.getElementById('b-lista-limpar')
+    .addEventListener('click', () => { LISTA.clear(); render(); pintarLista(); });
   document.getElementById('b-mono').addEventListener('click', () => { S.mono = !S.mono; salvar(); montarForm(); });
   document.getElementById('b-cortes').addEventListener('click', () => { S.cortes = !S.cortes; salvar(); montarForm(); });
 
@@ -2335,6 +2425,21 @@ function iniciar() {
  * 2. Se iniciar() rebentar, o aviso fica e mostra o erro. Alguém num ginásio
  *    não consegue abrir uma consola; o erro tem de estar na página.
  * -------------------------------------------------------------------------*/
+/**
+ * A barra de navegação só aparece se isto veio de um servidor.
+ *
+ * O kit corre de uma pen, de um anexo de e-mail e do GitHub Pages, e nesses
+ * sítios `/centros` não existe. Um link que não leva a lado nenhum, no meio de
+ * um ginásio, é pior do que não haver link — quem o segue conclui que a
+ * ferramenta está partida.
+ */
+function mostrarNav() {
+  const n = document.getElementById('nav-topo');
+  if (!n) return;
+  const o = location.origin;
+  n.hidden = !(o && o !== 'null' && /^https?:/.test(o));
+}
+
 function arrancar() {
   try {
     iniciar();
@@ -2741,10 +2846,27 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   display: flex; flex-direction: column; gap: 8px;
   min-width: 0;
 }
+/* A altura fixa da janela de pré-visualização.
+   Lê-se no JS (`--altura-previa`) e é o que faz todas as molduras terem a mesma
+   altura, independentemente de a peça ser um A3 retrato ou um cartão de visita.
+   Na impressão é retirada, porque aí a folha é a folha. */
+.moldura { --altura-previa: 300px; }
+.peca.destaque .moldura { --altura-previa: 380px; }
+/* Uma peça que ocupa a linha toda tem espaço para ser vista. A placa de rua é
+   um A3 RETRATO — numa janela de 300 px ficava do tamanho de um selo dentro de
+   uma moldura de 780 px de largura. */
+.peca.larga .moldura { --altura-previa: 440px; }
+@media (max-width: 700px) { .moldura { --altura-previa: 260px; } }
+
+/* A folha fica no fluxo, com as medidas reais, e é a janela que a corta
+   (`overflow: hidden`) e a encolhe (`transform`). Chegou a ser `absolute` para
+   a centrar e isso partiu vinte e três testes de uma vez: são eles que
+   garantem que um A4 tem mesmo 210 mm, e uma folha fora do fluxo deixa de ter
+   medida nenhuma para eles medirem. O centrar faz-se no `translate`. */
 .folha-wrap { position: relative; overflow: hidden; min-width: 0; }
 .folha {
   transform-origin: top left;
-  transform: scale(var(--escala, 1));
+  transform: translate(var(--desvio, 0), var(--desvio-y, 0)) scale(var(--escala, 1));
   background: var(--papel);
   position: relative;
   overflow: hidden;
@@ -3170,6 +3292,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .tela, .colunas, .painel, .familia, .pecas { display: block; padding: 0; margin: 0; max-width: none; }
   .moldura { box-shadow: none; overflow: visible; }
   .folha-wrap { width: auto !important; height: auto !important; overflow: visible; }
+  /* A folha é absoluta no ecrã para poder ser centrada dentro de uma janela de
+     altura fixa. Na impressão volta ao fluxo, senão sai uma página em branco
+     com a peça encostada ao canto. */
   .folha { transform: none !important; box-shadow: none; }
   /* Só a peça escolhida existe. */
   body.imprimindo .peca { display: none; }
@@ -3191,6 +3316,60 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
    não tem deve conseguir ignorar de relance. */
 .bloco.destaque{border:3px solid var(--tinta);padding:16px;background:var(--papel)}
 .bloco.destaque h2{margin-top:0}
+
+/* ---------------------------------------------------------------------------
+ * A lista de impressão
+ *
+ * Fixa no fundo, porque a decisão de imprimir toma-se a meio da galeria e não
+ * no fim dela. Só existe quando tem peças dentro.
+ * -------------------------------------------------------------------------*/
+/* `fixed` e não `sticky`: a barra vive no topo de uma coluna muito comprida, e
+   sticky-bottom só segura um elemento que sairia por baixo — este saía por
+   cima, e desaparecia ao segundo scroll. A decisão de imprimir toma-se a meio
+   da galeria, por isso a barra tem de estar sempre à mão. */
+.barra-lista {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--tinta); color: var(--papel);
+  border-top: 3px solid var(--papel);
+}
+.bl-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bl-txt b { font: 700 13px/1.2 var(--mono); }
+/* Os nomes numa linha só: com seis peças a barra passava a ter quatro linhas e
+   tapava metade do ecrã de um telemóvel. */
+.bl-txt span {
+  font: 500 12px/1.3 var(--fonte); color: var(--fio);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bl-acoes { display: flex; gap: 8px; flex: none; }
+.barra-lista .btn { padding: 10px 12px; font-size: 12px; }
+@media (max-width: 420px) {
+  .bl-txt span { display: none; }   /* num telemóvel a conta chega */
+}
+.barra-lista .btn { margin: 0; background: transparent; color: var(--papel); border-color: var(--papel); }
+.barra-lista .btn-primario { background: var(--papel); color: var(--tinta); }
+
+.peca-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.acao-lista { background: transparent; }
+/* Uma peça já na lista tem de se distinguir com a folha em pré-visualização a
+   preto e branco por trás — daí o preenchimento cheio e não só uma borda. */
+.acao-lista.dentro { background: var(--tinta); color: var(--papel); border-color: var(--tinta); }
+@media print { .barra-lista { display: none !important; } }
+
+/* A barra de navegação, igual à das páginas do servidor — as duas metades têm
+   de parecer a mesma ferramenta a quem salta de uma para a outra. */
+.nav-topo{position:sticky;top:0;z-index:40;display:flex;align-items:center;
+  gap:8px 16px;flex-wrap:wrap;padding:10px 20px;
+  background:var(--tinta);color:var(--papel)}
+.nav-topo .marca{font:400 20px/1 var(--preta);letter-spacing:-.01em;
+  color:var(--papel);text-decoration:none;flex:none}
+.nav-links{display:flex;flex-wrap:wrap;gap:4px 14px;min-width:0}
+.nav-links a{font:600 13px/1.2 var(--fonte);color:var(--fio);text-decoration:none;
+  padding:8px 0;white-space:nowrap}
+.nav-links a:hover{color:var(--papel)}
+.nav-links a[aria-current=page]{color:var(--papel);box-shadow:inset 0 -3px 0 var(--papel)}
+@media print{.nav-topo{display:none !important}}
 
 </style>
 <style>
@@ -3218,6 +3397,19 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
     No telemóvel: descarregar, depois abrir a partir de <i>Ficheiros</i>.</p>
   <pre id="sem-js-erro" hidden></pre>
 </div>
+
+<!-- A mesma barra das páginas do servidor.
+     O kit também se abre de uma pen ou de um anexo, onde estes links não levam
+     a lado nenhum — por isso o script apaga-a quando não veio de um servidor.
+     Um link morto num ginásio é pior do que link nenhum. -->
+<nav class="nav-topo" id="nav-topo" aria-label="Principal" hidden>
+  <a class="marca" href="/">CAPEM</a>
+  <div class="nav-links">
+    <a href="/centros">Quero ajudar</a>
+    <a href="/atualizar">Atualizar a lista</a>
+    <a href="/kit" aria-current="page">Imprimir material</a>
+  </div>
+</nav>
 
 <header class="topo">
   <h1>Kit de material impresso</h1>
@@ -3360,6 +3552,19 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
     </form>
 
     <main class="painel">
+      <!-- A lista de impressão. Só aparece quando tem alguma coisa dentro:
+           uma barra fixa e vazia rouba espaço ao que interessa num telemóvel. -->
+      <div class="barra-lista" id="barra-lista" hidden>
+        <div class="bl-txt">
+          <b id="lista-conta"></b>
+          <span id="lista-nomes"></span>
+        </div>
+        <div class="bl-acoes">
+          <button type="button" class="btn" id="b-lista-limpar">Limpar</button>
+          <button type="button" class="btn btn-primario" id="b-lista-imprimir">Imprimir a lista</button>
+        </div>
+      </div>
+
       <div class="barra">
         <button type="button" class="btn btn-primario" id="b-conjunto">Imprimir o conjunto inicial</button>
         <button type="button" class="btn" id="b-mono" aria-pressed="false"><span class="luz"></span>Preto e branco</button>

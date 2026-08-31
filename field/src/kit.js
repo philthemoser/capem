@@ -1030,9 +1030,20 @@ function cartao(p, destaque) {
      As peças de WhatsApp são altas e estreitas e cabem na grelha normal. */
   if (p.un === 'mm' && p.w > 210) classes.push('larga');
 
+  /* Duas acções e não uma.
+     Imprimir logo é o que se quer quando falta UMA peça — o cartaz caiu da
+     porta, precisa de outro. A lista é para o resto do tempo: escolhem-se seis
+     peças com calma e vão todas num trabalho de impressão só, o que poupa
+     idas à impressora e, mais importante, evita ficar com metade do conjunto
+     porque alguém foi interrompido a meio.
+     As peças de WhatsApp não entram na lista: não são papel. */
+  const naLista = LISTA.has(p.id);
   const acao = p.ecra
     ? `<button type="button" class="acao" data-img="${p.id}">Gerar imagem</button>`
-    : `<button type="button" class="acao" data-print="${p.id}">Imprimir</button>`;
+    : `<button type="button" class="acao" data-print="${p.id}">Imprimir já</button>
+       <button type="button" class="acao acao-lista${naLista ? ' dentro' : ''}"
+         data-lista="${p.id}" aria-pressed="${naLista}">${
+         naLista ? '✓ Na lista' : '+ Juntar à lista'}</button>`;
 
   /* Uma peça multi-folha — dez etiquetas de caixa são cinco folhas — mostra
      só a primeira. Todas ficam no DOM porque todas têm de sair na impressão;
@@ -1061,18 +1072,52 @@ function cartao(p, destaque) {
   </article>`;
 }
 
-/** Encolhe cada folha para caber na coluna sem lhe tocar nas medidas. */
+/**
+ * Encolhe cada folha para caber na moldura, sem lhe tocar nas medidas.
+ *
+ * A folha continua a ter as medidas reais em milímetros — só é vista mais
+ * pequena. É por isso que a impressão sai certa mesmo com a pré-visualização
+ * encolhida, e é a razão de o `transform:scale()` existir aqui em vez de haver
+ * duas medidas para a mesma peça.
+ *
+ * Duas armadilhas, ambas já pagas:
+ *
+ * 1. `clientWidth` INCLUI o padding. A moldura tem 8 px de cada lado, por isso
+ *    medir assim desenhava todas as quinze peças 17 px mais largas do que a
+ *    caixa que as segura — a folha passava por cima da moldura à direita e em
+ *    baixo. Parecia um problema de A4 contra Letter e não era: era isto.
+ * 2. Cabe na largura não é cabe. Encolher só pela largura dá molduras de
+ *    alturas todas diferentes — um A3 retrato fica com o dobro da altura de um
+ *    cartão. Agora usa-se o menor dos dois factores, e a folha é centrada no
+ *    espaço que sobra: a grelha passa a ler-se como uma prateleira.
+ */
 function escalar() {
   document.querySelectorAll('.folha-wrap').forEach(w => {
     const un = w.dataset.un;
     const wpx = parseFloat(w.dataset.w) * (un === 'mm' ? MM : 1);
     const hpx = parseFloat(w.dataset.h) * (un === 'mm' ? MM : 1);
-    const disp = w.parentElement.clientWidth || w.clientWidth;
-    if (!disp) return;
-    const k = disp / wpx;
+
+    const mold = w.parentElement;
+    const cs = getComputedStyle(mold);
+    const disp = (mold.clientWidth || w.clientWidth)
+      - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+    if (!disp || disp <= 0) return;
+
+    /* A altura da janela vem do CSS (--altura-previa). Sem ela — impressão, ou
+       um browser que não a resolva — volta-se ao comportamento antigo de caber
+       só pela largura, que nunca corta nada. */
+    const alvo = parseFloat(cs.getPropertyValue('--altura-previa')) || 0;
+    const k = alvo > 0 ? Math.min(disp / wpx, alvo / hpx) : disp / wpx;
+
     w.style.setProperty('--escala', k);
     w.style.width = disp + 'px';
-    w.style.height = (hpx * k) + 'px';
+    w.style.height = (alvo > 0 ? alvo : hpx * k) + 'px';
+    /* Centrar o que sobra. Sem isto as folhas estreitas — o cartão de visita, a
+       faixa de braço — encostavam à esquerda e a grelha ficava torta. */
+    w.style.setProperty('--desvio', Math.max(0, (disp - wpx * k) / 2) + 'px');
+    w.style.setProperty('--desvio-y',
+      Math.max(0, ((alvo > 0 ? alvo : hpx * k) - hpx * k) / 2) + 'px');
+
     const f = w.querySelector('.folha');
     if (f) f.style.setProperty('--escala', k);
   });
@@ -1085,6 +1130,45 @@ function escalar() {
  * páginas nomeadas não é de confiança fora do Chrome — e este ficheiro tem
  * de sair certo do telemóvel de alguém sem saber qual é.
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * A LISTA DE IMPRESSÃO
+ *
+ * Um carrinho, mas de papel. Escolhem-se as peças com calma e saem todas num
+ * trabalho só.
+ *
+ * Vive na memória e não no localStorage de propósito: uma lista de impressão de
+ * ontem que reaparece hoje faz alguém imprimir o que já tem na parede. O que
+ * merece sobreviver a fechar o separador são os dados do centro, não uma
+ * intenção de há dois dias.
+ * -------------------------------------------------------------------------*/
+const LISTA = new Set();
+
+function alternarLista(id) {
+  if (LISTA.has(id)) LISTA.delete(id); else LISTA.add(id);
+  render();
+  pintarLista();
+}
+
+/** A barra só existe quando há alguma coisa nela. Uma barra vazia é ruído. */
+function pintarLista() {
+  const b = document.getElementById('barra-lista');
+  if (!b) return;
+  const n = LISTA.size;
+  b.hidden = n === 0;
+  /* A barra é fixa e tapa o fim da página. Sem esta folga, a última peça da
+     galeria fica escondida por baixo dela e parece que não existe. */
+  document.body.style.paddingBottom = n ? (b.offsetHeight || 68) + 16 + 'px' : '';
+  if (!n) return;
+  const nomes = [...LISTA].map(id => (PECAS.find(x => x.id === id) || {}).titulo).filter(Boolean);
+  const folhas = [...LISTA].reduce((t, id) => {
+    const p = PECAS.find(x => x.id === id);
+    return t + (p && p.folhas ? p.folhas().length : 1);
+  }, 0);
+  document.getElementById('lista-conta').textContent =
+    `${n} ${n === 1 ? 'peça' : 'peças'} · ${folhas} ${folhas === 1 ? 'folha' : 'folhas'}`;
+  document.getElementById('lista-nomes').textContent = nomes.join(' · ');
+}
+
 function imprimir(id) { imprimirVarias([id]); }
 
 /* O conjunto inicial: o que um centro tem de ter na parede na primeira hora.
@@ -1576,6 +1660,7 @@ function limparTudo() {
 }
 
 function iniciar() {
+  mostrarNav();
   carregar();
 
   document.getElementById('f-tipo').innerHTML =
@@ -1603,7 +1688,7 @@ function iniciar() {
   });
 
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-tog],[data-rm],[data-mv],[data-print],[data-img],[data-marca],[data-pick]');
+    const t = e.target.closest('[data-tog],[data-rm],[data-mv],[data-print],[data-img],[data-marca],[data-pick],[data-lista]');
     if (!t) return;
     if (t.dataset.pick) escolherMarca(t.dataset.pick);
     else if (t.dataset.marca) abrirMarcas(t.dataset.l === 'precisa' ? 'precisa' : 'naoTraga', +t.dataset.marca);
@@ -1611,6 +1696,7 @@ function iniciar() {
     else if (t.dataset.rm) remover(t.dataset.l, +t.dataset.rm);
     else if (t.dataset.mv) mover(+t.dataset.mv, +t.dataset.d);
     else if (t.dataset.print) imprimir(t.dataset.print);
+    else if (t.dataset.lista) alternarLista(t.dataset.lista);
     else if (t.dataset.img) imagem(t.dataset.img, t);
   });
 
@@ -1645,6 +1731,10 @@ function iniciar() {
     S.pausado = e.currentTarget.checked; salvar(); montarForm();
   });
   document.getElementById('b-conjunto').addEventListener('click', () => imprimirVarias(CONJUNTO_INICIAL));
+  document.getElementById('b-lista-imprimir')
+    .addEventListener('click', () => imprimirVarias([...LISTA]));
+  document.getElementById('b-lista-limpar')
+    .addEventListener('click', () => { LISTA.clear(); render(); pintarLista(); });
   document.getElementById('b-mono').addEventListener('click', () => { S.mono = !S.mono; salvar(); montarForm(); });
   document.getElementById('b-cortes').addEventListener('click', () => { S.cortes = !S.cortes; salvar(); montarForm(); });
 
@@ -1672,6 +1762,21 @@ function iniciar() {
  * 2. Se iniciar() rebentar, o aviso fica e mostra o erro. Alguém num ginásio
  *    não consegue abrir uma consola; o erro tem de estar na página.
  * -------------------------------------------------------------------------*/
+/**
+ * A barra de navegação só aparece se isto veio de um servidor.
+ *
+ * O kit corre de uma pen, de um anexo de e-mail e do GitHub Pages, e nesses
+ * sítios `/centros` não existe. Um link que não leva a lado nenhum, no meio de
+ * um ginásio, é pior do que não haver link — quem o segue conclui que a
+ * ferramenta está partida.
+ */
+function mostrarNav() {
+  const n = document.getElementById('nav-topo');
+  if (!n) return;
+  const o = location.origin;
+  n.hidden = !(o && o !== 'null' && /^https?:/.test(o));
+}
+
 function arrancar() {
   try {
     iniciar();

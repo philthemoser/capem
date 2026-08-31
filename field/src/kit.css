@@ -384,10 +384,27 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   display: flex; flex-direction: column; gap: 8px;
   min-width: 0;
 }
+/* A altura fixa da janela de pré-visualização.
+   Lê-se no JS (`--altura-previa`) e é o que faz todas as molduras terem a mesma
+   altura, independentemente de a peça ser um A3 retrato ou um cartão de visita.
+   Na impressão é retirada, porque aí a folha é a folha. */
+.moldura { --altura-previa: 300px; }
+.peca.destaque .moldura { --altura-previa: 380px; }
+/* Uma peça que ocupa a linha toda tem espaço para ser vista. A placa de rua é
+   um A3 RETRATO — numa janela de 300 px ficava do tamanho de um selo dentro de
+   uma moldura de 780 px de largura. */
+.peca.larga .moldura { --altura-previa: 440px; }
+@media (max-width: 700px) { .moldura { --altura-previa: 260px; } }
+
+/* A folha fica no fluxo, com as medidas reais, e é a janela que a corta
+   (`overflow: hidden`) e a encolhe (`transform`). Chegou a ser `absolute` para
+   a centrar e isso partiu vinte e três testes de uma vez: são eles que
+   garantem que um A4 tem mesmo 210 mm, e uma folha fora do fluxo deixa de ter
+   medida nenhuma para eles medirem. O centrar faz-se no `translate`. */
 .folha-wrap { position: relative; overflow: hidden; min-width: 0; }
 .folha {
   transform-origin: top left;
-  transform: scale(var(--escala, 1));
+  transform: translate(var(--desvio, 0), var(--desvio-y, 0)) scale(var(--escala, 1));
   background: var(--papel);
   position: relative;
   overflow: hidden;
@@ -813,6 +830,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
   .tela, .colunas, .painel, .familia, .pecas { display: block; padding: 0; margin: 0; max-width: none; }
   .moldura { box-shadow: none; overflow: visible; }
   .folha-wrap { width: auto !important; height: auto !important; overflow: visible; }
+  /* A folha é absoluta no ecrã para poder ser centrada dentro de uma janela de
+     altura fixa. Na impressão volta ao fluxo, senão sai uma página em branco
+     com a peça encostada ao canto. */
   .folha { transform: none !important; box-shadow: none; }
   /* Só a peça escolhida existe. */
   body.imprimindo .peca { display: none; }
@@ -834,3 +854,57 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
    não tem deve conseguir ignorar de relance. */
 .bloco.destaque{border:3px solid var(--tinta);padding:16px;background:var(--papel)}
 .bloco.destaque h2{margin-top:0}
+
+/* ---------------------------------------------------------------------------
+ * A lista de impressão
+ *
+ * Fixa no fundo, porque a decisão de imprimir toma-se a meio da galeria e não
+ * no fim dela. Só existe quando tem peças dentro.
+ * -------------------------------------------------------------------------*/
+/* `fixed` e não `sticky`: a barra vive no topo de uma coluna muito comprida, e
+   sticky-bottom só segura um elemento que sairia por baixo — este saía por
+   cima, e desaparecia ao segundo scroll. A decisão de imprimir toma-se a meio
+   da galeria, por isso a barra tem de estar sempre à mão. */
+.barra-lista {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: var(--tinta); color: var(--papel);
+  border-top: 3px solid var(--papel);
+}
+.bl-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bl-txt b { font: 700 13px/1.2 var(--mono); }
+/* Os nomes numa linha só: com seis peças a barra passava a ter quatro linhas e
+   tapava metade do ecrã de um telemóvel. */
+.bl-txt span {
+  font: 500 12px/1.3 var(--fonte); color: var(--fio);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bl-acoes { display: flex; gap: 8px; flex: none; }
+.barra-lista .btn { padding: 10px 12px; font-size: 12px; }
+@media (max-width: 420px) {
+  .bl-txt span { display: none; }   /* num telemóvel a conta chega */
+}
+.barra-lista .btn { margin: 0; background: transparent; color: var(--papel); border-color: var(--papel); }
+.barra-lista .btn-primario { background: var(--papel); color: var(--tinta); }
+
+.peca-acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.acao-lista { background: transparent; }
+/* Uma peça já na lista tem de se distinguir com a folha em pré-visualização a
+   preto e branco por trás — daí o preenchimento cheio e não só uma borda. */
+.acao-lista.dentro { background: var(--tinta); color: var(--papel); border-color: var(--tinta); }
+@media print { .barra-lista { display: none !important; } }
+
+/* A barra de navegação, igual à das páginas do servidor — as duas metades têm
+   de parecer a mesma ferramenta a quem salta de uma para a outra. */
+.nav-topo{position:sticky;top:0;z-index:40;display:flex;align-items:center;
+  gap:8px 16px;flex-wrap:wrap;padding:10px 20px;
+  background:var(--tinta);color:var(--papel)}
+.nav-topo .marca{font:400 20px/1 var(--preta);letter-spacing:-.01em;
+  color:var(--papel);text-decoration:none;flex:none}
+.nav-links{display:flex;flex-wrap:wrap;gap:4px 14px;min-width:0}
+.nav-links a{font:600 13px/1.2 var(--fonte);color:var(--fio);text-decoration:none;
+  padding:8px 0;white-space:nowrap}
+.nav-links a:hover{color:var(--papel)}
+.nav-links a[aria-current=page]{color:var(--papel);box-shadow:inset 0 -3px 0 var(--papel)}
+@media print{.nav-topo{display:none !important}}

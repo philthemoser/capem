@@ -39,6 +39,19 @@
   <pre id="sem-js-erro" hidden></pre>
 </div>
 
+<!-- A mesma barra das páginas do servidor.
+     O kit também se abre de uma pen ou de um anexo, onde estes links não levam
+     a lado nenhum — por isso o script apaga-a quando não veio de um servidor.
+     Um link morto num ginásio é pior do que link nenhum. -->
+<nav class="nav-topo" id="nav-topo" aria-label="Principal" hidden>
+  <a class="marca" href="/">CAPEM</a>
+  <div class="nav-links">
+    <a href="/centros">Quero ajudar</a>
+    <a href="/atualizar">Atualizar a lista</a>
+    <a href="/kit" aria-current="page">Imprimir material</a>
+  </div>
+</nav>
+
 <header class="topo">
   <h1>Kit de material impresso</h1>
   <p>Preencha uma vez. Saem quinze peças prontas, em A4 comum, legíveis a preto
@@ -180,6 +193,19 @@
     </form>
 
     <main class="painel">
+      <!-- A lista de impressão. Só aparece quando tem alguma coisa dentro:
+           uma barra fixa e vazia rouba espaço ao que interessa num telemóvel. -->
+      <div class="barra-lista" id="barra-lista" hidden>
+        <div class="bl-txt">
+          <b id="lista-conta"></b>
+          <span id="lista-nomes"></span>
+        </div>
+        <div class="bl-acoes">
+          <button type="button" class="btn" id="b-lista-limpar">Limpar</button>
+          <button type="button" class="btn btn-primario" id="b-lista-imprimir">Imprimir a lista</button>
+        </div>
+      </div>
+
       <div class="barra">
         <button type="button" class="btn btn-primario" id="b-conjunto">Imprimir o conjunto inicial</button>
         <button type="button" class="btn" id="b-mono" aria-pressed="false"><span class="luz"></span>Preto e branco</button>

@@ -1,4 +1,13 @@
+node_modules/
+
+# O estado do servidor. É o único ficheiro que importa fazer cópia — e é
+# precisamente por isso que não entra aqui.
 server/capem.db
 server/*.db-journal
 server/*.db-wal
-node_modules/
+
+# Capturas geradas por tools/shots.js
+shots/
+
+.DS_Store
+*.log

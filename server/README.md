@@ -120,6 +120,7 @@ para uma dúzia de centros a conta é praticamente zero.
 | `/` | Duas portas: **quero ajudar** e **sou de um centro**. Nada mais. |
 | `/centros` | A lista, com o que cada um precisa hoje em marcas, e a idade de cada lista. Procura, filtros, ordem e páginas — tudo no servidor, tudo no endereço. |
 | `/centro` | A porta de quem gere um centro: atualizar, imprimir, ou pedir uma página. |
+| `/pedir-codigo` | Pedir um código novo. **Não emite nada** — manda um recado. |
 | `/atualizar` | **A actualização diária.** Endereço + código, e a lista abre para edição. 30 KB, sem JavaScript obrigatório. |
 | `/novo` | O formulário de pedido. |
 | `/<centro>` | A página do centro — o destino do QR. |
@@ -182,6 +183,33 @@ decisão inteira: emitir um código é dar acesso de escrita à página de um ce
 A verificação de que a pessoa do outro lado é mesmo de lá é um telefonema para
 o número que já está guardado — não é coisa que um formulário faça. A página
 diz isso por extenso, ao lado do botão.
+
+### Pedir um código novo, do lado de quem o perdeu
+
+`/pedir-codigo` é público e **não concede nada**. O coordenador escreve o
+endereço do centro, opcionalmente quem é e o que aconteceu, e isso chega ao
+Telegram com o nome do centro, o telefone que está guardado, e um link `wa.me`
+já apontado a esse número — porque quando a notificação chega, a acção seguinte
+é ligar.
+
+Porque não emite: o código é o que deixa escrever na página de um centro, e os
+nomes dos centros estão numa lista pública. Um formulário que emitisse
+transformava "saber o nome de um centro" em "tomar conta do centro". A
+verificação é o telefonema, e não é coisa que um formulário faça.
+
+E o código novo vai para o **telefone conferido na aprovação**, não para quem
+pediu — o botão da página de reemissão já vem apontado a esse número, com
+"mandar para outro número" ao lado para o caso raro. É isso que faz um pedido
+feito por um impostor acabar no telemóvel do centro em vez de no dele.
+
+Cinco pedidos por hora por IP: chega para quem se engana no endereço, e não
+chega para encher o Telegram de quem tem de atender.
+
+Antes disto, as duas páginas que falavam de códigos perdidos mandavam "falar
+com quem aprovou o seu centro" — sem dizer como, a alguém que provavelmente
+nunca soube quem foi — e uma delas sugeria **criar uma página nova**, o que
+deixaria duas páginas do mesmo centro com os cartazes impressos a apontar para
+a errada.
 
 ### `POST /api/carregar` — o código também lê
 
@@ -359,7 +387,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 195 verificações
+node tools/server-test.js    # 208 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 

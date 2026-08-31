@@ -67,6 +67,7 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     ['porta do centro', '/centro'],
     ['pedir página', '/novo'],
     ['entrada de atualização', '/atualizar'],
+    ['pedir um código novo', '/pedir-codigo'],
     ['página de um centro', '/sao-sebastiao'],
     ['centro em pausa', '/zona-norte'],
     ['centro com lista velha', '/bela-vista'],

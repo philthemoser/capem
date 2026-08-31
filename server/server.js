@@ -354,6 +354,61 @@ async function encaminhar(req, res) {
   }
 
   /* --- publicar (o botão do kit) --- */
+  /* --- pedir um código novo ---
+   *
+   * Não emite nada. Manda um recado ao Telegram com o centro, o telefone que
+   * está guardado, e o link para a fila — onde o botão de emitir já existe.
+   *
+   * É público de propósito e não concede nada de propósito: o código é o que
+   * deixa escrever na página de um centro, e os nomes dos centros estão numa
+   * lista pública. Se este formulário emitisse, bastava saber um nome para
+   * tomar conta de um centro. A verificação é o telefonema, e o código novo
+   * segue para o número conferido à mão na aprovação — não para quem pediu.
+   */
+  if (caminho === '/pedir-codigo' && req.method === 'GET') {
+    return responder(res, 200, P.paginaPedirCodigo({ slug: url.searchParams.get('c') || '' }));
+  }
+  if (caminho === '/pedir-codigo' && req.method === 'POST') {
+    if (demasiado(ip, 5, 3600e3)) {
+      return responder(res, 429, P.paginaPedirCodigo({
+        erro: 'Demasiados pedidos deste aparelho. Tente daqui a uma hora.' }));
+    }
+    const campos = new URLSearchParams(await corpo(req));
+    const pedido = texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
+    const nota = texto(campos.get('nota'), 140);
+    const real = db.resolver(pedido);
+    const centro = real ? db.ler(real) : null;
+    if (!centro || centro.estado !== 'aprovado') {
+      return responder(res, 404, P.paginaPedirCodigo({
+        slug: pedido,
+        erro: 'Não encontrámos esse endereço. Confira-o no rodapé de uma peça '
+            + 'impressa, ou procure o seu centro na lista de centros.'
+      }));
+    }
+    const d = centro.dados || {};
+    const url_centro = urlDoCentro(centro.slug, base);
+    /* O link do WhatsApp para o número guardado vai já feito na notificação:
+       quando isto chegar, a acção seguinte é ligar, e um toque poupa procurar
+       o número na base de dados. */
+    const wa = A.linkWhatsApp(d.contato, `Olá! Aqui é do CAPEM, sobre o código de ${d.nome || centro.slug}.`);
+    A.avisar({
+      tipo: 'codigo',
+      titulo: 'Pedido de código novo',
+      corpo: [
+        d.nome || centro.slug,
+        'telefone do centro: ' + (d.contato || 'sem telefone'),
+        nota ? 'disse: ' + nota : '',
+        wa ? 'falar: ' + wa : '',
+        'confirme ao telefone ANTES de emitir'
+      ].filter(Boolean).join('\n'),
+      url: `${base}/admin?t=${encodeURIComponent(ADMIN)}`,
+      slug: centro.slug
+    });
+    console.log(`[pedido de código] ${centro.slug}${nota ? ' — ' + nota : ''}`);
+    return responder(res, 200, P.paginaPedirCodigo({
+      feito: true, nome: d.nome || centro.slug }));
+  }
+
   /* --- a actualização diária ---
    *
    * Um GET mostra o formulário de entrada; um POST com código certo mostra a
@@ -546,7 +601,8 @@ async function encaminhar(req, res) {
        turno. */
     return responder(res, 200, P.paginaCodigo({
       slug, codigo, base, url: urlDoCentro(slug, base),
-      nome: (centro.dados || {}).nome, reemitido: true,
+      nome: (centro.dados || {}).nome, contato: (centro.dados || {}).contato,
+      reemitido: true,
       voltar: '/admin?t=' + encodeURIComponent(ADMIN)
     }));
   }

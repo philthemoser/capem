@@ -403,12 +403,13 @@ const DIA = 86400000;
   console.log('\natualizar a lista com o código');
   /* A página que se abre todas as manhãs, e a única cujo êxito se mede em
      segundos. Se esta não for usada, tudo o resto envelhece. */
-  const formN = (p, obj) => {
+  const formN = (p, obj, ip) => {
     const u = new URLSearchParams();
     Object.entries(obj).forEach(([k, v]) =>
       Array.isArray(v) ? v.forEach(x => u.append(k, x)) : u.append(k, v));
     return fetch(base + p, { method: 'POST', redirect: 'manual',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: u.toString() });
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded',
+                 ...(ip ? { 'X-Forwarded-For': ip } : {}) }, body: u.toString() });
   };
 
   r = await get('/atualizar');
@@ -625,6 +626,49 @@ const DIA = 86400000;
     (html.match(/https:\/\/capem[^"< ]*/) || [])[0]);
 
   let novoCod;
+  console.log('\npedir um código novo (público)');
+  /* O beco sem saída: a página dizia "fale com quem aprovou o seu centro" a
+     alguém que provavelmente nunca soube quem foi. */
+  r = await get('/atualizar');
+  ok('a entrada de atualização diz onde pedir',
+    /href="\/pedir-codigo"/.test(await r.text()));
+  r = await get('/centro');
+  html = await r.text();
+  ok('e a porta do centro também', /href="\/pedir-codigo"/.test(html));
+  /* Mandar criar uma página nova era conselho activamente mau: ficavam duas do
+     mesmo centro e os cartazes impressos apontavam para a errada. */
+  ok('e já não manda criar uma página nova', /não crie uma página\s+nova/.test(html));
+
+  r = await get('/pedir-codigo');
+  ok('a página de pedido responde', r.status === 200, String(r.status));
+  ok('e avisa que o código vai para o telefone do centro',
+    /não para quem fez este pedido/.test(await r.text()));
+
+  r = await formN('/pedir-codigo', { slug: 'nao-existe-nenhum' }, '203.0.113.7');
+  ok('um endereço que não existe é recusado', r.status === 404, String(r.status));
+
+  /* O que este formulário NÃO pode fazer, que é a razão de ele poder ser
+     público: emitir. Se emitisse, bastava saber um nome — que está numa lista
+     pública — para tomar conta de um centro. */
+  const hashAntes = S.db.ler(slugFinal).codigo_hash;
+  r = await formN('/pedir-codigo', { slug: slugFinal, nota: 'Sou a Ana, o papel molhou-se.' }, '203.0.113.7');
+  html = await r.text();
+  ok('um pedido válido é aceite', r.status === 200, String(r.status));
+  ok('e diz que vai haver um telefonema', /Vamos ligar/.test(html));
+  ok('MAS não emite código nenhum',
+    S.db.ler(slugFinal).codigo_hash === hashAntes);
+  ok('e o código actual continua a publicar',
+    (await api('/api/publicar', { slug: slugFinal, codigo, dados: { precisa: ['agua'] } })).status === 200);
+
+  /* Cinco por hora: chega para alguém que se engana no endereço, e não chega
+     para encher o Telegram de quem tem de atender. */
+  let travou = false;
+  for (let i = 0; i < 8; i++) {
+    const x = await formN('/pedir-codigo', { slug: slugFinal }, '203.0.113.7');
+    if (x.status === 429) { travou = true; break; }
+  }
+  ok('e há uma trava para não encher o Telegram', travou);
+
   console.log('\nemitir um código novo');
   /* "Perdi o código" é o pedido de ajuda mais provável que esta ferramenta vai
      receber. Até aqui a única resposta era mexer na base de dados à mão. */
@@ -647,7 +691,12 @@ const DIA = 86400000;
   ok('diz que o anterior deixou de funcionar', /deixou de funcionar/.test(html));
   /* O problema a seguir a "perdi o código" é o mesmo: fazê-lo chegar a quem
      está de turno. */
-  ok('e oferece mandá-lo no WhatsApp', /wa\.me\/\?text=/.test(html));
+  ok('e oferece mandá-lo no WhatsApp', /wa\.me\//.test(html));
+  /* Para o número conferido na aprovação, não para "escolha um contacto": é o
+     que faz um pedido feito por um impostor acabar no telemóvel do centro. */
+  ok('e o destino por omissão é o telefone do centro',
+    /wa\.me\/5551996120044\?text=/.test(html));
+  ok('com a opção de mandar para outro número', /Mandar para outro número/.test(html));
 
   /* A parte que interessa: invalidar não é um efeito secundário, é metade da
      razão de existir. Um código perdido pode estar perdido PARA ALGUÉM. */

@@ -476,6 +476,75 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
 }
 
 /* ---------------------------------------------------------------------------
+ * PEDIR UM CÓDIGO NOVO
+ *
+ * Esta página não emite nada. Manda um recado.
+ *
+ * O código é o que deixa escrever na página de um centro, por isso não pode ser
+ * um formulário a decidir quem o recebe — bastava saber o nome de um centro,
+ * que está numa lista pública, para tomar conta dele. A verificação é um
+ * telefonema para o número que foi conferido à mão na aprovação, e o código
+ * novo vai para ESSE número e não para quem o pediu. Quem se fizer passar por
+ * um coordenador consegue, no máximo, que o centro receba um código novo.
+ *
+ * O que isto resolve é o dead end: até aqui a página dizia "fale com quem
+ * aprovou o seu centro" sem dizer como, a alguém que provavelmente nunca soube
+ * quem foi.
+ * -------------------------------------------------------------------------*/
+function paginaPedirCodigo({ erro, feito, slug, nome }) {
+  return molde({
+    aqui: '/atualizar',
+    migalhas: [['Atualizar a lista', '/atualizar'], ['Pedir um código novo']],
+    titulo: 'Pedir um código novo — CAPEM',
+    descricao: 'Peça um código novo para o seu centro.',
+    corpo: `
+<main class="entrar">
+  <header>
+    <h1>Pedir um código novo</h1>
+  </header>
+
+  ${feito ? `<p class="feito">Pedido enviado${nome ? ` para <b>${esc(nome)}</b>` : ''}.
+    Vamos ligar para o telefone do centro para confirmar, e o código novo segue
+    para esse mesmo número. Se ninguém ligar até amanhã, tente outra vez.</p>` : ''}
+  ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
+
+  ${feito ? '' : `
+  <p class="entrada">Escreva o endereço da página do seu centro. Não precisa de
+    saber o código — é isso que está a pedir.</p>
+
+  <form method="post" action="/pedir-codigo">
+    <label class="campo" for="slug">Endereço da sua página</label>
+    <input id="slug" name="slug" type="text" value="${esc(slug || '')}"
+      placeholder="canoas-ss" autocomplete="off" spellcheck="false"
+      inputmode="url" maxlength="60" required>
+    <p class="ajuda">Só o nome — a parte depois da barra. Está no rodapé de
+      todas as peças que imprimiu.</p>
+
+    <label class="campo" for="nota">Quem é, e o que aconteceu (opcional)</label>
+    <input id="nota" name="nota" type="text" maxlength="140" autocomplete="off"
+      placeholder="Sou a Ana, da cozinha. O papel com o código molhou-se.">
+    <p class="ajuda">Ajuda a saber com quem falar quando ligarmos.</p>
+
+    <button class="btn btn-primario largo" type="submit">Pedir</button>
+  </form>
+
+  <div class="aviso-caixa">
+    <p><b>Como funciona, para não haver surpresas:</b></p>
+    <p>Ligamos para o telefone que está na página do centro — o mesmo que foi
+      conferido quando o centro foi aprovado. O código novo vai para esse
+      número, e não para quem fez este pedido.</p>
+    <p>Assim que for emitido, <b>o código antigo deixa de funcionar</b>. Se
+      alguém ainda o tiver escrito num papel, esse papel deixa de valer.</p>
+  </div>`}
+
+  <footer class="pe">
+    <p><a href="/atualizar">Voltar</a> — se afinal encontrou o código.</p>
+  </footer>
+</main>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
  * A ACTUALIZAÇÃO DIÁRIA
  *
  * A página que um coordenador abre todas as manhãs, e a única cujo êxito se
@@ -535,8 +604,8 @@ function paginaAtualizarEntrada({ erro, slug }) {
 
   <footer class="pe">
     <p><b>Ainda não tem página?</b> <a href="/novo">Peça uma aqui.</a></p>
-    <p><b>Perdeu o código?</b> Não há como recuperá-lo — só emitir outro. Fale
-      com quem aprovou o seu centro.</p>
+    <p><b>Perdeu o código?</b> Não há como recuperá-lo — só emitir outro.
+      <a href="/pedir-codigo">Peça um código novo aqui.</a></p>
     <p><b>Quer imprimir material novo?</b> <a href="/kit">O kit está aqui</a> —
       e puxa os seus dados com o mesmo código, sem escrever tudo outra vez.</p>
   </footer>
@@ -720,7 +789,8 @@ function paginaCentroEntrada({ base }) {
 
   <footer class="pe">
     <p><b>Perdeu o código?</b> Não há como o recuperar — só emitir outro.
-      <a href="/novo">Peça uma página nova</a> e diga-nos, para juntarmos as duas.</p>
+      <a href="/pedir-codigo">Peça um código novo aqui</a>; não crie uma página
+      nova, senão ficam duas do mesmo centro e os cartazes apontam para a errada.</p>
   </footer>
 </main>`
   });
@@ -808,10 +878,15 @@ function textoCodigo(nome, slug, codigo, base, url) {
   ].join('\n');
 }
 
-function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, reemitido, voltar }) {
+function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, reemitido, voltar, contato }) {
   const url = urlCanonica || `${base}/${slug}`;
-  const wa = 'https://wa.me/?text=' +
-    encodeURIComponent(textoCodigo(nome, slug, codigo, base, url));
+  const txt = textoCodigo(nome, slug, codigo, base, url);
+  const wa = 'https://wa.me/?text=' + encodeURIComponent(txt);
+  /* Ao reemitir, o destino certo é o telefone do centro e não "escolha um
+     contacto": foi esse número que foi conferido à mão na aprovação. Mandá-lo
+     para lá é o que faz um pedido de código feito por um impostor terminar no
+     telemóvel do centro em vez de no dele. */
+  const waDirecto = reemitido ? linkWhatsApp(contato, txt) : '';
   return molde({
     aqui: reemitido ? false : '/centro',
     migalhas: reemitido ? null : [['Sou de um centro', '/centro'], ['Pedido recebido']],
@@ -834,8 +909,12 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, reemitido, v
   </section>
 
   <div class="guardar-codigo">
-    <a class="btn btn-wa largo" href="${esc(wa)}" target="_blank" rel="noopener">
-      Mandar o código no WhatsApp</a>
+    ${waDirecto ? `<a class="btn btn-wa largo" href="${esc(waDirecto)}" target="_blank" rel="noopener">
+      Mandar para ${esc(contato)}</a>
+    <p class="ajuda">É o telefone que está na página do centro — o que foi
+      conferido quando o centro foi aprovado.</p>` : ''}
+    <a class="btn ${waDirecto ? '' : 'btn-wa'} largo" href="${esc(wa)}" target="_blank" rel="noopener">
+      ${waDirecto ? 'Mandar para outro número' : 'Mandar o código no WhatsApp'}</a>
     <p class="ajuda">Mande-o ao grupo do centro, ou a si próprio. Quem entrar ao
       turno de amanhã não esteve aqui a ver este ecrã — e um papel colado à
       parede de um ginásio perde-se. <b>Escreva-o também num papel</b>: é o que
@@ -1219,6 +1298,14 @@ input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{
 .btn-recusar{border-color:var(--proibido);color:var(--proibido)}
 /* O bloco de guardar o código, logo a seguir à caixa que o mostra: é o momento
    em que a pessoa ainda o tem no ecrã, e o único em que o pode mandar. */
+/* O que vai acontecer a seguir, dito antes de se carregar no botão: haverá um
+   telefonema, e o código antigo morre. As duas coisas surpreendem se não forem
+   ditas, e uma delas estraga um papel que alguém guardou. */
+.aviso-caixa{margin:22px 20px;padding:16px;background:var(--claro);
+  border-left:6px solid var(--tinta)}
+.aviso-caixa p{margin:0 0 8px;font:500 14px/1.5 var(--fonte);color:var(--texto-2)}
+.aviso-caixa p:last-child{margin-bottom:0}
+.aviso-caixa b{color:var(--tinta)}
 .guardar-codigo{margin:0 0 22px}
 .guardar-codigo .ajuda{margin-top:10px}
 .codigo-caixa{padding:18px;margin:0 0 20px;border:3px solid var(--tinta);background:var(--claro)}
@@ -1263,4 +1350,5 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
                    paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
+                   paginaPedirCodigo,
                    paginaCodigo, paginaAdmin, idade, esc, CSS };

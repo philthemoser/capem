@@ -518,6 +518,39 @@ async function encaminhar(req, res) {
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
   }
+  /* --- emitir um código novo ---
+   *
+   * "Perdi o código" vai ser o pedido de ajuda mais comum que esta ferramenta
+   * recebe: um papel colado à parede de um ginásio perde-se, molha-se, e quem
+   * o tinha no telemóvel foi para casa. Até aqui a única resposta era uma
+   * alteração à mão na base de dados.
+   *
+   * Vive atrás do segredo de administração e não numa página pública, e isso é
+   * a decisão inteira: emitir um código é dar acesso de escrita à página de um
+   * centro. A verificação de que a pessoa do outro lado é mesmo do centro é um
+   * telefonema para o número que já está guardado — não é coisa que um
+   * formulário faça.
+   */
+  if (caminho === '/admin/recodigo' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    const slug = db.resolver(texto(campos.get('slug'), 60));
+    const centro = slug ? db.ler(slug) : null;
+    if (!centro) return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
+
+    const codigo = db.novoCodigoPara(slug);
+    console.log(`[código novo] ${slug}`);
+    /* Mostrado uma vez, na mesma página que mostra um código acabado de criar —
+       com o mesmo botão de mandar no WhatsApp, porque o problema a seguir a
+       "perdi o código" é exactamente o mesmo: fazê-lo chegar a quem está de
+       turno. */
+    return responder(res, 200, P.paginaCodigo({
+      slug, codigo, base, url: urlDoCentro(slug, base),
+      nome: (centro.dados || {}).nome, reemitido: true,
+      voltar: '/admin?t=' + encodeURIComponent(ADMIN)
+    }));
+  }
+
   if (caminho === '/admin/decidir' && req.method === 'POST') {
     const campos = new URLSearchParams(await corpo(req));
     if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());

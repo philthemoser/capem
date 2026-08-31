@@ -240,6 +240,26 @@ function publicar(slug, dados) {
     .run(JSON.stringify(dados), Date.now(), ...derivadas(dados), slug);
 }
 
+/**
+ * Emitir um código novo, invalidando o antigo.
+ *
+ * O código não se recupera — só se guarda o hash, e isso é deliberado nos dois
+ * sentidos. Mas "perdi o código" é o que vai acontecer mais vezes do que
+ * qualquer outro pedido de ajuda: um papel colado à parede de um ginásio
+ * perde-se, molha-se, e a pessoa que o tinha no telemóvel foi para casa.
+ *
+ * Que o antigo deixe de funcionar não é um efeito secundário, é metade da
+ * razão: um código perdido pode estar perdido *para alguém*. Emitir sem
+ * invalidar seria acumular chaves da mesma porta.
+ */
+function novoCodigoPara(slug) {
+  const codigo = novoCodigo();
+  const r = db.prepare('UPDATE centros SET codigo_hash = ? WHERE slug = ?')
+    .run(hash(codigo), slug);
+  if (!r.changes) throw new Error('centro não existe: ' + slug);
+  return codigo;
+}
+
 function decidir(slug, estado) {
   if (!ESTADOS.includes(estado)) throw new Error('estado inválido: ' + estado);
   db.prepare('UPDATE centros SET estado = ?, decidido = ? WHERE slug = ?')
@@ -342,4 +362,4 @@ function contar() {
 module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
                    decidir, listar, procurar, parados, contar, lerEstado,
                    escreverEstado, definirDerivacao, reindexar,
-                   novoCodigo, codigoConfere, ESTADOS };
+                   novoCodigo, novoCodigoPara, codigoConfere, ESTADOS };

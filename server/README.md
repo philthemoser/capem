@@ -124,7 +124,7 @@ para uma dúzia de centros a conta é praticamente zero.
 | `/novo` | O formulário de pedido. |
 | `/<centro>` | A página do centro — o destino do QR. |
 | `/kit` | O gerador de material impresso. |
-| `/admin?t=…` | A fila de aprovação. |
+| `/admin?t=…` | A fila de aprovação, os empurrões, e emitir um código novo. |
 
 A entrada não tem formulário de propósito. Quem chega é uma de duas pessoas e
 não há uma terceira: ou tem alguma coisa para dar, ou está a montar um centro.
@@ -159,6 +159,29 @@ Três decisões:
 Publicar uma lista vazia sem marcar "não estamos recebendo" é permitido — quem
 manda é o coordenador — mas a página avisa, porque nesse estado ela não responde
 à única pergunta que lhe fazem.
+
+### Emitir um código novo
+
+"Perdi o código" é o pedido de ajuda mais provável que esta ferramenta vai
+receber: um papel colado à parede de um ginásio perde-se, molha-se, e quem o
+tinha no telemóvel foi para casa. Até aqui a única resposta era uma alteração à
+mão na base de dados.
+
+Na lista **No ar** de `/admin` cada centro tem um botão discreto. Emite um
+código novo, mostra-o uma vez, e oferece o mesmo botão de WhatsApp da página de
+um centro acabado de criar — porque o problema a seguir a "perdi o código" é
+exactamente o mesmo: fazê-lo chegar a quem está de turno.
+
+**O código anterior deixa de funcionar, e isso é metade da razão.** Um código
+perdido pode estar perdido *para alguém*; emitir sem invalidar seria acumular
+chaves da mesma porta. Há um teste que confirma que o antigo passa a receber
+403 e que o novo publica.
+
+Vive atrás do segredo de administração e não numa página pública, e essa é a
+decisão inteira: emitir um código é dar acesso de escrita à página de um centro.
+A verificação de que a pessoa do outro lado é mesmo de lá é um telefonema para
+o número que já está guardado — não é coisa que um formulário faça. A página
+diz isso por extenso, ao lado do botão.
 
 ### `POST /api/carregar` — o código também lê
 
@@ -336,7 +359,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 177 verificações
+node tools/server-test.js    # 195 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 

@@ -808,25 +808,29 @@ function textoCodigo(nome, slug, codigo, base, url) {
   ].join('\n');
 }
 
-function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome }) {
+function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, reemitido, voltar }) {
   const url = urlCanonica || `${base}/${slug}`;
   const wa = 'https://wa.me/?text=' +
     encodeURIComponent(textoCodigo(nome, slug, codigo, base, url));
   return molde({
-    aqui: '/centro',
-    migalhas: [['Sou de um centro', '/centro'], ['Pedido recebido']],
-    titulo: 'Pedido recebido — guarde o código',
+    aqui: reemitido ? false : '/centro',
+    migalhas: reemitido ? null : [['Sou de um centro', '/centro'], ['Pedido recebido']],
+    titulo: reemitido ? 'Código novo emitido' : 'Pedido recebido — guarde o código',
     corpo: `
 <main class="inicial">
-  <h1>Pedido recebido</h1>
-  <p class="entrada">A página de <b>${esc(slug)}</b> fica no ar assim que for verificada.</p>
+  <h1>${reemitido ? 'Código novo' : 'Pedido recebido'}</h1>
+  ${reemitido
+    ? `<p class="entrada">Emitido para <b>${esc(nome || slug)}</b>.
+        <b>O código anterior deixou de funcionar</b> — se estava perdido, podia
+        estar perdido para alguém.</p>`
+    : `<p class="entrada">A página de <b>${esc(slug)}</b> fica no ar assim que for verificada.</p>`}
 
   <section class="codigo-caixa">
     <p class="rotulo">O seu código</p>
     <p class="codigo">${esc(codigo)}</p>
-    <p class="dica"><b>Esta é a única vez que ele aparece.</b> É o que lhe deixa
+    <p class="dica"><b>Esta é a única vez que ele aparece.</b> É o que deixa
       publicar a lista todos os dias. Não é guardado em lado nenhum de onde se
-      possa recuperar — se o perder, tem de pedir outro.</p>
+      possa recuperar — só se emite outro.</p>
   </section>
 
   <div class="guardar-codigo">
@@ -838,8 +842,9 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome }) {
       continua a funcionar quando a bateria acaba.</p>
   </div>
 
-  <p>O endereço da sua página será:<br><code>${esc(url)}</code></p>
-  <p><a class="btn" href="/kit">Ir para o kit e gerar o material impresso</a></p>
+  <p>${reemitido ? 'O endereço da página:' : 'O endereço da sua página será:'}<br><code>${esc(url)}</code></p>
+  <p><a class="btn" href="${reemitido ? esc(voltar || '/') : '/kit'}">${
+    reemitido ? 'Voltar aos pedidos' : 'Ir para o kit e gerar o material impresso'}</a></p>
 </main>`
   });
 }
@@ -935,12 +940,26 @@ function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, err
   }).join('')}</div>` : ''}
 
   <h2>No ar</h2>
+  <p class="entrada">Se alguém ligar a dizer que perdeu o código, emita outro
+    aqui — <b>depois de confirmar ao telefone que é mesmo do centro</b>. O número
+    guardado está no cartão do pedido. Emitir um código é dar acesso de escrita
+    à página; essa confirmação é a única que existe, e não há formulário que a
+    faça por si.</p>
   ${aprovados.length ? `<ul class="lista-no-ar">${aprovados.map(c => {
     const { dias, nivel } = idade(c.publicado);
     const quando = nivel === 'nunca' ? 'nunca publicou' :
       dias <= 1 ? 'lista de hoje' : `há ${dias} dias`;
-    return `<li class="${nivel}"><a href="${esc(c.url || base + '/' + c.slug)}">${esc((c.dados || {}).nome || c.slug)}</a>
-      <span>${esc(quando)}</span></li>`;
+    return `<li class="${nivel}">
+      <div class="na-txt">
+        <a href="${esc(c.url || base + '/' + c.slug)}">${esc((c.dados || {}).nome || c.slug)}</a>
+        <span>${esc(quando)}</span>
+      </div>
+      <form method="POST" action="/admin/recodigo" class="na-form">
+        <input type="hidden" name="t" value="${esc(token)}">
+        <input type="hidden" name="slug" value="${esc(c.slug)}">
+        <button class="btn pequeno">Código novo</button>
+      </form>
+    </li>`;
   }).join('')}</ul>` : '<p class="vazio">Nenhum centro no ar.</p>'}
 </main>`
   });
@@ -1231,6 +1250,14 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
   padding:11px 0;border-bottom:1px solid var(--tenue);font:600 15px/1.3 var(--fonte)}
 .lista-no-ar span{font:500 13px/1.3 var(--mono);color:var(--texto-2);flex:none}
 .lista-no-ar li.velha span,.lista-no-ar li.nunca span{color:var(--proibido);font-weight:700}
+.na-txt{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;min-width:0}
+.na-form{flex:none;margin:0}
+/* Discreto de propósito: é uma acção rara e destrutiva — invalida o código que
+   está em uso — e não pode competir com o nome do centro pela atenção de quem
+   corre esta lista à procura de quem parou de publicar. */
+.btn.pequeno{margin-top:0;padding:8px 10px;font-size:11px;
+  border-color:var(--fio);color:var(--texto-2)}
+.btn.pequeno:hover{border-color:var(--tinta);color:var(--tinta)}
 `;
 
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,

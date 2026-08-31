@@ -624,6 +624,49 @@ const DIA = 86400000;
   ok('e respeitam o proxy à frente', html.includes('https://capem.org/' + slugFinal),
     (html.match(/https:\/\/capem[^"< ]*/) || [])[0]);
 
+  let novoCod;
+  console.log('\nemitir um código novo');
+  /* "Perdi o código" é o pedido de ajuda mais provável que esta ferramenta vai
+     receber. Até aqui a única resposta era mexer na base de dados à mão. */
+  html = await (await get('/admin?t=' + encodeURIComponent(ADMIN))).text();
+  ok('a fila oferece emitir um código novo', /action="\/admin\/recodigo"/.test(html));
+  ok('e diz para confirmar ao telefone primeiro', /confirmar ao telefone/.test(html));
+
+  r = await form('/admin/recodigo', { t: 'errado', slug: slugFinal });
+  ok('não se emite sem o segredo', r.status === 404, String(r.status));
+  ok('e o código antigo continua a valer',
+    (await api('/api/publicar', { slug: slugFinal, codigo, dados: { precisa: ['agua'] } })).status === 200);
+
+  r = await form('/admin/recodigo', { t: ADMIN, slug: slugFinal });
+  html = await r.text();
+  ok('com o segredo, emite', r.status === 200, String(r.status));
+  novoCod = (html.match(/class="codigo">([A-Z0-9-]+)</) || [])[1];
+  ok('e mostra o código novo', !!novoCod && novoCod !== codigo, novoCod);
+  ok('sem caracteres que se confundem ao telefone',
+    novoCod && !/[OIS015]/.test(novoCod), novoCod);
+  ok('diz que o anterior deixou de funcionar', /deixou de funcionar/.test(html));
+  /* O problema a seguir a "perdi o código" é o mesmo: fazê-lo chegar a quem
+     está de turno. */
+  ok('e oferece mandá-lo no WhatsApp', /wa\.me\/\?text=/.test(html));
+
+  /* A parte que interessa: invalidar não é um efeito secundário, é metade da
+     razão de existir. Um código perdido pode estar perdido PARA ALGUÉM. */
+  r = await api('/api/publicar', { slug: slugFinal, codigo, dados: { precisa: ['agua'] } });
+  ok('o código antigo deixa mesmo de publicar', r.status === 403, String(r.status));
+  r = await api('/api/publicar', { slug: slugFinal, codigo: novoCod,
+    dados: { precisa: ['agua'], naoTraga: ['roupa-usada'] } });
+  ok('e o novo publica', r.status === 200, String(r.status));
+  /* Emitir um código não é aprovar nem mexer no que foi verificado à mão. */
+  const depois = S.db.ler(slugFinal);
+  ok('o centro continua aprovado', depois.estado === 'aprovado', depois.estado);
+  ok('e o nome verificado continua intacto',
+    depois.dados.nome === 'Paróquia São Sebastião', depois.dados.nome);
+
+  r = await form('/admin/recodigo', { t: ADMIN, slug: 'nao-existe-nenhum' });
+  ok('um centro que não existe não rebenta a página',
+    r.status === 303 || r.status === 200, String(r.status));
+
+
   servidor.close();
 
   /* -------------------------------------------------------------------------
@@ -689,7 +732,9 @@ const DIA = 86400000;
     const pub = await fetch(b2 + '/api/publicar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Forwarded-Host': 'capem.org' },
-      body: JSON.stringify({ slug: slugFinal, codigo, dados: { precisa: ['agua'] } })
+      /* `novoCod` e não `codigo`: a secção anterior emitiu um código novo e
+         invalidou o antigo, que é precisamente o que ela testa. */
+      body: JSON.stringify({ slug: slugFinal, codigo: novoCod, dados: { precisa: ['agua'] } })
     });
     const j = await pub.json();
     ok('o kit recebe de volta o endereço canónico',

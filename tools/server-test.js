@@ -626,6 +626,73 @@ const DIA = 86400000;
     (html.match(/https:\/\/capem[^"< ]*/) || [])[0]);
 
   let novoCod;
+  console.log('\navisar que a página ficou no ar');
+  /* A aprovação era silenciosa: o coordenador pedia a página, recebia o código,
+     e nada lhe dizia que já estava no ar — tinha de ir espreitar o endereço de
+     vez em quando. Um passo do processo que só o administrador via. */
+  {
+    S.db.criar('aviso-teste', { nome: 'Centro do Aviso', tipo: 'Ponto de arrecadação',
+      endereco: 'Rua do Aviso, 1', contato: '(51) 99612-0044',
+      precisa: ['agua'], naoTraga: [] });
+    r = await form('/admin/decidir', { t: ADMIN, slug: 'aviso-teste',
+      novo_slug: 'aviso-teste', decisao: 'aprovado' });
+    ok('aprovar leva de volta à fila com o centro em mão',
+      /avisar=aviso-teste/.test(r.headers.get('location') || ''),
+      r.headers.get('location'));
+
+    html = await (await get('/admin?t=' + encodeURIComponent(ADMIN) + '&avisar=aviso-teste')).text();
+    ok('a fila mostra o cartão de avisar', /class="acabou-aprovar"/.test(html));
+    ok('com o nome do centro', /Centro do Aviso/.test(html));
+    /* Para o telefone do centro, e a mensagem tem de se explicar sozinha. */
+    ok('e um link de WhatsApp para o telefone do centro',
+      /wa\.me\/5551996120044\?text=/.test(html));
+    const msg = decodeURIComponent(((html.match(/href="(https:\/\/wa\.me\/55[^"]*)"/) || [])[1] || '')
+      .replace(/&amp;/g, '&').split('text=')[1] || '');
+    ok('a mensagem leva o endereço da página', msg.includes('/aviso-teste'), msg.slice(0, 80));
+    ok('e diz onde se atualiza', msg.includes('/atualizar'));
+    /* Metade do valor: o centro fica com um contacto humano guardado, para o
+       dia em que o código se perder e o site não chegar. */
+    ok('e pede que guardem o contacto', /[Gg]uarde este contacto/.test(msg));
+
+    /* Recusar não traz cartão nenhum: não há nada de bom para dizer, e a
+       mensagem seria a última coisa que alguém quer receber de uma ferramenta. */
+    S.db.criar('recusa-teste', { nome: 'Centro Recusado', endereco: 'R. X',
+      contato: '(51) 90000-0000', precisa: [], naoTraga: [] });
+    r = await form('/admin/decidir', { t: ADMIN, slug: 'recusa-teste',
+      novo_slug: 'recusa-teste', decisao: 'recusado' });
+    ok('recusar não oferece avisar ninguém',
+      !/avisar=/.test(r.headers.get('location') || ''), r.headers.get('location'));
+
+    /* Um centro sem telefone utilizável não pode ser avisado — e a fila tem de
+       o dizer em vez de mostrar um botão morto. */
+    S.db.criar('sem-tel', { nome: 'Centro Sem Telefone', endereco: 'R. Y',
+      contato: 'ligar na portaria', precisa: [], naoTraga: [] });
+    S.db.decidir('sem-tel', 'aprovado');
+    html = await (await get('/admin?t=' + encodeURIComponent(ADMIN) + '&avisar=sem-tel')).text();
+    ok('sem telefone utilizável, diz que não dá', /não tem um telefone utilizável/.test(html));
+    ok('e não mostra um botão morto',
+      !/class="btn btn-wa largo"[^>]*acabou/.test(html) && !/wa\.me\/\?text=[^"]*Sem%20Telefone/.test(html));
+
+    /* Um slug inventado no endereço não pode partir a fila. */
+    r = await get('/admin?t=' + encodeURIComponent(ADMIN) + '&avisar=nao-existe-de-todo');
+    ok('um centro inventado no endereço não parte a fila', r.status === 200, String(r.status));
+  }
+
+  /* Um centro acabado de aprovar não está parado — está a começar. Sem isto
+     aparecia na lista de empurrões no segundo seguinte à aprovação, e entrava
+     no resumo diário antes de alguém ter escrito a primeira lista. */
+  {
+    const recentes = S.db.parados(S.DIAS_PARADO).map(c => c.slug);
+    ok('um centro aprovado agora não entra nos empurrões',
+      !recentes.includes('aviso-teste'), recentes.join(', '));
+    const c4 = new (require('node:sqlite').DatabaseSync)(ficheiro);
+    c4.prepare('UPDATE centros SET decidido=? WHERE slug=?')
+      .run(Date.now() - 30 * DIA, 'aviso-teste');
+    c4.close();
+    ok('mas entra se for aprovado há um mês e continuar sem lista',
+      S.db.parados(S.DIAS_PARADO).map(c => c.slug).includes('aviso-teste'));
+  }
+
   console.log('\npedir um código novo (público)');
   /* O beco sem saída: a página dizia "fale com quem aprovou o seu centro" a
      alguém que provavelmente nunca soube quem foi. */

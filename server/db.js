@@ -344,10 +344,15 @@ const escreverEstado = (chave, valor) =>
  */
 function parados(dias) {
   const limite = Date.now() - dias * 86400000;
+  /* COALESCE e não "publicado IS NULL": um centro que nunca publicou não está
+     parado — está a começar. Sem isto, todo o centro aparecia na lista de
+     empurrões no segundo a seguir a ser aprovado, e entrava no resumo diário
+     antes de alguém ter tido hipótese de escrever a primeira lista. Conta-se a
+     partir da aprovação até haver uma publicação. */
   return db.prepare(`SELECT * FROM centros
                      WHERE estado = 'aprovado'
-                       AND (publicado IS NULL OR publicado < ?)
-                     ORDER BY COALESCE(publicado, 0) ASC`).all(limite)
+                       AND COALESCE(publicado, decidido, criado) < ?
+                     ORDER BY COALESCE(publicado, decidido, criado) ASC`).all(limite)
     .map(r => ({ ...r, dados: JSON.parse(r.dados) }));
 }
 

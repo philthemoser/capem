@@ -570,6 +570,16 @@ async function encaminhar(req, res) {
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       parados: db.parados(DIAS_PARADO).map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       erro: url.searchParams.get('erro'),
+      /* Quem acabou de ser aprovado, para o cartão de "avise a pessoa". Vem do
+         endereço e não de estado guardado: se a página for recarregada o cartão
+         volta, e isso é melhor do que desaparecer antes de se ter avisado. */
+      avisar: (() => {
+        const a = texto(url.searchParams.get('avisar'), 60);
+        if (!a) return null;
+        const c = db.ler(db.resolver(a) || '');
+        return c && c.estado === 'aprovado'
+          ? { ...c, url: urlDoCentro(c.slug, base) } : null;
+      })(),
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
   }
@@ -630,7 +640,11 @@ async function encaminhar(req, res) {
     }
     db.decidir(alvo, decisao);
     console.log(`[${decisao}] ${alvo}`);
-    return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
+    /* Aprovar traz o cartão de "avise a pessoa" de volta na fila. Recusar não:
+       não há nada de bom para dizer, e a mensagem seria a última coisa que
+       alguém quer receber de uma ferramenta. */
+    return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN)
+      + (decisao === 'aprovado' ? '&avisar=' + encodeURIComponent(alvo) : ''));
   }
 
   /* --- a página de um centro --- */

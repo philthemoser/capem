@@ -161,6 +161,25 @@ Publicar uma lista vazia sem marcar "não estamos recebendo" é permitido — qu
 manda é o coordenador — mas a página avisa, porque nesse estado ela não responde
 à única pergunta que lhe fazem.
 
+### Avisar que a página ficou no ar
+
+A aprovação era silenciosa. O coordenador pedia a página, recebia o código na
+hora, e depois **nada lhe dizia que já estava no ar** — tinha de ir espreitar o
+endereço de vez em quando. Era o único passo do processo que só o administrador
+via acontecer.
+
+Aprovar traz agora um cartão ao topo da fila com um botão de WhatsApp para o
+telefone do centro. A mensagem leva o endereço da página, onde se atualiza, e
+pede que guardem o contacto.
+
+**Essa última parte é metade do valor.** Manda-se à mão, do telemóvel de quem
+aprova, e o centro fica com um contacto humano guardado. No dia em que o código
+se perder — e vai perder-se — há para onde ligar que não depende de encontrar a
+página certa num site.
+
+Recusar não oferece cartão nenhum: não há nada de bom para dizer, e a mensagem
+seria a última coisa que alguém quer receber de uma ferramenta.
+
 ### Emitir um código novo
 
 "Perdi o código" é o pedido de ajuda mais provável que esta ferramenta vai
@@ -387,7 +406,7 @@ server/compartilhado.js  carrega as 29 marcas e o catálogo de field/src/
 ## Testes
 
 ```bash
-node tools/server-test.js    # 208 verificações
+node tools/server-test.js    # 221 verificações
 node tools/a11y-server.js    # axe nas páginas servidas, claro e escuro
 ```
 

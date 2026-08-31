@@ -956,7 +956,35 @@ Atualizar leva meio minuto: abra ${url.replace(/\/[^/]*$/, '')}/kit no telemóve
 Se o centro fechou ou parou de receber, diga só — marcamos a página e ninguém aparece à porta em vão.`;
 }
 
-function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, erro }) {
+/**
+ * O aviso de que a página ficou no ar.
+ *
+ * A aprovação era silenciosa: o coordenador pedia a página, recebia o código, e
+ * depois nada lhe dizia que já estava no ar — tinha de ir espreitar o endereço
+ * de vez em quando. Um passo do processo que só o administrador via.
+ *
+ * Manda-se à mão, do telemóvel de quem aprova, e isso é metade do valor: o
+ * centro fica com um contacto humano guardado. Quando o código se perder — e
+ * vai perder-se — há para onde ligar que não depende de encontrar a página
+ * certa num site.
+ */
+function textoAprovado(d, url, base) {
+  return [
+    'Olá! Aqui é do CAPEM.',
+    '',
+    `A página do *${d.nome || ''}* já está no ar:`,
+    url,
+    '',
+    'É este endereço que o QR das peças impressas abre, e é esta a lista que os vizinhos veem.',
+    '',
+    `Para atualizar o que precisam hoje: ${base}/atualizar`,
+    'Use o código que recebeu quando pediu a página. Leva meio minuto, e é o que impede o papel colado na porta de ficar velho.',
+    '',
+    'Guarde este contacto. Se perder o código, ou precisar de alguma coisa, é por aqui.'
+  ].join('\n');
+}
+
+function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, erro, avisar }) {
   const linha = c => {
     const d = c.dados || {};
     return `<article class="pedido">
@@ -992,6 +1020,27 @@ function paginaAdmin({ pendentes, aprovados, parados, token, contagem, base, err
   <p class="entrada">${contagem.pendente} à espera · ${contagem.aprovado} no ar ·
     ${contagem.recusado} recusados</p>
   ${erro === 'ocupado' ? '<p class="erro-form">Esse endereço já está ocupado. Escolha outro.</p>' : ''}
+
+  ${avisar ? (() => {
+    const d = avisar.dados || {};
+    const u = avisar.url || base + '/' + avisar.slug;
+    const wa = linkWhatsApp(d.contato, textoAprovado(d, u, base));
+    return `<section class="acabou-aprovar">
+      <h2>${esc(d.nome || avisar.slug)} está no ar</h2>
+      <p>Avise a pessoa. Ela não sabe — até aqui a aprovação era silenciosa, e
+        ninguém fica a olhar para o endereço à espera que apareça.</p>
+      ${wa
+        ? `<a class="btn btn-wa largo" href="${esc(wa)}" target="_blank" rel="noopener">
+             Avisar ${esc(d.contato)} no WhatsApp</a>
+           <p class="meta">A mensagem leva o endereço da página e onde atualizar.
+             E deixa o seu contacto guardado no telemóvel do centro — é para onde
+             vão ligar no dia em que perderem o código.</p>`
+        : `<p class="meta">Este centro não tem um telefone utilizável, por isso
+             não há como avisar por aqui. Vale a pena ligar-lhe de outra forma:
+             ninguém lhe disse que a página existe.</p>`}
+      <p><a href="${esc(u)}" target="_blank" rel="noopener">Ver a página</a></p>
+    </section>`;
+  })() : ''}
 
   ${pendentes.length
     ? `<div class="pedidos">${pendentes.map(linha).join('')}</div>`
@@ -1332,6 +1381,13 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 .pedido .botoes{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
 .pedido .botoes .btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
 .pedido .btn{flex:1;margin-top:0;text-align:center}
+/* O cartão que aparece logo depois de aprovar. Verde e no topo porque a acção
+   seguinte tem prazo: se ninguém avisar agora, o centro fica no ar sem saber. */
+.acabou-aprovar{margin:0 20px 24px;padding:18px;border:3px solid var(--permitido)}
+.acabou-aprovar h2{margin:0 0 8px}
+.acabou-aprovar p{margin:0 0 10px;font:500 14px/1.5 var(--fonte)}
+.acabou-aprovar .meta{color:var(--texto-2);font-size:13px}
+.acabou-aprovar .btn{margin-top:4px}
 .lista-no-ar{list-style:none;margin:0;padding:0}
 .lista-no-ar li{display:flex;justify-content:space-between;gap:12px;
   padding:11px 0;border-bottom:1px solid var(--tenue);font:600 15px/1.3 var(--fonte)}

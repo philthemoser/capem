@@ -83,6 +83,7 @@ function lerConsulta(params) {
     ordem: ORDENS[p.get('ordem')] ? p.get('ordem') : ORDEM_PREDEFINIDA,
     aceitando: p.get('aceitando') === '1',
     recentes: p.get('recentes') === '1',
+    emergencia: String(p.get('e') || '').slice(0, 60),
     pagina: num(p.get('p'), 1, 10000, 1),
     porPagina: POR_PAGINA
   };
@@ -96,6 +97,7 @@ function comoEndereco(c, mudanca = {}) {
   if (v.ordem && v.ordem !== ORDEM_PREDEFINIDA) p.set('ordem', v.ordem);
   if (v.aceitando) p.set('aceitando', '1');
   if (v.recentes) p.set('recentes', '1');
+  if (v.emergencia) p.set('e', v.emergencia);
   if (v.pagina > 1) p.set('p', String(v.pagina));
   const s = p.toString();
   return '/centros' + (s ? '?' + s : '');

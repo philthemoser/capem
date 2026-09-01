@@ -68,6 +68,134 @@ const dataCurta = ms => {
 };
 
 /* ---------------------------------------------------------------------------
+ * Ligar e chegar
+ *
+ * Duas coisas que alguém com cobertores no carro quer fazer, e que até aqui
+ * obrigavam a abrir a página do centro, copiar o endereço à mão e colá-lo noutro
+ * aplicativo. Três passos de pé, na rua, para uma coisa que é um toque.
+ *
+ * O endereço vai como PROCURA e não como coordenada, porque coordenada é um
+ * campo que ainda não existe em nenhum centro aprovado. Uma procura acerta quase
+ * sempre e falha sem estragar nada — abre o mapa no bairro certo e a pessoa vê
+ * onde é. O que a torna honesta é a fila de aprovação levar o mesmo link: o
+ * endereço já é conferido à mão nesse momento, e conferir também para onde ele
+ * aponta é um toque a mais numa coisa que já se está a fazer.
+ *
+ * Um link só, e não "Apple ou Google?". Este endereço abre o aplicativo nativo
+ * no Android, o Google Maps ou a web no iPhone, e uma página no computador.
+ * Perguntar qual à pessoa que está a tentar sair de casa é pior do que às vezes
+ * abrir o que ela não usa.
+ *
+ * `geo:` seria mais correcto e é só Android — no iPhone não abre nada.
+ * -------------------------------------------------------------------------*/
+const linkMapa = (endereco, coords) => {
+  const c = coordenadasValidas(coords);
+  if (c) return `https://www.google.com/maps/search/?api=1&query=${c[0]},${c[1]}`;
+  const e = String(endereco || '').trim();
+  return e ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(e)}` : '';
+};
+
+/**
+ * Coordenadas, se as houver e se fizerem sentido.
+ *
+ * Devolve `null` a qualquer coisa que não seja um par de números dentro do
+ * planeta. Um zero-zero é o Golfo da Guiné e é quase sempre um campo vazio que
+ * passou por um `Number()` — mandar alguém para lá é pior do que não ter mapa.
+ */
+function coordenadasValidas(v) {
+  if (!Array.isArray(v) || v.length !== 2) return null;
+  const [a, b] = v.map(Number);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  if (a < -90 || a > 90 || b < -180 || b > 180) return null;
+  if (a === 0 && b === 0) return null;
+  return [a, b];
+}
+
+/** O telefone tal como um `tel:` o quer: dígitos e, quando muito, um `+`. */
+const telDe = c => String(c || '').trim().replace(/[^\d+]/g, '');
+
+/** As coordenadas de volta ao formato em que se colam. Vazio se não houver. */
+const coordsTexto = v => {
+  const c = coordenadasValidas(v);
+  return c ? `${c[0]}, ${c[1]}` : '';
+};
+
+/* ---------------------------------------------------------------------------
+ * Onde mais encontrar o centro — Instagram, Facebook, site
+ *
+ * Muitas paróquias e associações mantêm o Instagram mais atualizado do que
+ * qualquer outra coisa que tenham, e quem está a decidir se atravessa a cidade
+ * quer ver o sítio. Vale a pena.
+ *
+ * Três decisões que não são óbvias:
+ *
+ * 1. CHAMA-SE `perfil` E NÃO `link`. `dados.link` já existe e quer dizer outra
+ *    coisa por completo — é o destino do QR, a própria página do centro, usada
+ *    por todas as peças impressas. Reaproveitar o nome dava um bug silencioso
+ *    e caro.
+ *
+ * 2. QUEM O PÕE É QUEM APROVA, não o coordenador. Um link que sai de uma página
+ *    que leva a verificação feita à mão herda essa verificação: quem o segue
+ *    acredita que o CAPEM conferiu. Um perfil que morre, muda de dono ou é
+ *    invadido passa a fazê-lo com o nosso nome em cima. Conferir custa um toque
+ *    no mesmo momento em que já se está a ligar para o telefone.
+ *
+ * 3. NÃO VAI PARA O PAPEL. Mesma regra das quantidades: um endereço que muda
+ *    não se corrige numa folha que já saiu da impressora. A página do centro
+ *    está impressa em todas as peças e leva lá o link.
+ *
+ * Sem logótipo: as 29 marcas são silhuetas cheias que se lêem a dois metros a
+ * preto e branco, e um logótipo de marca comercial não pertence a esse conjunto.
+ * A marca aqui é genérica e é o texto que diz qual é a casa.
+ * -------------------------------------------------------------------------*/
+const CASAS = [
+  [/(^|\.)instagram\.com$/, 'Instagram'],
+  [/(^|\.)facebook\.com$/, 'Facebook'],
+  [/(^|\.)fb\.com$/, 'Facebook'],
+  [/(^|\.)(chat\.)?whatsapp\.com$/, 'Grupo de WhatsApp'],
+  [/(^|\.)youtube\.com$/, 'YouTube'],
+  [/(^|\.)youtu\.be$/, 'YouTube'],
+  [/(^|\.)tiktok\.com$/, 'TikTok'],
+  [/(^|\.)x\.com$/, 'X'],
+  [/(^|\.)twitter\.com$/, 'X']
+];
+
+/**
+ * Devolve `{ href, rotulo, casa }`, ou `null` se não houver nada utilizável.
+ *
+ * Só http e https. Um `javascript:` guardado à mão na base de dados seria um
+ * XSS com um clique, e a lista de esquemas permitidos é mais curta e mais
+ * segura do que a lista dos proibidos.
+ */
+function lerPerfil(v) {
+  const bruto = String(v || '').trim();
+  if (!bruto) return null;
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(bruto) ? bruto : 'https://' + bruto); }
+  catch (e) { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  const anfitriao = u.hostname.replace(/^www\./, '');
+  const casa = (CASAS.find(([re]) => re.test(anfitriao)) || [])[1] || null;
+  /* Sem casa conhecida, o rótulo é o próprio domínio: dizer "Site" e esconder
+     para onde se vai é pior do que mostrar. */
+  const rotulo = casa
+    ? (casa === 'Instagram' && u.pathname.length > 1
+        ? `Instagram — @${u.pathname.split('/').filter(Boolean)[0]}`
+        : casa)
+    : anfitriao;
+  return { href: u.href, rotulo, casa };
+}
+
+/* Marca de elo. NÃO entra em field/src/icones.js de propósito: aquele conjunto
+   é o das 29 marcas que vão para o papel, e este símbolo nunca é impresso.
+   Pô-lo lá punha-o também no índice de marcas e na lista de onde um
+   coordenador escolhe a marca de um item — "cobertor: elo" não quer dizer
+   nada. Mesma geometria (64×64, silhueta cheia, evenodd) para não destoar. */
+const svgElo = () => '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">'
+  + '<path fill="currentColor" fill-rule="evenodd" d="M35 4 H60 V29 H50 V21 L31 40 L24 33 L43 14 H35 Z '
+  + 'M4 16 H30 V26 H14 V50 H38 V34 H48 V60 H4 Z"/></svg>';
+
+/* ---------------------------------------------------------------------------
  * NAVEGAÇÃO
  *
  * Faltava por completo, e isso é mais grave aqui do que num site normal: metade
@@ -189,7 +317,9 @@ function paginaCentro(centro, base, urlCanonica) {
   const precisa = (d.precisa || []).map(item);
   const nao = (d.naoTraga || []).map(item);
   const tel = (d.contato || '').trim();
-  const telLink = tel.replace(/[^\d+]/g, '');
+  const telLink = telDe(tel);
+  const mapa = linkMapa(d.endereco, d.coords);
+  const perfil = lerPerfil(d.perfil);
   const url = urlCanonica || `${base}/${centro.slug}`;
 
   const corpo = `
@@ -226,10 +356,20 @@ function paginaCentro(centro, base, urlCanonica) {
   </section>
 
   <section class="contato">
-    ${d.endereco ? `<p class="lin">${svgIcone('pino')}<span>${esc(d.endereco)}</span></p>` : ''}
+    ${d.endereco ? `<p class="lin"><a href="${esc(mapa)}" target="_blank" rel="noopener"
+      >${svgIcone('pino')}<span>${esc(d.endereco)}</span></a></p>` : ''}
     ${tel ? `<p class="lin"><a href="tel:${esc(telLink)}">${svgIcone('telefone')}<span>${esc(tel)}</span></a></p>` : ''}
+    ${perfil ? `<p class="lin"><a href="${esc(perfil.href)}" target="_blank" rel="noopener nofollow ugc"
+      >${svgElo()}<span>${esc(perfil.rotulo)}</span></a></p>` : ''}
     ${centro.publicado ? `<p class="carimbo">Lista de ${dataCurta(centro.publicado)}</p>` : ''}
   </section>
+
+  ${d.endereco ? `<section class="ir">
+    <a class="btn btn-ir" href="${esc(mapa)}" target="_blank" rel="noopener">
+      ${svgIcone('pino')}<span>Como chegar</span></a>
+    ${tel ? `<a class="btn btn-ir" href="tel:${esc(telLink)}">
+      ${svgIcone('telefone')}<span>Ligar antes de vir</span></a>` : ''}
+  </section>` : ''}
 
   <section class="compartilhar">
     <a class="btn btn-wa" id="b-wa" href="${esc(linkCompartilhar(d, url))}" target="_blank" rel="noopener">
@@ -278,7 +418,7 @@ function paginaPendente(centro) {
       <h1>Esta página ainda não está no ar</h1>
       <p>O pedido para <b>${esc((centro.dados || {}).nome || centro.slug)}</b> foi recebido e
         está aguardando verificação. Isso costuma demorar pouco.</p>
-      <p>Se é o coordenador deste centro, pode ver como a página vai ficar juntando o
+      <p>Se é o coordenador deste centro, pode ver como a página vai ficar juntando
         seu código ao endereço:
         <code>?codigo=SEU-CODIGO</code></p>
     </main>`
@@ -307,7 +447,21 @@ function paginaNaoExiste() {
  * entrada obrigava a primeira a passar por cima da segunda para chegar ao que
  * queria, e é a primeira que aparece às centenas.
  * -------------------------------------------------------------------------*/
-function paginaInicial({ contagem, base }) {
+function paginaInicial({ contagem, base, emergencias }) {
+  const emgs = emergencias || [];
+
+  /* Enquanto houver uma resposta só, isto não aparece — e não aparecer é o
+     comportamento certo, não uma funcionalidade por acabar. Uma barra com um
+     único botão só faz alguém perguntar-se o que é aquilo. */
+  const barraEmg = emgs.length > 1 ? `
+  <section class="emg-inicial">
+    <h2>Respostas em curso</h2>
+    <ul class="emergencias">
+      ${emgs.map(e => `<li><a class="emg" href="/centros?e=${encodeURIComponent(e.emergencia)}"
+        >${esc(e.emergencia)} <span class="emg-n">${e.n} ${e.n === 1 ? 'centro' : 'centros'}</span></a></li>`).join('')}
+    </ul>
+  </section>` : '';
+
   return molde({
     aqui: false,
     titulo: 'CAPEM — centros de apoio',
@@ -317,16 +471,24 @@ function paginaInicial({ contagem, base }) {
   <header>
     <p class="tipo">CAPEM · ferramenta livre</p>
     <h1>O que os centros precisam hoje</h1>
-    <p class="entrada">Um cartaz impresso diz o que um centro precisava no dia em que
-      foi impresso. Estas páginas dizem o que precisa hoje — e é para aqui que aponta
-      o QR de todo o material do kit.</p>
+    <p class="entrada">Quando uma emergência acontece, igrejas, escolas e ginásios
+      viram pontos de arrecadação de um dia para o outro — e passam a receber o
+      que as pessoas têm, não o que falta. Aqui cada centro mantém, todo dia, uma
+      lista do que precisa e do que já não cabe. Quem quer ajudar vê a lista
+      antes de sair de casa.</p>
+    <p class="entrada">É uma ferramenta livre, feita para qualquer centro em
+      qualquer emergência. Não é de nenhuma prefeitura nem de nenhuma
+      organização.</p>
   </header>
+
+  ${barraEmg}
 
   <div class="duas-portas">
     <a class="porta" href="/centros">
       ${svgIcone('caixa')}
       <span class="porta-t">Quero ajudar</span>
-      <span class="porta-d">Ver os centros e o que cada um precisa hoje.
+      <span class="porta-d">Ver os centros e o que cada um precisa hoje — e ligar
+        ou traçar a rota sem sair da lista.
         ${contagem.aprovado ? `${contagem.aprovado} ${contagem.aprovado === 1 ? 'centro' : 'centros'} no ar.` : ''}</span>
     </a>
     <a class="porta" href="/centro">
@@ -365,9 +527,10 @@ function paginaInicial({ contagem, base }) {
  * alguém tem no bolso. Com JavaScript, o botão "filtrar" desaparece e as
  * escolhas aplicam-se sozinhas — é um acabamento, nunca o mecanismo.
  * -------------------------------------------------------------------------*/
-function paginaCentros({ centros, base, consulta, total, paginas }) {
+function paginaCentros({ centros, base, consulta, total, paginas, emergencias }) {
   const c = consulta || B.lerConsulta();
   const ts = B.termos(c.q);
+  const emgs = emergencias || [];
   const linhas = centros.map(x => {
     const d = x.dados || {};
     const i = idade(x.publicado);
@@ -376,22 +539,68 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
     const precisa = B.realcar((d.precisa || []).map(item), ts).slice(0, 8);
     const quando = { fresca: 'lista de hoje', 'a-envelhecer': `há ${i.dias} dias`,
       velha: `há ${i.dias} dias`, nunca: 'ainda sem lista' }[i.nivel];
-    return `<li class="c-item ${i.nivel}">
-      <a href="${esc(x.url || base + '/' + x.slug)}">
-        <span class="c-nome">${esc(d.nome || x.slug)}</span>
+    const nome = d.nome || x.slug;
+    const tel = telDe(d.contato);
+    const mapa = linkMapa(d.endereco, d.coords);
+    const c2 = coordenadasValidas(d.coords);
+
+    /* As duas acções ficam FORA do link do cartão, e não por preguiça: um <a>
+       dentro de outro <a> não é HTML válido, o axe reprova-o, e o que acontece
+       na prática é pior do que a regra — um toque na beira do botão segue o
+       cartão e leva a pessoa para outra página. O truque de esticar o link com
+       um ::after e deixar os botões por cima resolve-o no papel e traz de volta
+       a família de bugs que a linha `[hidden]{display:none!important}` está no
+       topo de todas as folhas para evitar: um elemento invisível a comer
+       toques. Já mordeu duas vezes. Uma linha a mais no HTML é mais barata.
+
+       O nome do centro vai no rótulo de cada acção porque numa lista de
+       quarenta, "Ligar" quarenta vezes seguidas não diz a um leitor de ecrã
+       para onde se está a ligar. */
+    const acoes = (tel || mapa) ? `
+      <div class="c-acoes">
+        ${tel ? `<a class="c-acao" href="tel:${esc(tel)}"
+          aria-label="Ligar para ${esc(nome)}">${svgIcone('telefone')}<span>Ligar</span></a>` : ''}
+        ${mapa ? `<a class="c-acao" href="${esc(mapa)}" target="_blank" rel="noopener"
+          aria-label="Como chegar a ${esc(nome)}${c2 ? '' : ' — procura pelo endereço'}"
+          >${svgIcone('pino')}<span>Como chegar</span></a>` : ''}
+      </div>` : '';
+
+    return `<li class="c-item ${i.nivel}"${c2 ? ` data-lat="${c2[0]}" data-lon="${c2[1]}"` : ''}>
+      <a class="c-cartao" href="${esc(x.url || base + '/' + x.slug)}">
+        <span class="c-nome">${esc(nome)}</span>
         <span class="c-endereco">${esc(d.endereco || '')}</span>
-        <span class="c-quando">${esc(quando)}</span>
+        <span class="c-quando">${esc(quando)}<span class="c-perto" hidden></span></span>
         ${d.pausado
           ? `<span class="c-pausa">${svgIcone('fechado')} Não está recebendo agora</span>`
           : precisa.length
             ? `<span class="c-marcas">${precisa.map(y => svgIcone(y.id)).join('')}</span>`
             : ''}
       </a>
+      ${acoes}
     </li>`;
   }).join('');
 
   const opcoes = Object.entries(B.ORDENS).map(([v, r]) =>
     `<option value="${esc(v)}"${v === c.ordem ? ' selected' : ''}>${esc(r)}</option>`).join('');
+
+  /* As emergências só aparecem quando há mais do que uma. Com uma resposta a
+     acontecer — que é o caso hoje e provavelmente por muito tempo — uma barra
+     com um único botão só faz o utilizador perguntar-se o que é aquilo. Com
+     duas ao mesmo tempo, misturá-las na mesma lista manda alguém atravessar um
+     estado; aí a barra deixa de ser decoração. */
+  const barraEmg = emgs.length > 1 ? `
+  <nav class="emergencias" aria-label="Emergência">
+    <a class="emg${c.emergencia ? '' : ' atual'}"
+      href="${esc(B.comoEndereco(c, { emergencia: '', pagina: 1 }))}">Todas</a>
+    ${emgs.map(e => `<a class="emg${e.emergencia === c.emergencia ? ' atual' : ''}"
+      href="${esc(B.comoEndereco(c, { emergencia: e.emergencia, pagina: 1 }))}"
+      >${esc(e.emergencia)} <span class="emg-n">${e.n}</span></a>`).join('')}
+  </nav>` : '';
+
+  /* Quantos centros desta página trazem coordenadas. Sem nenhuma, não se
+     oferece ordenar por distância — um botão que pede a localização e não
+     consegue fazer nada com ela é pior do que não haver botão. */
+  const comCoords = centros.filter(x => coordenadasValidas((x.dados || {}).coords)).length;
 
   /* Quantos resultados, e por causa de quê. Uma lista filtrada que não diz que
      está filtrada faz alguém concluir que o seu bairro não tem centro nenhum. */
@@ -425,7 +634,10 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
       <b>Ligue antes de vir</b> se a lista não for de hoje.</p>
   </header>
 
+  ${barraEmg}
+
   <form class="procura" method="get" action="/centros" role="search">
+    ${c.emergencia ? `<input type="hidden" name="e" value="${esc(c.emergencia)}">` : ''}
     <div class="linha-q">
       <label class="sr-only" for="q">Procurar por nome, lugar ou item</label>
       <input id="q" name="q" type="search" value="${esc(c.q)}"
@@ -451,7 +663,13 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
   </form>
 
   <p class="resumo" role="status">${resumo}${
-    filtrada ? ` · <a href="/centros">ver todos</a>` : ''}</p>
+    filtrada ? ` · <a href="${esc(B.comoEndereco(c, { q: '', aceitando: false, recentes: false, pagina: 1 }))}">ver todos</a>` : ''}</p>
+
+  ${comCoords ? `
+  <div class="perto-barra" id="perto-barra" hidden>
+    <button type="button" class="btn" id="b-perto">${svgIcone('pino')}<span>Ordenar pelo mais perto de mim</span></button>
+    <p class="perto-nota" id="perto-nota" role="status"></p>
+  </div>` : ''}
 
   ${centros.length
     ? `<ul class="centros">${linhas}</ul>${paginacao}`
@@ -484,6 +702,100 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
         f.submit();
       });
     });
+})();
+
+/* ---------------------------------------------------------------------------
+ * O mais perto de mim
+ *
+ * ISTO CORRE TODO NO APARELHO. A localização de quem procura nunca vai para o
+ * servidor, nem num parâmetro, nem num pedido, nem num registo — o servidor
+ * mandou as coordenadas dos centros desta página e é o browser que faz as
+ * contas e reordena as linhas que já cá estão. Não é um pormenor de
+ * implementação: é a única versão desta funcionalidade compatível com uma
+ * ferramenta cujo rodapé diz que não recolhe dados sobre pessoas. Se alguém
+ * um dia a mudar para ordenar em SQL, é essa frase que deixa de ser verdade.
+ *
+ * Duas consequências honestas, ditas na própria página:
+ *
+ * · Ordena os que estão NESTA página. Com mais de quarenta centros, o mais
+ *   perto pode estar na página seguinte. Com uma dúzia — que é onde isto vai
+ *   estar durante muito tempo — não acontece; quando acontecer, a ordenação
+ *   passa a precisar do servidor e a decisão de privacidade volta à mesa.
+ * · Centros sem coordenadas não desaparecem: vão para o fim, com a ordem que
+ *   já tinham. Sumir com um centro por causa de um campo que quem aprova não
+ *   preencheu seria transformar uma falha nossa numa viagem que não se faz.
+ *
+ * Sem JavaScript e sem permissão, a lista fica na ordem de sempre. O botão
+ * está escondido no HTML e só este script o mostra — um botão que abre uma
+ * caixa de permissões e não faz nada a seguir é pior do que nenhum botão.
+ * -------------------------------------------------------------------------*/
+(function () {
+  var barra = document.getElementById('perto-barra');
+  var bot = document.getElementById('b-perto');
+  var nota = document.getElementById('perto-nota');
+  var ul = document.querySelector('ul.centros');
+  if (!barra || !bot || !ul || !navigator.geolocation) return;
+  barra.hidden = false;
+
+  /* Distância em linha recta, em km. Não é a distância de carro, e a página
+     não a chama isso: com um rio pelo meio — que é o caso de metade das
+     enchentes — o carro faz muito mais. Serve para ordenar, não para navegar. */
+  function km(a, b, c, d) {
+    var R = 6371, r = Math.PI / 180;
+    var dl = (c - a) * r, dg = (d - b) * r;
+    var s = Math.sin(dl / 2) * Math.sin(dl / 2)
+      + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dg / 2) * Math.sin(dg / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  }
+
+  bot.addEventListener('click', function () {
+    bot.disabled = true;
+    nota.textContent = 'Pedindo sua localização…';
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var la = pos.coords.latitude, lo = pos.coords.longitude;
+      var itens = [].slice.call(ul.children);
+      var comDist = 0;
+
+      itens.forEach(function (li, i) {
+        var a = parseFloat(li.getAttribute('data-lat'));
+        var o = parseFloat(li.getAttribute('data-lon'));
+        /* A ordem original é o desempate, para os que não têm coordenadas
+           ficarem entre si exactamente como estavam. */
+        li._ord = i;
+        if (isFinite(a) && isFinite(o)) {
+          li._d = km(la, lo, a, o);
+          comDist++;
+          var marca = li.querySelector('.c-perto');
+          if (marca) {
+            marca.textContent = li._d < 1
+              ? Math.round(li._d * 1000) + ' m em linha reta'
+              : li._d.toFixed(li._d < 10 ? 1 : 0) + ' km em linha reta';
+            marca.hidden = false;
+          }
+        } else { li._d = Infinity; }
+      });
+
+      itens.sort(function (x, y) {
+        if (x._d !== y._d) return x._d - y._d;
+        return x._ord - y._ord;
+      }).forEach(function (li) { ul.appendChild(li); });
+
+      var sem = itens.length - comDist;
+      nota.textContent = 'Ordenado do mais perto ao mais longe, em linha reta — '
+        + 'a viagem de carro é sempre maior.'
+        + (sem ? ' ' + sem + (sem === 1
+            ? ' centro ainda não tem localização exata e ficou no fim.'
+            : ' centros ainda não têm localização exata e ficaram no fim.') : '')
+        + ' Sua localização não saiu deste aparelho.';
+      bot.hidden = true;
+    }, function (e) {
+      bot.disabled = false;
+      nota.textContent = e && e.code === 1
+        ? 'Sem a localização não dá para ordenar por distância — a lista continua '
+          + 'pela mais útil primeiro. Você pode procurar pelo nome do seu bairro.'
+        : 'Não conseguimos sua localização agora. A lista continua pela mais útil primeiro.';
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+  });
 })();
 </script>`
   });
@@ -623,7 +935,7 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
   ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
 
   ${feito ? '' : `
-  <p class="entrada">Escreva o endereço da página do seu centro. Não precisa de
+  <p class="entrada">Escreva o endereço da página do seu centro. Não precisa
     saber o código — é isso que você está pedindo.</p>
 
   <form method="post" action="/pedir-codigo">
@@ -771,7 +1083,12 @@ function paginaAtualizar({ centro, url, erro, feito }) {
 <main class="atualizar faixas">
   <header class="topo-c">
     <h1>${esc(d.nome || centro.slug)}</h1>
-    <p class="endereco">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
+    <p class="endereco">${d.endereco
+      ? `<a href="${esc(linkMapa(d.endereco, d.coords))}" target="_blank" rel="noopener">${esc(d.endereco)}</a>`
+      : ''}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
+    ${d.endereco ? `<p class="ajuda conferir">Toque no endereço para ver onde ele cai no
+      mapa — é o mesmo link que aparece na lista de centros. Se cair no lugar
+      errado, fale com quem aprovou seu centro.</p>` : ''}
   </header>
 
   ${feito ? `<p class="feito">Publicado. Sua página já mostra esta lista.
@@ -867,7 +1184,11 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     <p><b>O nome, o endereço e o telefone não mudam aqui.</b> Foram conferidos
       à mão quando o centro foi aprovado. Se estiverem errados, fale com quem
       aprovou — mudá-los sem ninguém ver tiraria o valor da verificação.</p>
-    <p><a href="${esc(url)}">Ver minha página</a> · <a href="/kit">Imprimir material novo</a></p>
+    <p><a href="${esc(url)}">Ver minha página</a> ·
+      <a href="/kit?slug=${encodeURIComponent(centro.slug)}">Imprimir material novo</a></p>
+    <p class="ajuda">O kit abre já com o endereço do seu centro. O código não vai
+      no link — ele ficaria no histórico do navegador, e o computador da
+      secretaria é de todo mundo que faz turno. Escreva o código lá.</p>
   </footer>
 </main>`
   });
@@ -891,6 +1212,9 @@ function paginaCentroEntrada({ base }) {
     <h1>Meu centro</h1>
     <p class="entrada">Tudo que um ponto de arrecadação precisa. A lista de
       hoje é a que se faz todos os dias — as outras, uma vez só.</p>
+    <p class="entrada">Um cartaz impresso diz o que o centro precisava no dia em
+      que saiu da impressora. Por isso o QR de todas as peças aponta para sua
+      página: o papel fica na porta e a lista continua sendo a de hoje.</p>
   </header>
 
   <div class="duas-portas">
@@ -1185,22 +1509,60 @@ function textoAprovado(d, url, base, codigo) {
 function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contagem, base, erro }) {
   const linha = c => {
     const d = c.dados || {};
+    const s = esc(c.slug);
+    const mapa = linkMapa(d.endereco, d.coords);
     return `<article class="pedido">
       <h3>${esc(d.nome || c.slug)}</h3>
       <p class="meta">${esc(d.tipo || '')} · pedido em ${dataCurta(c.criado)}</p>
-      <p>${svgIcone('pino')} ${esc(d.endereco || '—')}</p>
+      <p>${svgIcone('pino')} ${d.endereco
+        ? `<a href="${esc(mapa)}" target="_blank" rel="noopener">${esc(d.endereco)}</a>`
+        : '—'}</p>
       <p>${svgIcone('telefone')} ${esc(d.contato || '—')}</p>
+      ${d.endereco ? `<p class="meta conferir">Abra o endereço antes de aprovar. É o
+        mesmo link que vai aparecer no botão <b>Como chegar</b> de toda a gente:
+        se ele cair na rua errada, cai na rua errada para todos.</p>` : ''}
       <form method="POST" action="/admin/decidir">
         <input type="hidden" name="t" value="${esc(token)}">
-        <input type="hidden" name="slug" value="${esc(c.slug)}">
-        <label class="campo" for="s-${esc(c.slug)}">Endereço</label>
+        <input type="hidden" name="slug" value="${s}">
+        <!-- Diz ao servidor que ESTE formulário traz os campos conferidos. Sem
+             esta marca ele não lhes toca — o botão "Reabrir" lá em baixo também
+             faz POST para /admin/decidir com decisao=aprovado, e sem a marca
+             apagava as coordenadas, a emergência e o perfil de um centro que
+             estava só a reabrir. -->
+        <input type="hidden" name="verificados" value="1">
+        <label class="campo" for="s-${s}">Endereço</label>
         <div class="linha-slug">
           <span>/</span>
-          <input id="s-${esc(c.slug)}" name="novo_slug" type="text" value="${esc(c.slug)}"
+          <input id="s-${s}" name="novo_slug" type="text" value="${s}"
             maxlength="48" autocomplete="off" spellcheck="false">
         </div>
         <p class="meta">Encurte se for longo de ditar ao telefone. O endereço
           antigo continua respondendo.</p>
+
+        <label class="campo" for="c-${s}">Coordenadas (opcional)</label>
+        <input id="c-${s}" name="coords" type="text" value="${esc(coordsTexto(d.coords))}"
+          placeholder="-29.9177, -51.1839" maxlength="48" autocomplete="off" spellcheck="false"
+          inputmode="text">
+        <p class="meta">No mapa que acabou de abrir: toque e segure no lugar certo,
+          copie o par de números e cole aqui. Faz o pino cair no lugar exato em vez
+          de uma procura pelo texto do endereço — e é o que permite ordenar a
+          lista pelo que está mais perto de quem procura. Em branco funciona
+          do mesmo jeito.</p>
+
+        <label class="campo" for="e-${s}">Emergência (opcional)</label>
+        <input id="e-${s}" name="emergencia" type="text" value="${esc(d.emergencia || '')}"
+          placeholder="Enchentes RS 2026" maxlength="60" autocomplete="off">
+        <p class="meta">A que resposta este centro pertence. Enquanto houver só
+          uma, não aparece em lugar nenhum — serve para o dia em que houver duas
+          ao mesmo tempo e a lista não puder misturá-las.</p>
+
+        <label class="campo" for="p-${s}">Instagram ou site (opcional)</label>
+        <input id="p-${s}" name="perfil" type="text" value="${esc(d.perfil || '')}"
+          placeholder="instagram.com/paroquiasaosebastiao" maxlength="140"
+          autocomplete="off" spellcheck="false" inputmode="url">
+        <p class="meta">Abra antes de colar. Este link sai de uma página que leva
+          sua verificação, e quem o seguir vai achar que você conferiu.</p>
+
         <div class="botoes">
           <button class="btn btn-primario" name="decisao" value="aprovado">Aprovar</button>
           <button class="btn btn-recusar" name="decisao" value="recusado">Recusar</button>
@@ -1266,6 +1628,34 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
         <input type="hidden" name="slug" value="${esc(c.slug)}">
         <button class="btn pequeno">Código novo</button>
       </form>
+      <!-- Corrigir depois de aprovar.
+           Sem isto, uma coordenada colada com um dígito a menos ficava errada
+           para sempre — e este projecto tem uma regra sobre números que só
+           podem viver onde se corrigem. Nome, morada e telefone continuam de
+           fora: mudá-los é refazer a verificação, e isso é um telefonema. -->
+      <details class="na-editar">
+        <summary>Corrigir mapa, emergência ou perfil</summary>
+        <form method="POST" action="/admin/verificados">
+          <input type="hidden" name="t" value="${esc(token)}">
+          <input type="hidden" name="slug" value="${esc(c.slug)}">
+          <label class="campo" for="ec-${esc(c.slug)}">Coordenadas</label>
+          <input id="ec-${esc(c.slug)}" name="coords" type="text"
+            value="${esc(coordsTexto((c.dados || {}).coords))}"
+            placeholder="-29.9177, -51.1839" maxlength="48" autocomplete="off" spellcheck="false">
+          ${(c.dados || {}).endereco ? `<p class="meta"><a href="${esc(linkMapa((c.dados || {}).endereco, (c.dados || {}).coords))}"
+            target="_blank" rel="noopener">Ver onde isto cai agora</a></p>` : ''}
+          <label class="campo" for="ee-${esc(c.slug)}">Emergência</label>
+          <input id="ee-${esc(c.slug)}" name="emergencia" type="text"
+            value="${esc((c.dados || {}).emergencia || '')}" maxlength="60" autocomplete="off">
+          <label class="campo" for="ep-${esc(c.slug)}">Instagram ou site</label>
+          <input id="ep-${esc(c.slug)}" name="perfil" type="text"
+            value="${esc((c.dados || {}).perfil || '')}" maxlength="140"
+            autocomplete="off" spellcheck="false" inputmode="url">
+          <p class="meta">Deixar em branco apaga. Guardar não republica a lista:
+            a idade da página é da lista do centro, não das nossas correções.</p>
+          <button class="btn pequeno">Guardar</button>
+        </form>
+      </details>
     </li>`;
   }).join('')}</ul>` : '<p class="vazio">Nenhum centro no ar.</p>'}
 
@@ -1394,7 +1784,19 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .contato .lin svg{width:22px;height:22px;flex:none}
 .contato .lin span{font:700 clamp(17px,4.6vw,22px)/1.25 var(--fonte)}
 .contato .lin a span{text-decoration:underline;text-underline-offset:3px}
+/* O perfil é o único link daqui que sai do CAPEM. Fica mais pequeno do que o
+   endereço e o telefone de propósito: é o menos urgente dos três. */
+.contato .lin a[rel~=ugc] span{font-size:clamp(15px,3.8vw,17px);font-weight:600}
 .carimbo{margin:16px 0 0;font:600 13px/1.2 var(--mono);color:var(--texto-2)}
+
+/* --- chegar e ligar ---
+   Duas coisas que alguém faz de pé, na rua, com uma mão. Lado a lado no
+   telemóvel largo e empilhados no estreito, sempre com 52 px de altura. */
+.ir{display:grid;gap:10px;padding:0 var(--goteira) 4px}
+@media(min-width:520px){.ir{grid-template-columns:1fr 1fr}}
+.btn-ir{display:flex;align-items:center;justify-content:center;gap:10px;
+  min-height:52px;margin:0;font-weight:800;text-align:center}
+.btn-ir svg{width:22px;height:22px;flex:none}
 
 /* --- compartilhar --- */
 .compartilhar{border-top:6px solid var(--tinta)}
@@ -1411,6 +1813,24 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .pe .creditos{color:var(--texto-3)}
 
 /* --- as duas portas --- */
+/* As respostas em curso, na entrada. Só existem no HTML quando há mais de uma. */
+.emg-inicial{margin:0 0 24px;padding:16px 0 0;border-top:2px solid var(--tinta)}
+.emg-inicial h2{margin:0 0 12px;font-size:clamp(18px,4.5vw,22px)}
+.emg-inicial .emergencias{list-style:none;margin:0;padding:0;
+  display:flex;flex-wrap:wrap;gap:8px}
+.emg-inicial .emg{min-height:46px}
+
+/* Corrigir um centro que já está no ar. Fechado por omissão: é a excepção,
+   não a tarefa do dia. */
+.na-editar{flex-basis:100%;margin-top:8px}
+.na-editar summary{font:600 12px/1.4 var(--mono);color:var(--texto-2);cursor:pointer;
+  padding:6px 0}
+/* Sem enchimento lateral: os campos aqui dentro alinham com a goteira da
+   página, como os de todos os outros formulários. */
+.na-editar form{margin:6px 0 4px;padding:12px 0;background:var(--claro)}
+.na-editar .campo{margin-top:8px}
+.na-editar input{width:100%}
+
 .duas-portas{display:grid;gap:14px;margin:8px 0 28px}
 /* Chamava-se "duas portas" e passaram a ser três quando a actualização diária
    ganhou a sua. auto-fit em vez de dois fixos, para não ficar uma órfã. */
@@ -1455,10 +1875,30 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
    cinzento que não é clicável falha o contraste E mente sobre ser um link. */
 .pg.vazia{visibility:hidden}
 .pg-conta{font:600 12px/1.2 var(--mono);color:var(--texto-2)}
+/* --- a barra de emergências ---
+   Só existe no HTML quando há mais de uma. Ver o comentário em paginaCentros. */
+.emergencias{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px}
+.emg{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 13px;
+  border:2px solid var(--tinta);background:var(--papel);color:var(--tinta);
+  font:700 13px/1 var(--fonte);text-decoration:none}
+.emg.atual{background:var(--tinta);color:var(--papel)}
+.emg-n{font:700 11px/1 var(--mono);opacity:.7}
+
+/* --- o mais perto de mim ---
+   Escondido no HTML e mostrado pelo script: sem geolocalização o botão abriria
+   uma caixa de permissões para não fazer nada a seguir. */
+.perto-barra{margin:0 0 14px}
+#b-perto{display:inline-flex;align-items:center;gap:9px;min-height:46px}
+#b-perto svg{width:20px;height:20px;flex:none}
+.perto-nota{margin:8px 0 0;font:500 13px/1.5 var(--fonte);color:var(--texto-2);max-width:60ch}
+
 .centros{list-style:none;margin:0;padding:0}
 .c-item{border-top:2px solid var(--tinta)}
 .c-item:last-child{border-bottom:2px solid var(--tinta)}
-.c-item a{display:grid;gap:4px;padding:15px 0;text-decoration:none}
+/* Era ".c-item a", o que passou a apanhar também os botões de ligar e de
+   chegar assim que eles existiram — e transformava cada um numa grelha.
+   (Sem crases neste bloco: é um literal de template. Ver tools/goteira.js.) */
+.c-cartao{display:grid;gap:4px;padding:15px 0 12px;text-decoration:none}
 .c-nome{font:800 17px/1.25 var(--fonte)}
 .c-endereco{font:500 13.5px/1.4 var(--fonte);color:var(--texto-2)}
 .c-quando{font:600 12px/1.2 var(--mono);color:var(--texto-2)}
@@ -1471,6 +1911,27 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .c-pausa{display:flex;align-items:center;gap:7px;margin-top:5px;
   font:700 13px/1.2 var(--fonte);color:var(--proibido)}
 .c-pausa svg{width:20px;height:20px;flex:none}
+
+/* --- ligar e chegar, na própria lista ---
+   Alvos de 44 px, que é o mínimo para um polegar, e a lista usa-se de pé.
+   Ficam por baixo do cartão e não dentro dele: ver o comentário no HTML. */
+.c-acoes{display:flex;gap:8px;padding:0 0 14px;flex-wrap:wrap}
+.c-acao{display:inline-flex;align-items:center;gap:7px;min-height:44px;
+  padding:0 14px;border:2px solid var(--tinta);background:var(--papel);
+  font:700 13px/1 var(--fonte);color:var(--tinta);text-decoration:none}
+.c-acao svg{width:19px;height:19px;flex:none}
+.c-acao:hover,.c-acao:focus-visible{background:var(--tinta);color:var(--papel)}
+/* A marca herda a cor do texto, por isso inverte-se com ele. */
+.c-acao:hover svg,.c-acao:focus-visible svg{color:var(--papel)}
+/* Um centro parado continua a poder ser telefonado — é a única coisa útil a
+   fazer com ele — mas os botões não competem com o aviso vermelho. */
+.c-item .c-pausa~.c-acoes,.c-item.velha .c-acoes,.c-item.nunca .c-acoes{opacity:.75}
+
+/* A distância só existe depois de alguém dar a localização, e é escrita pelo
+   script. Sem permissão nunca aparece — ver o comentário em paginaCentros. */
+.c-perto{margin-left:8px;font:700 12px/1.2 var(--mono);color:var(--tinta)}
+.c-perto::before{content:"· "}
+
 .sem-resultado{margin:18px 0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 .erro-form{margin:0 0 16px;padding:12px 14px;background:var(--proibido);color:#fff;
   font:600 14px/1.45 var(--fonte)}
@@ -1623,7 +2084,11 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 .fechou svg{width:52px;height:52px;color:var(--proibido)}
 .fechou p{margin:0;font:500 15px/1.5 var(--fonte);color:var(--texto-2)}
 .lista-no-ar{list-style:none;margin:0;padding:0}
-.lista-no-ar li{display:flex;justify-content:space-between;gap:12px;
+/* flex-wrap por causa do bloco de correção: sem ele o "details" ficava
+   espremido na mesma linha, empurrado para a direita, e os campos lá dentro
+   começavam a 262 px da beira em vez dos 20 px de toda a gente — que é
+   exactamente o que tools/goteira.js existe para apanhar. */
+.lista-no-ar li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;
   padding:11px 0;border-bottom:1px solid var(--tenue);font:600 15px/1.3 var(--fonte)}
 .lista-no-ar span{font:500 13px/1.3 var(--mono);color:var(--texto-2);flex:none}
 .lista-no-ar li.velha span,.lista-no-ar li.nunca span{color:var(--proibido);font-weight:700}

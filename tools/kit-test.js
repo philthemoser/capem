@@ -329,6 +329,55 @@ const CENTRO = {
   await p.evaluate(() => { S.precisa = S.precisa.filter(v => typeof v === 'string'); salvar(); montarForm(); });
   await p.waitForTimeout(300);
 
+  /* =========================================================================
+   * A MOLDURA: BARRA, TRILHO E CABEÇALHO
+   *
+   * O kit era a única página com um cabeçalho seu — branco sobre preto, colado
+   * por baixo da barra — e sem trilho de migalhas. Duas faixas escuras
+   * empilhadas, e nenhuma pista de onde se está.
+   *
+   * A parte que interessa não é o trilho existir: é ele DESAPARECER quando
+   * isto foi aberto de um pen drive ou de um anexo, onde "Início" não leva a
+   * lugar nenhum. Um link morto num ginásio é pior do que link nenhum. Este
+   * teste corre de file://, que é exactamente esse caso.
+   * =======================================================================*/
+  console.log('\nbarra, trilho e cabeçalho');
+  ok('o trilho de migalhas existe no documento',
+    await p.$('#migalhas') !== null);
+  ok('mas some quando isto não veio de um servidor',
+    await p.evaluate(() => document.getElementById('migalhas').hidden));
+  ok('a barra some pelo mesmo motivo, e ao mesmo tempo',
+    await p.evaluate(() => document.getElementById('nav-topo').hidden));
+  ok('o trilho diz o caminho todo, e o fim não é link',
+    await p.evaluate(() => {
+      const m = document.getElementById('migalhas');
+      const links = [...m.querySelectorAll('a')].map(a => a.getAttribute('href'));
+      return links.join(',') === '/,/centro' && !!m.querySelector('b');
+    }));
+
+  /* O cabeçalho passou a ser o mesmo das páginas do servidor: papel, não
+     tinta. Se alguém o voltar a pintar de escuro, isto falha. */
+  ok('o cabeçalho é claro, como o das outras páginas',
+    await p.evaluate(() => {
+      const c = getComputedStyle(document.querySelector('header.topo'));
+      const m = c.backgroundColor.match(/\d+/g).map(Number);
+      return m[0] > 200 && m[1] > 200 && m[2] > 200;
+    }));
+
+  /* As regras de .migalhas são uma cópia das do servidor — o kit não pode ir
+     buscar a folha de lá sem deixar de abrir de uma pen. Uma cópia que ninguém
+     compara é uma cópia que diverge. */
+  {
+    const doServidor = require('../server/pagina.js').CSS;
+    const doKit = require('fs').readFileSync(
+      path.join(__dirname, '..', 'field', 'src', 'kit.css'), 'utf8');
+    const regras = t => (t.match(/\.migalhas[^{]*\{[^}]*\}/g) || [])
+      .map(r => r.replace(/\s+/g, ' ').trim()).sort();
+    const a = regras(doServidor), b = regras(doKit);
+    ok('a cópia do trilho no kit tem as mesmas regras que a do servidor',
+      a.length > 0 && a.length === b.length, `servidor ${a.length}, kit ${b.length}`);
+  }
+
   console.log('\nendereço para publicar');
   /* Este ficheiro é aberto de uma pen, de um anexo, do GitHub Pages — sítios
      que não são o servidor. O endereço da página é a única coisa que o

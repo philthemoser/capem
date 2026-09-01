@@ -880,6 +880,254 @@ const DIA = 86400000;
     r.status === 303 || r.status === 200, String(r.status));
 
 
+  /* =========================================================================
+   * LIGAR E CHEGAR
+   *
+   * Alguém com cobertores no carro quer duas coisas: telefonar antes de sair, e
+   * saber onde é. Ambas obrigavam a abrir a página do centro e a copiar o
+   * endereço à mão para outro aplicativo.
+   * =======================================================================*/
+  console.log('\nligar e chegar');
+  /* As secções de paginação acima deixaram quarenta centros "Paginado" na
+     lista, por isso a fixture está na página 2. Procura-se por ela. */
+  const soEste = '/centros?q=' + encodeURIComponent('sebastiao');
+  {
+    const lista = await (await get(soEste)).text();
+
+    ok('a lista tem um botão de ligar, com o nome do centro no rótulo',
+      /aria-label="Ligar para Paróquia São Sebastião"/.test(lista));
+    ok('e um de como chegar, também com o nome',
+      /aria-label="Como chegar a Paróquia São Sebastião[^"]*"/.test(lista));
+    ok('o telefone vira um tel: com só dígitos', /href="tel:51996120044"/.test(lista));
+    ok('o mapa é uma procura pelo endereço',
+      /https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=/.test(lista));
+
+    /* A razão de os botões estarem FORA do link do cartão, e o teste que
+       impede que alguém os volte a pôr lá dentro. Um <a> dentro de outro <a>
+       não é HTML válido; o que acontece na prática é pior do que a regra —
+       um toque na beira do botão segue o cartão e leva a pessoa para outra
+       página. O axe também o reprova, mas isto falha mais depressa e diz
+       porquê. */
+    ok('nenhum link dentro de outro link na lista',
+      !/<a\b[^>]*>(?:(?!<\/a>)[\s\S])*<a\b/.test(lista));
+
+    const pag = await (await get('/' + slugFinal)).text();
+    ok('na página do centro o endereço abre o mapa',
+      /class="lin"><a href="https:\/\/www\.google\.com\/maps\/search/.test(pag));
+    ok('e há um botão grande de como chegar', /class="btn btn-ir"/.test(pag));
+
+    /* Um centro encerrado NÃO ganha o botão: a página existe para dizer
+       "não traga nada para aqui", e um botão de rota diz o contrário. */
+  }
+
+  /* =========================================================================
+   * COORDENADAS
+   *
+   * Coladas à mão na aprovação, no mesmo momento em que já se está a conferir
+   * o endereço no mapa. O que não for um par de números dentro do planeta tem
+   * de virar "sem coordenadas" e não meio par — e "sem coordenadas" continua a
+   * funcionar, com a procura pelo texto do endereço.
+   * =======================================================================*/
+  console.log('\ncoordenadas');
+  {
+    const casos = [
+      ['-29.9177, -51.1839', [-29.9177, -51.1839], 'o formato normal'],
+      ['-29.9177,-51.1839', [-29.9177, -51.1839], 'sem espaço'],
+      ['(-29.9177, -51.1839)', [-29.9177, -51.1839], 'entre parênteses'],
+      ['-29,9177; -51,1839', [-29.9177, -51.1839], 'com vírgula decimal e ponto e vírgula'],
+      ['', undefined, 'vazio'],
+      ['perto da igreja', undefined, 'texto'],
+      ['-29.9177', undefined, 'meio par'],
+      ['999, 999', undefined, 'fora do planeta'],
+      /* Zero-zero é o Golfo da Guiné, e é quase sempre um campo vazio que
+         passou por um Number(). Mandar alguém para lá é pior do que não ter
+         mapa nenhum. */
+      ['0, 0', undefined, 'zero-zero, que é o Golfo da Guiné']
+    ];
+    let bons = 0;
+    casos.forEach(([entrada, esperado]) => {
+      const saida = S.lerCoords(entrada);
+      const bate = esperado === undefined
+        ? saida === undefined
+        : Array.isArray(saida) && saida[0] === esperado[0] && saida[1] === esperado[1];
+      if (bate) bons++;
+      else console.log(`       ↳ "${entrada}" deu ${JSON.stringify(saida)}`);
+    });
+    ok(`${casos.length} formas de coordenada lidas como devem`, bons === casos.length,
+      `${bons}/${casos.length}`);
+
+    S.db.definirVerificados(slugFinal, { coords: [-29.9177, -51.1839] });
+    const lista = await (await get(soEste)).text();
+    ok('com coordenadas, o mapa aponta ao ponto e não ao texto',
+      /query=-29\.9177,-51\.1839/.test(lista));
+    ok('e a linha leva as coordenadas para o script ordenar',
+      /data-lat="-29\.9177" data-lon="-51\.1839"/.test(lista));
+    ok('o botão de ordenar por distância aparece', /id="perto-barra"/.test(lista));
+
+    /* Escondido no HTML e mostrado pelo script: sem JavaScript, um botão que
+       pede a localização e não faz nada a seguir é pior do que botão nenhum. */
+    ok('e vem escondido, para o script o mostrar',
+      /<div class="perto-barra" id="perto-barra" hidden>/.test(lista));
+
+    S.db.definirVerificados(slugFinal, { coords: undefined });
+    const sem = await (await get(soEste)).text();
+    ok('sem coordenadas volta a ser uma procura pelo endereço',
+      !/data-lat=/.test(sem) && /maps\/search\/\?api=1&amp;query=R\./.test(sem));
+    ok('e o botão de distância desaparece com ele', !/id="perto-barra"/.test(sem));
+  }
+
+  /* =========================================================================
+   * EMERGÊNCIA
+   *
+   * Uma coluna derivada, um filtro, e uma barra que não aparece enquanto
+   * houver uma resposta só. Não aparecer é o comportamento certo, não uma
+   * funcionalidade por acabar.
+   * =======================================================================*/
+  console.log('\nemergência');
+  {
+    S.db.definirVerificados(slugFinal, { emergencia: 'Enchentes RS 2026' });
+
+    /* A coluna e não só o campo dentro do JSON. Esquecer a linha que a deriva
+       em server.js não rebenta nada — a coluna fica vazia, o filtro deixa de
+       devolver seja o que for, e tudo o resto continua a funcionar. Foi
+       exactamente o que aconteceu da primeira vez, e é por isso que este teste
+       vai ler a COLUNA e não os dados. */
+    ok('a emergência chega à coluna derivada, e não só ao JSON',
+      S.db.ler(slugFinal).emergencia === 'Enchentes RS 2026',
+      JSON.stringify(S.db.ler(slugFinal).emergencia));
+
+    const filtrado = await (await get('/centros?e=' + encodeURIComponent('Enchentes RS 2026'))).text();
+    ok('o filtro por emergência encontra o centro', filtrado.includes(slugFinal));
+    ok('e a procura leva a emergência consigo, para não a perder ao filtrar',
+      /<input type="hidden" name="e" value="Enchentes RS 2026">/.test(filtrado));
+    const outra = await (await get('/centros?e=Chuvas+BA+2026')).text();
+    ok('uma emergência que não é a dele não o traz', !outra.includes(slugFinal));
+
+    /* Com uma resposta só, a barra não existe: um botão sozinho numa barra só
+       faz alguém perguntar-se o que é aquilo. */
+    ok('com uma emergência só, não há barra na lista',
+      !/<nav class="emergencias"/.test(await (await get(soEste)).text()));
+    ok('nem na entrada',
+      !/<section class="emg-inicial">/.test(await (await get('/')).text()));
+
+    /* Com duas, misturá-las manda alguém atravessar um estado.
+       Criado directamente: o formulário de /pedir tem um limite de cinco por
+       hora e por IP, e as secções acima já o gastaram. */
+    S.db.criar('salvador-ec', { nome: 'Escola Central', tipo: 'Abrigo',
+      endereco: 'R. das Flores, 5 — Salvador BA', contato: '(71) 98888-2222' });
+    await form('/admin/decidir', { t: ADMIN, slug: 'salvador-ec', decisao: 'aprovado',
+      novo_slug: 'salvador-ec', verificados: '1', coords: '',
+      emergencia: 'Chuvas BA 2026', perfil: '' });
+    S.db.publicar('salvador-ec', { ...S.db.ler('salvador-ec').dados, precisa: ['agua'] });
+
+    const duas = await (await get(soEste)).text();
+    ok('com duas emergências, a barra aparece', /<nav class="emergencias"/.test(duas));
+    ok('e nomeia as duas',
+      /Enchentes RS 2026/.test(duas) && /Chuvas BA 2026/.test(duas));
+    ok('a entrada passa a listar as respostas em curso',
+      /<section class="emg-inicial">/.test(await (await get('/')).text()));
+    const so = await (await get('/centros?e=Chuvas+BA+2026')).text();
+    ok('o filtro separa mesmo as duas',
+      so.includes('salvador-ec') && !so.includes('>Paróquia São Sebastião<'));
+  }
+
+  /* =========================================================================
+   * O PERFIL — INSTAGRAM OU SITE
+   *
+   * `dados.link` já existe e é outra coisa: o destino do QR, a própria página
+   * do centro. Este campo chama-se `perfil` por isso mesmo.
+   * =======================================================================*/
+  console.log('\nperfil do centro');
+  {
+    ok('um javascript: não é guardado',
+      S.lerPerfilBruto('javascript:alert(1)') === '', S.lerPerfilBruto('javascript:alert(1)'));
+    ok('um data: também não', S.lerPerfilBruto('data:text/html,<script>') === '');
+    ok('texto que não é endereço nenhum também não', S.lerPerfilBruto('o instagram deles') === '');
+    ok('um endereço sem esquema ganha https',
+      S.lerPerfilBruto('instagram.com/paroquia') === 'https://instagram.com/paroquia',
+      S.lerPerfilBruto('instagram.com/paroquia'));
+
+    S.db.definirVerificados(slugFinal, { perfil: 'https://instagram.com/paroquiasaosebastiao' });
+    const pag = await (await get('/' + slugFinal)).text();
+    ok('a página diz qual é a casa e qual é a conta',
+      /Instagram — @paroquiasaosebastiao/.test(pag));
+    /* Um link que sai de uma página que leva a nossa verificação não pode
+       levar a nossa reputação com ele. */
+    ok('e sai com noopener nofollow ugc', /rel="noopener nofollow ugc"/.test(pag));
+
+    S.db.definirVerificados(slugFinal, { perfil: 'https://paroquiasaosebastiao.org.br/doacoes' });
+    ok('um site sem casa conhecida mostra o domínio, em vez de dizer só "site"',
+      /paroquiasaosebastiao\.org\.br/.test(await (await get('/' + slugFinal)).text()));
+
+    /* Nem o kit nem /atualizar podem escrever isto: foi conferido à mão, e uma
+       verificação que o próprio verificado reescreve não é verificação. */
+    await api('/api/publicar', { slug: slugFinal, codigo: novoCod,
+      dados: { precisa: ['agua'], perfil: 'https://sitio-do-atacante.example' } });
+    ok('o kit não consegue trocar o perfil ao publicar',
+      S.db.ler(slugFinal).dados.perfil === 'https://paroquiasaosebastiao.org.br/doacoes',
+      S.db.ler(slugFinal).dados.perfil);
+  }
+
+  /* =========================================================================
+   * CORRIGIR DEPOIS DE APROVAR
+   *
+   * Uma coordenada colada com um dígito a menos ficava errada para sempre — e
+   * este projecto tem uma regra sobre números viverem só onde se corrigem.
+   * =======================================================================*/
+  console.log('\ncorrigir o que foi conferido');
+  {
+    const antes = S.db.ler(slugFinal).publicado;
+    r = await form('/admin/verificados', { t: ADMIN, slug: slugFinal,
+      coords: '-29.9200, -51.1800', emergencia: 'Enchentes RS 2026',
+      perfil: 'https://instagram.com/paroquiasaosebastiao' });
+    const d = S.db.ler(slugFinal);
+    ok('a correção entra', d.dados.coords[0] === -29.92, JSON.stringify(d.dados.coords));
+
+    /* Corrigir uma coordenada não é o centro ter publicado uma lista. Fazer a
+       página parecer fresca por causa de uma correção nossa seria exactamente
+       a mentira que o resto do desenho existe para evitar. */
+    ok('e não faz a lista do centro parecer mais nova do que é', d.publicado === antes,
+      `${antes} → ${d.publicado}`);
+
+    r = await form('/admin/verificados', { t: 'errado', slug: slugFinal, coords: '0,0' });
+    ok('sem o segredo do admin, não corrige nada', r.status === 404, String(r.status));
+
+    /* O botão "Reabrir" da lista de encerrados faz POST para /admin/decidir com
+       decisao=aprovado e SEM estes campos. Sem a marca `verificados`, reabrir
+       um centro apagava-lhe as coordenadas, a emergência e o perfil — que é
+       precisamente o género de perda silenciosa que ninguém repara até alguém
+       procurar o centro e ele não aparecer no filtro. */
+    S.db.decidir(slugFinal, 'encerrado');
+    await form('/admin/decidir', { t: ADMIN, slug: slugFinal, decisao: 'aprovado', novo_slug: '' });
+    const dep = S.db.ler(slugFinal).dados;
+    ok('reabrir um centro não lhe apaga as coordenadas', !!dep.coords, JSON.stringify(dep.coords));
+    ok('nem a emergência', dep.emergencia === 'Enchentes RS 2026', dep.emergencia);
+    ok('nem o perfil', !!dep.perfil, dep.perfil);
+  }
+
+  /* =========================================================================
+   * DE /ATUALIZAR PARA O KIT
+   * =======================================================================*/
+  console.log('\nde atualizar para o kit');
+  {
+    /* A página é desenhada directamente e não pedida por HTTP: /atualizar tem
+       um limite de vinte tentativas por hora e por IP — é a rota onde alguém
+       adivinharia um código à força — e as secções acima já o gastaram. O que
+       se testa aqui é o que a página escreve, não o caminho até ela. */
+    const P = require('../server/pagina.js');
+    const at = P.paginaAtualizar({
+      centro: { ...S.db.ler(slugFinal), codigoDado: novoCod },
+      url: `${base}/${slugFinal}` });
+    ok('o link para o kit leva o endereço do centro',
+      at.includes('href="/kit?slug=' + slugFinal + '"'));
+    /* O código nunca viaja num URL: fica no histórico do navegador, e o
+       computador da secretaria é de toda a gente que faz turno. */
+    ok('e NUNCA leva o código', !/\/kit\?[^"]*codigo/.test(at));
+    ok('o endereço no cabeçalho abre o mapa',
+      at.includes('class="endereco"><a href="https://www.google.com/maps'));
+  }
+
+
   servidor.close();
 
   /* -------------------------------------------------------------------------

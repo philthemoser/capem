@@ -37,14 +37,16 @@ let db;
 let derivar = d => ({
   busca: String((d && d.nome) || '').toLowerCase(),
   nome_ord: String((d && d.nome) || '').toLowerCase(),
-  pausado: !!(d && d.pausado)
+  pausado: !!(d && d.pausado),
+  emergencia: String((d && d.emergencia) || '')
 });
 
 const definirDerivacao = fn => { derivar = fn; };
 
 const derivadas = d => {
   const x = derivar(d || {});
-  return [String(x.busca || ''), String(x.nome_ord || ''), x.pausado ? 1 : 0];
+  return [String(x.busca || ''), String(x.nome_ord || ''), x.pausado ? 1 : 0,
+          String(x.emergencia || '')];
 };
 
 function abrir(arquivo) {
@@ -59,23 +61,28 @@ function abrir(arquivo) {
       decidido    INTEGER,
       publicado   INTEGER,
 
-      /* Três colunas que são cópias de coisas que já estão dentro do JSON.
+      /* Quatro colunas que são cópias de coisas que já estão dentro do JSON.
          Existem porque a lista de centros tem de ser filtrada, procurada e
          ordenada em SQL — a alternativa é ler e desempacotar mil JSON a cada
          pedido, que é exactamente o que tornava essa página lenta.
 
-         busca     nome + morada + tipo + os rótulos das necessidades, sem
-                   acentos nem maiúsculas. Ver busca.js: quem procura escreve
-                   o que quer dar, não o nome de um centro.
-         nome_ord  o nome sem acentos, porque o SQLite não ordena português.
-         pausado   para "só quem está a receber" ser um WHERE e não um filtro
-                   aplicado depois de já se ter desenhado tudo.
+         busca       nome + morada + tipo + os rótulos das necessidades, sem
+                     acentos nem maiúsculas. Ver busca.js: quem procura escreve
+                     o que quer dar, não o nome de um centro.
+         nome_ord    o nome sem acentos, porque o SQLite não ordena português.
+         pausado     para "só quem está a receber" ser um WHERE e não um filtro
+                     aplicado depois de já se ter desenhado tudo.
+         emergencia  a que resposta o centro pertence. Vazia em toda a parte
+                     hoje, e é para continuar assim enquanto houver uma só:
+                     existe para o dia em que houver duas ao mesmo tempo e
+                     misturá-las passar a mandar gente para o outro estado.
 
          São derivadas: a coluna dados continua a ser a verdade. Reescrevem-se
          sozinhas a cada publicação, e reindexar() refá-las todas. */
       busca       TEXT NOT NULL DEFAULT '',
       nome_ord    TEXT NOT NULL DEFAULT '',
-      pausado     INTEGER NOT NULL DEFAULT 0
+      pausado     INTEGER NOT NULL DEFAULT 0,
+      emergencia  TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_estado ON centros(estado, criado);
     CREATE INDEX IF NOT EXISTS idx_lista ON centros(estado, publicado);
@@ -121,7 +128,13 @@ function migrar() {
   const novas = {
     busca: "TEXT NOT NULL DEFAULT ''",
     nome_ord: "TEXT NOT NULL DEFAULT ''",
-    pausado: 'INTEGER NOT NULL DEFAULT 0'
+    pausado: 'INTEGER NOT NULL DEFAULT 0',
+    /* A que resposta o centro pertence. Coluna e não só um campo dentro do
+       JSON, pelo mesmo motivo que as outras três: filtra-se em SQL, e um
+       filtro que obrigue a desempacotar todos os JSON é o desenho que esta
+       página já teve uma vez e que custou 1,6 MB. Vazia enquanto ninguém a
+       preencher, e vazia é exactamente o comportamento de hoje. */
+    emergencia: "TEXT NOT NULL DEFAULT ''"
   };
   Object.entries(novas).forEach(([c, t]) => {
     if (!tem.has(c)) db.exec(`ALTER TABLE centros ADD COLUMN ${c} ${t}`);
@@ -140,14 +153,14 @@ function migrar() {
  */
 function reindexar() {
   const linhas = db.prepare('SELECT slug, dados FROM centros').all();
-  const upd = db.prepare('UPDATE centros SET busca = ?, nome_ord = ?, pausado = ? WHERE slug = ?');
+  const upd = db.prepare(`UPDATE centros SET busca = ?, nome_ord = ?, pausado = ?,
+                                             emergencia = ? WHERE slug = ?`);
   db.exec('BEGIN');
   try {
     linhas.forEach(r => {
       let d = {};
       try { d = JSON.parse(r.dados); } catch { /* uma linha corrompida não pára o arranque */ }
-      const x = derivar(d);
-      upd.run(x.busca, x.nome_ord, x.pausado ? 1 : 0, r.slug);
+      upd.run(...derivadas(d), r.slug);
     });
     db.exec('COMMIT');
   } catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -207,8 +220,8 @@ function codigoConfere(codigo, guardado) {
  */
 function criar(slug, dados) {
   db.prepare(`INSERT INTO centros (slug, estado, codigo_hash, dados, criado,
-                                   busca, nome_ord, pausado)
-              VALUES (?, 'pendente', '', ?, ?, ?, ?, ?)`)
+                                   busca, nome_ord, pausado, emergencia)
+              VALUES (?, 'pendente', '', ?, ?, ?, ?, ?, ?)`)
     .run(slug, JSON.stringify(dados), Date.now(), ...derivadas(dados));
 }
 
@@ -254,7 +267,7 @@ function renomear(antigo, novo) {
 
 function publicar(slug, dados) {
   db.prepare(`UPDATE centros SET dados = ?, publicado = ?,
-                                 busca = ?, nome_ord = ?, pausado = ?
+                                 busca = ?, nome_ord = ?, pausado = ?, emergencia = ?
               WHERE slug = ?`)
     .run(JSON.stringify(dados), Date.now(), ...derivadas(dados), slug);
 }
@@ -318,10 +331,11 @@ function listar(estado) {
  * não reinicia há três semanas não pode achar que ainda é a semana passada.
  * -------------------------------------------------------------------------*/
 function procurar({ termos = [], ordem = 'uteis', aceitando = false,
-                    recentes = false, pagina = 1, porPagina = 40,
+                    recentes = false, emergencia = '', pagina = 1, porPagina = 40,
                     fresca = 0, envelhecida = 0 } = {}) {
   const onde = ["estado = 'aprovado'"];
   const arg = [];
+  if (emergencia) { onde.push('emergencia = ?'); arg.push(String(emergencia)); }
 
   /* Todos os termos têm de bater. Com o texto já normalizado dos dois lados,
      um LIKE chega — e uma tabela pequena percorre-se mais depressa do que se
@@ -397,7 +411,47 @@ function contar() {
   return r;
 }
 
+/**
+ * As emergências que existem, com quantos centros no ar cada uma tem.
+ *
+ * Centros sem emergência ficam de fora: até alguém preencher o campo, esta
+ * lista vem vazia e a entrada continua a ir direita à lista simples. É a
+ * diferença entre estar preparado e estar a fingir que já há duas respostas.
+ */
+function emergencias() {
+  return db.prepare(`SELECT emergencia, COUNT(*) n FROM centros
+                     WHERE estado = 'aprovado' AND emergencia <> ''
+                     GROUP BY emergencia ORDER BY n DESC, emergencia ASC`).all();
+}
+
+/**
+ * Escrever os campos que foram conferidos à mão.
+ *
+ * Só a aprovação passa por aqui. Nome, morada, telefone, coordenadas, a
+ * emergência e o perfil não se mudam nem em /atualizar nem pelo kit — foram
+ * verificados por uma pessoa, e uma verificação que o próprio verificado pode
+ * reescrever depois não é uma verificação.
+ *
+ * Funde em vez de substituir: a lista do dia e a pausa vivem no mesmo JSON e
+ * não têm nada que ver com isto. `publicado` NÃO é tocado — mexer nos dados
+ * verificados não é publicar uma lista, e fazer a página parecer fresca por
+ * causa de uma correcção de morada seria a mentira que o resto do projecto
+ * existe para evitar.
+ */
+function definirVerificados(slug, campos) {
+  const r = db.prepare('SELECT dados FROM centros WHERE slug = ?').get(slug);
+  if (!r) throw new Error('centro não existe: ' + slug);
+  let d = {};
+  try { d = JSON.parse(r.dados); } catch { /* linha corrompida: recomeça-se */ }
+  const dados = { ...d, ...campos };
+  db.prepare(`UPDATE centros SET dados = ?, busca = ?, nome_ord = ?,
+                                 pausado = ?, emergencia = ? WHERE slug = ?`)
+    .run(JSON.stringify(dados), ...derivadas(dados), slug);
+  return dados;
+}
+
 module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
-                   decidir, listar, procurar, parados, contar, lerEstado,
+                   decidir, listar, procurar, parados, contar, emergencias,
+                   definirVerificados, lerEstado,
                    escreverEstado, definirDerivacao, reindexar,
                    novoCodigo, novoCodigoPara, garantirCodigo, codigoConfere, ESTADOS };

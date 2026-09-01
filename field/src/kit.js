@@ -1352,9 +1352,11 @@ async function puxarDados(botao) {
     return;
   }
   const { base, slug } = alvo;
-  const antes = botao.textContent;
-  botao.disabled = true; botao.textContent = 'A puxar…';
-  estadoCarga('');
+  /* Também é chamada sozinha ao abrir (ver `aoAbrir`), e aí não há botão
+     nenhum para desactivar. */
+  const antes = botao ? botao.textContent : '';
+  if (botao) { botao.disabled = true; botao.textContent = 'Puxando…'; }
+  estadoCarga('Conferindo com o servidor…');
   try {
     const r = await fetch(base + '/api/carregar', {
       method: 'POST',
@@ -1410,13 +1412,14 @@ async function puxarDados(botao) {
        perfeita.) */
     const rede = e instanceof TypeError;
     estadoCarga(rede
-      ? 'Sem conexão com o servidor. Preencha à mão — a impressão funciona do '
-        + 'mesmo jeito, e você pode publicar mais tarde.'
+      ? 'Sem conexão com o servidor, então o que está aí não foi conferido — é o '
+        + 'que ficou escrito neste aparelho. A impressão funciona do mesmo jeito, '
+        + 'mas confira a lista antes de imprimir cem folhas.'
       : 'Os dados vieram, mas alguma coisa deu errado ao preencher: '
         + (e && e.message ? e.message : e) + '. Confira o formulário antes de publicar.',
       'mau');
   } finally {
-    botao.disabled = false; botao.textContent = antes;
+    if (botao) { botao.disabled = false; botao.textContent = antes; }
   }
 }
 
@@ -1739,6 +1742,70 @@ function iniciar() {
   let t = null;
   window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(escalar, 120); });
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(escalar);
+
+  aoAbrir();
+}
+
+/* ---------------------------------------------------------------------------
+ * O que este ecrã diz sobre a idade daquilo que está a mostrar.
+ *
+ * O resto do CAPEM tem uma regra: o silêncio nunca é o estado apresentado. Cada
+ * página diz em voz alta a idade da sua própria lista, porque uma página web
+ * parece sempre nova e essa é a mentira perigosa aqui.
+ *
+ * O kit era a única tela que a quebrava. O formulário volta do localStorage
+ * exactamente como ficou — sem data, sem aviso, sem diferença visível entre
+ * "isto é o que está no ar" e "isto é o que alguém escreveu numa terça-feira".
+ * Um coordenador que publicou a lista de manhã pelo telemóvel abria o kit no
+ * computador da secretaria à tarde e imprimia a lista de ontem, calado.
+ *
+ * Por isso: se já cá está um endereço e um código, puxa-se sozinho ao abrir. Se
+ * não houver código, ou se a rede falhar, diz-se que o que está no ecrã é local
+ * e não foi conferido com o servidor. Nunca se mostra uma lista velha como se
+ * fosse a de hoje.
+ * -------------------------------------------------------------------------*/
+function aoAbrir() {
+  /* O link de /atualizar traz o endereço, e só o endereço. O código nunca viaja
+     num URL: fica no histórico do browser, e o computador da secretaria é
+     partilhado por toda a gente que faz turno. */
+  try {
+    const p = new URLSearchParams(location.search).get('slug');
+    if (p && !String(S.slug || '').trim()) {
+      S.slug = p.trim();
+      salvar(); montarForm();
+    }
+  } catch (e) { /* sem URL utilizável — segue à mesma */ }
+
+  const temCodigo = !!String(S.codigo || '').trim();
+  const alvo = alvoPublicacao();
+
+  if (temCodigo && alvo) {
+    /* Puxa sozinho. `puxarDados` já escreve o que veio e a idade da lista. */
+    const b = document.getElementById('b-carregar');
+    puxarDados(b);
+    return;
+  }
+
+  /* Sem código não há como conferir. Se há alguma coisa escrita, tem de se
+     dizer que é local — o perigo é imprimir isto a pensar que é o que está
+     no ar. Um formulário nos valores de fábrica não precisa de aviso nenhum. */
+  if (!tocado()) return;
+  estadoCarga(temCodigo
+    ? 'Não entendemos o endereço guardado, então isto não foi conferido com o '
+      + 'servidor. É o que ficou escrito neste aparelho — pode não ser o que a '
+      + 'sua página mostra agora.'
+    : 'Isto é o que ficou escrito neste aparelho' + (S.atualizado ? ' em ' + S.atualizado : '')
+      + ' — não foi conferido com o servidor. Escreva o endereço e o código para '
+      + 'puxar a lista que está no ar antes de imprimir.',
+  'aviso');
+}
+
+/** Alguém já mexeu nisto, ou é o formulário tal como vem de fábrica? */
+function tocado() {
+  const v = vazio();
+  if (String(S.nome || '').trim() || String(S.endereco || '').trim()) return true;
+  return JSON.stringify(S.precisa) !== JSON.stringify(v.precisa)
+    || JSON.stringify(S.naoTraga) !== JSON.stringify(v.naoTraga);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1763,10 +1830,14 @@ function iniciar() {
  * ferramenta está partida.
  */
 function mostrarNav() {
-  const n = document.getElementById('nav-topo');
-  if (!n) return;
   const o = location.origin;
-  n.hidden = !(o && o !== 'null' && /^https?:/.test(o));
+  const servido = !!(o && o !== 'null' && /^https?:/.test(o));
+  /* A barra e o trilho aparecem e desaparecem juntos: são a mesma promessa —
+     que estes links levam a algum lado. */
+  ['nav-topo', 'migalhas'].forEach(id => {
+    const n = document.getElementById(id);
+    if (n) n.hidden = !servido;
+  });
 }
 
 function arrancar() {

@@ -152,6 +152,23 @@ que faz o QR de todas as peças apontar para a página certa. Nunca mais é prec
 escrever tudo outra vez num telemóvel novo. No fim do formulário fica o botão
 de publicar.
 
+**E puxa-se sozinho ao abrir**, se o código já cá estiver. O kit era a única
+tela do CAPEM que quebrava a regra do resto do projecto — o silêncio nunca é o
+estado apresentado. O formulário voltava do `localStorage` exactamente como
+tinha ficado: sem data, sem aviso, sem diferença visível entre "isto é o que
+está no ar" e "isto é o que alguém escreveu na terça-feira". Um coordenador que
+publicou a lista de manhã pelo telemóvel abria o kit no computador da secretaria
+à tarde e imprimia a lista de ontem, calado.
+
+Agora, ao abrir: se houver endereço e código guardados, confere com o servidor e
+diz o que veio e de quando é a lista. Se não houver código, ou se a rede falhar,
+diz em âmbar que o que está no ecrã é local e não foi conferido. Nunca mostra
+uma lista velha como se fosse a de hoje.
+
+O link de `/atualizar` para o kit leva o endereço do centro (`/kit?slug=…`) e
+**nunca o código**: um código num URL fica no histórico do navegador, e o
+computador da secretaria é de toda a gente que faz turno.
+
 A página diz em voz alta a idade da lista: até um dia, nada; de dois a seis
 dias, faixa amarela "ligue antes de vir"; a partir de sete, faixa vermelha
 "pode já não valer". Uma página web parece sempre nova, e é essa a mentira

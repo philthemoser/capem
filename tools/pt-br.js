@@ -85,7 +85,16 @@ const TROCAS = [
     'está fazendo, não "está a fazer"'],
   [/(?<![\wçãõáéíóúâêôàü-])(pessoas|gente|alguém|ninguém|estranho|centro|voluntário|coordenador) a [a-zçãõáéíóú]+r(?![\wçãõáéíóúâêôàü-])/gi,
     'pessoas fazendo, não "pessoas a fazer"'],
-  [/(?<![\wçãõáéíóúâêôàü-])A (abrir|carregar|guardar|publicar|imprimir|enviar|procurar|gerar)(?![\wçãõáéíóúâêôàü-])/g,
+  /* Uma lista fechada de verbos só conhece os que já foram apanhados: esta
+     começou com oito e ficou verde por cima de um "A puxar…" durante semanas,
+     porque "puxar" não estava lá. Uma regra que só sabe o bug que já foi
+     corrigido não é uma regra. Agora são duas:
+       · qualquer infinitivo antes de reticências, que é a forma de todas as
+         mensagens de estado ("A puxar…", "A gerar…");
+       · a lista antiga, para os casos sem reticências. */
+  [/(?<![\wçãõáéíóúâêôàü-])A [a-zçãõáéíóúâêô]{2,}(ar|er|ir)(?=\s*(?:…|\.\.\.))/g,
+    'no gerúndio: "Puxando…", "Gerando…"'],
+  [/(?<![\wçãõáéíóúâêôàü-])A (abrir|carregar|guardar|publicar|imprimir|enviar|procurar|gerar|puxar|conferir)(?![\wçãõáéíóúâêôàü-])/g,
     'Abrindo…, no gerúndio'],
 
   /* "continua a funcionar" → "continua funcionando". */
@@ -157,14 +166,64 @@ const acusar = (onde, linha, achado, certo) => {
   console.log(`      ${linha.trim().slice(0, 88)}`);
 };
 
+/**
+ * Uma frase parte-se ao fim de oitenta colunas; uma expressão não.
+ *
+ * Isto lia linha a linha, e "legíveis a preto\n e branco" passou despercebido
+ * durante semanas por causa de uma quebra de linha no meio — a regra existia,
+ * estava certa, e nunca chegou a ver a frase inteira. O texto é lido duas
+ * vezes: uma linha a linha (para as regras que dependem do fim da linha, como
+ * "na mesma"), e outra com os espaços todos colapsados, para as que só querem a
+ * frase. As posições são traduzidas de volta em número de linha, senão o aviso
+ * manda alguém procurar às cegas num ficheiro de mil e novecentas linhas.
+ */
+function porLinha(texto, pos) {
+  let n = 1;
+  for (let i = 0; i < pos && i < texto.length; i++) if (texto[i] === '\n') n++;
+  return n;
+}
+
 FICHEIROS.forEach(f => {
   const texto = textoVisivel(fs.readFileSync(path.join(RAIZ, f), 'utf8'));
+  const visto = new Set();
+
   texto.split('\n').forEach((linha, n) => {
     TROCAS.forEach(([re, certo, salvo]) => {
       re.lastIndex = 0;
       const m = re.exec(linha);
-      if (m && !(salvo && salvo.test(m[0]))) acusar(`${f}:${n + 1}`, linha, m[0], certo);
+      if (m && !(salvo && salvo.test(m[0]))) {
+        visto.add(`${n + 1}|${m[0].toLowerCase()}`);
+        acusar(`${f}:${n + 1}`, linha, m[0], certo);
+      }
     });
+  });
+
+  /* Segunda passagem, sem quebras de linha. Só acusa o que a primeira não viu:
+     a mesma frase apanhada duas vezes seria ruído no ecrã de quem a vai
+     corrigir. */
+  const corrido = texto.replace(/[ \t]*\n[ \t]*/g, ' ');
+  const mapa = [];
+  { let j = 0;
+    for (let i = 0; i < texto.length; i++) {
+      mapa[j] = i;
+      if (/[ \t]/.test(texto[i]) && /[ \t\n]/.test(texto[i + 1] || '')) continue;
+      j++;
+    }
+  }
+  TROCAS.forEach(([re, certo, salvo]) => {
+    re.lastIndex = 0;
+    let m;
+    const g = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+    while ((m = g.exec(corrido)) !== null) {
+      if (salvo && salvo.test(m[0])) continue;
+      const n = porLinha(texto, mapa[m.index] != null ? mapa[m.index] : 0);
+      /* A quebra pode cair antes ou depois: aceita-se a linha e a seguinte. */
+      const chave = m[0].toLowerCase();
+      if (visto.has(`${n}|${chave}`) || visto.has(`${n + 1}|${chave}`)) continue;
+      visto.add(`${n}|${chave}`);
+      acusar(`${f}:${n} (frase partida em duas linhas)`,
+        corrido.slice(Math.max(0, m.index - 30), m.index + 60), m[0], certo);
+    }
   });
 });
 

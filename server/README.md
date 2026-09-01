@@ -323,6 +323,7 @@ Tudo vem do endereço, e o endereço é partilhável — um link para
 | `ordem` | `uteis` (por omissão), `recentes`, `nome`. |
 | `aceitando=1` | Esconde quem está em pausa. |
 | `recentes=1` | Só listas da última semana. |
+| `e` | Emergência. Filtra por `dados.emergencia`, resolvido na coluna derivada. |
 | `p` | Página. 40 por página. |
 
 `uteis` é a ordem de sempre: primeiro o escalão de idade da lista, depois quem
@@ -338,6 +339,106 @@ Porque foi feito assim: antes, a página desenhava **todos** os centros e
 filtrava-os no telemóvel. Com mil centros eram 1,6 MB de HTML e 41 páginas por
 segundo. Agora são 51 KB e ~440 por segundo, e o tamanho já não depende de
 quantos centros existem.
+
+### Ligar e chegar, sem abrir a página
+
+Cada linha da lista tem dois botões: `tel:` com o telefone, e uma procura no
+Google Maps com a morada. Um vizinho com cobertores no carro fazia isto abrindo
+a página do centro, copiando a morada à mão e colando-a noutro aplicativo.
+
+Os botões estão **fora** do `<a>` do cartão. Um `<a>` dentro de outro não é HTML
+válido, o axe reprova-o, e na prática um toque na beira do botão segue o cartão
+e leva a pessoa para outra página. O truque de esticar o link com um `::after` e
+deixar os botões por cima resolve-o no papel e traz de volta a família de bugs
+que a linha `[hidden]{display:none!important}` está no topo de todas as folhas
+para evitar. Há um teste que falha se alguém os voltar a aninhar.
+
+O rótulo de cada botão leva o nome do centro (`aria-label="Ligar para
+Paróquia São Sebastião"`): numa lista de quarenta, "Ligar" quarenta vezes
+seguidas não diz nada a um leitor de ecrã.
+
+### Coordenadas, e o mais perto de mim
+
+`dados.coords` é um par `[lat, lon]` colado à mão na aprovação — no momento em
+que já se está a conferir a morada no mapa. Sem coordenadas o link do mapa é uma
+procura pelo texto da morada, que acerta quase sempre; com elas, o pino cai no
+sítio exacto.
+
+**A ordenação por distância corre toda no aparelho.** O servidor manda as
+coordenadas dos centros da página, e é o browser que faz as contas e reordena as
+linhas que já lá estão. A localização de quem procura **nunca** vai para o
+servidor — nem num parâmetro, nem num pedido, nem num registo. Não é um
+pormenor de implementação: é a única versão desta funcionalidade compatível com
+um rodapé que diz que isto não recolhe dados sobre pessoas. Quem a mudar um dia
+para ordenar em SQL está a tornar essa frase falsa.
+
+Duas consequências, ditas na própria página em vez de escondidas:
+
+- Ordena os que estão **nesta** página. Com mais de quarenta centros, o mais
+  perto pode estar na seguinte. Com uma dúzia — que é onde isto vai estar
+  durante muito tempo — não acontece; quando acontecer, a ordenação passa a
+  precisar do servidor e a decisão de privacidade volta à mesa.
+- Centros sem coordenadas vão para o fim, com a ordem que já tinham. Sumir com
+  um centro por causa de um campo que quem aprova não preencheu seria
+  transformar uma falha nossa numa viagem que não se faz.
+
+Sem JavaScript e sem permissão, a lista fica na ordem de sempre — e o botão nem
+aparece, porque um botão que abre uma caixa de permissões e não faz nada a
+seguir é pior do que botão nenhum.
+
+### A emergência
+
+`dados.emergencia` existe para o dia em que houver duas respostas ao mesmo
+tempo. Uma lista que misture o Rio Grande do Sul com a Bahia manda alguém
+atravessar um estado.
+
+Hoje **não aparece em lado nenhum**: a barra de emergências só é desenhada
+quando existe mais do que uma, e com zero ou uma a entrada vai direita à lista
+simples, exactamente como sempre foi. Não aparecer é o comportamento certo e não
+uma funcionalidade por acabar. É uma coluna derivada, um filtro e um parâmetro —
+e deve continuar assim até haver um segundo evento real. Uma tabela de
+emergências, um ecrã para as gerir e páginas por evento são a mobília; isto é a
+fundação, e só a fundação é barata.
+
+### O perfil — Instagram ou site
+
+`dados.perfil`, e o nome importa: **`dados.link` já existe e é outra coisa** —
+o destino do QR, a própria página do centro, usada por todas as peças
+impressas. Reaproveitar aquele nome dava um bug silencioso e caro.
+
+Três decisões:
+
+- **Quem o põe é quem aprova.** Um link que sai de uma página que leva a
+  verificação feita à mão herda essa verificação: quem o segue acredita que
+  alguém conferiu. Um perfil que morre, muda de dono ou é invadido passa a
+  fazê-lo com o nosso nome em cima. Nem o kit nem `/atualizar` lhe tocam, e há
+  um teste que tenta publicá-lo pelo kit e verifica que não passa.
+- **Só `http` e `https`.** A lista de esquemas permitidos é mais curta e mais
+  segura do que a dos proibidos; um `javascript:` guardado à mão seria um XSS a
+  um clique da página pública de um centro.
+- **Não vai para o papel.** Mesma regra das quantidades: um endereço que muda
+  não se corrige numa folha que já saiu da impressora.
+
+Sem logótipo de marca: as 29 marcas são silhuetas cheias que se lêem a dois
+metros a preto e branco, e um logótipo do Instagram não pertence a esse
+conjunto. A marca de elo é desenhada em `pagina.js` e **não** entra em
+`field/src/icones.js` de propósito — aquele conjunto é o do papel, e pô-la lá
+punha-a também na lista de onde um coordenador escolhe a marca de um item.
+
+### Corrigir depois de aprovar
+
+`POST /admin/verificados` reescreve coordenadas, emergência e perfil de um
+centro que já está no ar. Existe porque uma coordenada colada com um dígito a
+menos ficava errada para sempre — e este projecto tem uma regra sobre números
+viverem só onde se podem corrigir. **Não republica:** mexer nisto não é a lista
+do centro mudar, e fazer a página parecer fresca por causa de uma correcção
+nossa seria a mentira que o resto do desenho existe para evitar.
+
+O formulário da fila leva um `verificados=1` escondido. Sem ele o servidor não
+toca nestes campos — e é preciso, porque o botão **Reabrir** da lista de
+encerrados também faz `POST /admin/decidir` com `decisao=aprovado` e sem estes
+campos: sem a marca, reabrir um centro apagava-lhe as coordenadas, a emergência
+e o perfil. Há um teste para isso.
 
 Se um dia forem dezenas de milhares: a procura é um `LIKE '%…%'`, que percorre a
 tabela. A 10 000 centros ainda dá ~130 páginas por segundo; muito acima disso

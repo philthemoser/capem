@@ -54,7 +54,13 @@ const RAIZ = path.join(__dirname, '..');
 db.definirDerivacao(d => ({
   busca: B.textoDeBusca(d),
   nome_ord: B.nomeDeOrdem(d),
-  pausado: !!(d && d.pausado)
+  pausado: !!(d && d.pausado),
+  /* Esquecer esta linha não rebenta nada: a coluna fica vazia, o filtro por
+     emergência deixa de devolver seja o que for, e tudo o resto continua a
+     funcionar. Foi exactamente o que aconteceu da primeira vez. É por isso que
+     há um teste que aprova um centro com emergência e vai ler a coluna — uma
+     falha silenciosa numa coluna derivada não se vê de outra maneira. */
+  emergencia: String((d && d.emergencia) || '')
 }));
 
 /* Falhar ao arrancar é melhor do que servir uma fila de aprovação aberta ao
@@ -73,7 +79,59 @@ if (!ADMIN || ADMIN.length < 16) {
    — que é literalmente o exemplo que o texto de ajuda dá. */
 const { MAX_Q } = require('./compartilhado');
 
-const LIMITES = { nome: 80, tipo: 60, endereco: 140, horario: 80, contato: 40, link: 140, motivoPausa: 140 };
+/* `link` é o destino do QR — a própria página do centro. `perfil` é outra coisa
+   por completo: o Instagram ou o site do centro, para onde um visitante vai. Os
+   dois nomes já se confundiram uma vez na cabeça de quem escreveu isto; ficam
+   comentados para não voltarem a confundir-se. */
+const LIMITES = { nome: 80, tipo: 60, endereco: 140, horario: 80, contato: 40,
+                  link: 140, motivoPausa: 140, emergencia: 60, perfil: 140 };
+
+/**
+ * Coordenadas coladas de um mapa.
+ *
+ * Aceita "-29.9177, -51.1839", com ou sem espaço, com ou sem parênteses. Tudo o
+ * resto dá `undefined` — e `undefined` é o que faz o link do mapa voltar a ser
+ * uma procura pelo texto da morada, que é o comportamento certo quando não se
+ * sabe. Um par que não seja um par não pode virar meio par.
+ */
+/** Os três campos conferidos, tal como saem de qualquer um dos dois formulários. */
+const camposVerificados = campos => ({
+  coords: lerCoords(campos.get('coords')),
+  emergencia: texto(campos.get('emergencia'), LIMITES.emergencia),
+  perfil: lerPerfilBruto(campos.get('perfil'))
+});
+
+function lerCoords(v) {
+  const s = String(v || '').trim();
+  if (!s) return undefined;
+  const m = s.match(/^\(?\s*(-?\d{1,3}(?:[.,]\d+)?)\s*[,;]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*\)?$/);
+  if (!m) return undefined;
+  const a = Number(m[1].replace(',', '.'));
+  const b = Number(m[2].replace(',', '.'));
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return undefined;
+  if (a < -90 || a > 90 || b < -180 || b > 180) return undefined;
+  /* Zero-zero é o Golfo da Guiné, e é quase sempre um campo vazio que passou
+     por um Number(). Mandar alguém para lá é pior do que não ter mapa. */
+  if (a === 0 && b === 0) return undefined;
+  return [a, b];
+}
+
+/**
+ * O perfil do centro tal como se guarda: só http(s), e só o que é um URL.
+ *
+ * A lista de esquemas permitidos é mais curta e mais segura do que a dos
+ * proibidos — um `javascript:` guardado à mão na base de dados seria um XSS a
+ * um clique de distância da página pública de um centro.
+ */
+function lerPerfilBruto(v) {
+  const s = texto(v, LIMITES.perfil);
+  if (!s) return '';
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s); } catch (e) { return ''; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  if (!u.hostname.includes('.')) return '';
+  return u.href.slice(0, LIMITES.perfil);
+}
 
 const texto = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
 
@@ -293,7 +351,8 @@ async function encaminhar(req, res) {
 
   /* --- entrada --- */
   if (caminho === '/' && req.method === 'GET') {
-    return responder(res, 200, P.paginaInicial({ contagem: db.contar(), base }));
+    return responder(res, 200, P.paginaInicial({
+      contagem: db.contar(), base, emergencias: db.emergencias() }));
   }
   if (caminho === '/centros' && req.method === 'GET') {
     const consulta = B.lerConsulta(url.searchParams);
@@ -301,6 +360,7 @@ async function encaminhar(req, res) {
     const r = db.procurar({
       termos: B.termos(consulta.q), ordem: consulta.ordem,
       aceitando: consulta.aceitando, recentes: consulta.recentes,
+      emergencia: consulta.emergencia,
       pagina: consulta.pagina, porPagina: consulta.porPagina,
       /* As fronteiras dos escalões, calculadas agora: até um dia é "de hoje",
          até sete ainda vale a pena mostrar sem alarme. */
@@ -308,7 +368,8 @@ async function encaminhar(req, res) {
     });
     const centros = r.linhas.map(x => ({ ...x, url: urlDoCentro(x.slug, base) }));
     return responder(res, 200,
-      P.paginaCentros({ centros, base, consulta, total: r.total, paginas: r.paginas }),
+      P.paginaCentros({ centros, base, consulta, total: r.total, paginas: r.paginas,
+                        emergencias: db.emergencias() }),
       'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
   }
   if (caminho === '/centro' && req.method === 'GET') {
@@ -666,6 +727,19 @@ async function encaminhar(req, res) {
       alvo = novo;
       console.log(`[renomeado] ${slug} → ${novo}`);
     }
+    /* Os campos que só a aprovação escreve. Ver `definirVerificados` em db.js:
+       não são do coordenador porque foram conferidos por uma pessoa, e uma
+       verificação que o verificado pode reescrever depois não é verificação
+       nenhuma. Passam antes do `decidir` para que o centro entre no ar já com
+       as coordenadas e a emergência que a lista precisa para o ordenar. */
+    /* `verificados` só vem do formulário da fila. O botão "Reabrir" da lista de
+       encerrados também faz POST aqui com decisao=aprovado e sem estes campos —
+       sem esta condição, reabrir um centro apagava-lhe as coordenadas, a
+       emergência e o perfil. */
+    if (decisao === 'aprovado' && campos.get('verificados') === '1') {
+      db.definirVerificados(alvo, camposVerificados(campos));
+    }
+
     db.decidir(alvo, decisao);
     console.log(`[${decisao}] ${alvo}`);
 
@@ -686,6 +760,23 @@ async function encaminhar(req, res) {
           voltar: '/admin?t=' + encodeURIComponent(ADMIN)
         }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
       }
+    }
+    return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
+  }
+
+  /* Corrigir os campos conferidos de um centro que já está no ar.
+     Existe porque uma coordenada colada com um dígito a menos ficava errada
+     para sempre, e este projecto tem uma regra sobre números viverem só onde se
+     podem corrigir. NÃO republica: mexer nisto não é a lista do centro mudar, e
+     fazer a página parecer fresca por causa de uma correcção nossa seria a
+     mentira que o resto do desenho existe para evitar. */
+  if (caminho === '/admin/verificados' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    const slug = texto(campos.get('slug'), 60);
+    if (db.existe(slug)) {
+      db.definirVerificados(slug, camposVerificados(campos));
+      console.log(`[conferido] ${slug}`);
     }
     return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
   }
@@ -812,5 +903,6 @@ if (require.main === module) {
 }
 
 module.exports = { criarServidor, encaminhar, fazerSlug, limparDados, db,
+                   lerCoords, lerPerfilBruto,
                    urlDoCentro, slugDoAnfitriao, resumoDeParados, DIAS_PARADO,
                    ESTILO, DOMINIO, RESERVADOS };

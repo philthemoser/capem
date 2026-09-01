@@ -89,21 +89,40 @@ html, body {
   white-space: pre-wrap; word-break: break-word;
 }
 
+/* Trilho de migalhas. As regras são uma cópia das de server/pagina.js pelo
+   mesmo motivo que `.nav-topo` lá em baixo é uma cópia: o kit não pode ir
+   buscar a folha do servidor sem deixar de abrir de uma pen. Se mudar lá,
+   muda aqui — tools/kit-test.js verifica que as duas continuam a bater certo. */
+.migalhas {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 10px 20px 0;
+  background: var(--papel);
+  font: 600 12px/1.3 var(--mono); color: var(--texto-2);
+}
+.migalhas a { color: var(--texto-2); }
+.migalhas b { color: var(--tinta); font-weight: 700; }
+@media print { .migalhas { display: none !important; } }
+
+/* O cabeçalho é o mesmo das outras páginas: papel, não tinta.
+   Era branco sobre preto, logo por baixo da barra — duas faixas escuras
+   empilhadas, e o kit abria com um aspecto que nenhuma outra página do CAPEM
+   tem. As medidas repetem `.inicial h1` e `.entrada` do servidor. */
 .topo {
-  background: var(--tinta);
-  color: var(--papel);
-  padding: 20px 20px 22px;
+  background: var(--papel);
+  color: var(--tinta);
+  padding: 24px 20px 22px;
 }
 .topo h1 {
-  margin: 0;
-  font: 400 clamp(26px, 6vw, 38px)/1 var(--preta);
-  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+  font: 400 clamp(26px, 7vw, 42px)/1.02 var(--preta);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
-.topo p {
-  margin: 8px 0 0;
-  font: 500 15px/1.45 var(--fonte);
-  color: #C9C6C0;
-  max-width: 62ch;
+.topo .entrada {
+  margin: 0;
+  font: 500 16px/1.55 var(--fonte);
+  color: var(--texto-2);
+  max-width: 60ch;
 }
 
 .tela { max-width: 1500px; margin: 0 auto; padding: 0 0 60px; }
@@ -231,6 +250,9 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 .estado-pub.bom { border-left-color: var(--permitido); }
 .estado-pub.mau { border-left-color: var(--proibido); }
+/* Nem bom nem mau: o formulário é local e não foi conferido com o servidor.
+   Âmbar, como a faixa de idade das páginas — "não sabemos", não "está errado". */
+.estado-pub.aviso { border-left-color: var(--atencao); background: #FDF8E4; }
 
 .pos-publicar {
   margin-top: 12px; padding: 14px;

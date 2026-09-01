@@ -134,6 +134,14 @@ const TROCAS = [
   [/(?<![\wçãõáéíóúâêôàü-])consigo(?![\wçãõáéíóúâêôàü-])/gi, 'com você'],
   [/(?<![\wçãõáéíóúâêôàü-])a si próprio(s)?(?![\wçãõáéíóúâêôàü-])/gi, 'para você mesmo'],
   [/(?<![\wçãõáéíóúâêôàü-])lado nenhum(?![\wçãõáéíóúâêôàü-])/gi, 'lugar nenhum'],
+  /* Duas que passaram ao lado até a página de administração as escrever, e
+     que se viam numa captura de ecrã antes de se verem no teste. */
+  [/(?<![\wçãõáéíóúâêôàü-])toda a gente(?![\wçãõáéíóúâêôàü-])/gi, 'todo mundo'],
+  [/(?<![\wçãõáéíóúâêôàü-])em baixo(?![\wçãõáéíóúâêôàü-])/gi, 'embaixo, numa palavra'],
+  /* "consola" é o nome interno de um adaptador em avisos.js e pode ficar; o
+     que não pode é chegar ao ecrã. A regra exige a maiúscula ou um espaço à
+     frente, para não acusar a chave `consola:` do objecto. */
+  [/(?<![\wçãõáéíóúâêôàü-])consola(?![\wçãõáéíóúâêôàü:-])/g, 'console'],
   [/(?<![\wçãõáéíóúâêôàü-])ao turno(?![\wçãõáéíóúâêôàü-])/gi, 'no turno'],
   /* "perceber" existe no Brasil — é "reparar", não "entender". Só se acusa o
      uso europeu, que é o de compreender uma coisa dita. */

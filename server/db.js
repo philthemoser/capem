@@ -106,13 +106,78 @@ function abrir(arquivo) {
       chave TEXT PRIMARY KEY,
       valor TEXT NOT NULL
     );
+
+    /* As emergências, com nome próprio.
+       Antes era texto livre escrito à mão em cada aprovação, e texto livre
+       escrito vinte vezes dá vinte grafias: "Enchentes RS 2026", "enchentes
+       rs", "Enchentes  RS 2026". Cada uma virava uma resposta diferente na
+       barra, e a lista partia-se em três sem ninguém perceber porquê.
+
+       O centro guarda o SLUG. O nome vive só aqui, o que quer dizer que
+       corrigir uma gralha é uma linha e não uma passagem por todos os
+       centros — e que o nome pode mudar sem que nenhum endereço mude. */
+    CREATE TABLE IF NOT EXISTS emergencias (
+      slug   TEXT PRIMARY KEY,
+      nome   TEXT NOT NULL,
+      ativa  INTEGER NOT NULL DEFAULT 1,
+      criada INTEGER NOT NULL
+    );
   `);
   migrar();
+  /* Depois de migrar (a tabela tem de existir) e ANTES de reindexar, porque
+     reescreve `dados.emergencia` e a reindexação é que copia o resultado para
+     a coluna. */
+  migrarEmergencias();
   /* Refaz as colunas derivadas de tudo o que já lá estava. É uma passagem por
      uma tabela pequena, e é o que torna seguro mudar a regra de indexação sem
      obrigar centro nenhum a republicar para voltar a ser encontrável. */
   reindexar();
   return db;
+}
+
+/**
+ * De texto livre para um catálogo.
+ *
+ * A primeira versão da emergência era uma palavra escrita à mão em cada
+ * aprovação. Quem tiver dados dessa versão tem nomes guardados onde agora vão
+ * slugs, e sem isto ficariam órfãos: a coluna com "Enchentes RS 2026" e a
+ * tabela vazia, logo nenhum filtro a devolver coisa nenhuma.
+ *
+ * Corre a cada arranque e é um no-op quando não há nada por converter. Isso é
+ * de propósito: uma migração que só corre uma vez é uma migração que ninguém
+ * consegue repetir quando restaura um backup antigo.
+ */
+function migrarEmergencias() {
+  const linhas = db.prepare('SELECT slug, dados FROM centros').all();
+  const conhecidos = new Set(db.prepare('SELECT slug FROM emergencias').all().map(r => r.slug));
+  let convertidos = 0;
+  db.exec('BEGIN');
+  try {
+    linhas.forEach(r => {
+      let d = {};
+      try { d = JSON.parse(r.dados); } catch { return; }
+      const valor = String(d.emergencia || '').trim();
+      if (!valor || conhecidos.has(valor)) return;
+      /* Era um nome, não um slug. Faz-se o slug, cria-se a emergência com o
+         nome tal como estava escrito, e o centro passa a apontar ao slug. */
+      const slug = valor.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+      if (!slug) return;
+      if (!conhecidos.has(slug)) {
+        db.prepare(`INSERT OR IGNORE INTO emergencias (slug, nome, ativa, criada)
+                    VALUES (?, ?, 1, ?)`).run(slug, valor, Date.now());
+        conhecidos.add(slug);
+      }
+      d.emergencia = slug;
+      db.prepare('UPDATE centros SET dados = ? WHERE slug = ?')
+        .run(JSON.stringify(d), r.slug);
+      convertidos++;
+    });
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  if (convertidos) console.log(`[migração] ${convertidos} centro(s) passaram a apontar a um slug de emergência`);
+  return convertidos;
 }
 
 /**
@@ -411,17 +476,126 @@ function contar() {
   return r;
 }
 
-/**
- * As emergências que existem, com quantos centros no ar cada uma tem.
+/* ---------------------------------------------------------------------------
+ * As emergências
  *
- * Centros sem emergência ficam de fora: até alguém preencher o campo, esta
- * lista vem vazia e a entrada continua a ir direita à lista simples. É a
- * diferença entre estar preparado e estar a fingir que já há duas respostas.
- */
+ * `emergencias()` devolve as que têm centros no ar — é o que a barra pública
+ * desenha, e continua a esconder-se sozinha enquanto houver uma só.
+ * `emergenciasTodas()` devolve o catálogo inteiro, incluindo as que ainda não
+ * têm centro nenhum e as desactivadas: é a vista de quem administra.
+ * -------------------------------------------------------------------------*/
 function emergencias() {
-  return db.prepare(`SELECT emergencia, COUNT(*) n FROM centros
-                     WHERE estado = 'aprovado' AND emergencia <> ''
-                     GROUP BY emergencia ORDER BY n DESC, emergencia ASC`).all();
+  return db.prepare(`SELECT e.slug, e.nome, COUNT(c.slug) n
+                     FROM emergencias e
+                     JOIN centros c ON c.emergencia = e.slug AND c.estado = 'aprovado'
+                     GROUP BY e.slug, e.nome
+                     HAVING n > 0
+                     ORDER BY n DESC, e.nome ASC`).all();
+}
+
+function emergenciasTodas() {
+  return db.prepare(`SELECT e.slug, e.nome, e.ativa, e.criada,
+                            (SELECT COUNT(*) FROM centros c
+                              WHERE c.emergencia = e.slug AND c.estado = 'aprovado') n
+                     FROM emergencias e
+                     ORDER BY e.ativa DESC, e.nome ASC`).all();
+}
+
+const emergencia = slug =>
+  db.prepare('SELECT * FROM emergencias WHERE slug = ?').get(String(slug || '')) || null;
+
+function criarEmergencia(slug, nome) {
+  db.prepare(`INSERT INTO emergencias (slug, nome, ativa, criada)
+              VALUES (?, ?, 1, ?)`).run(slug, nome, Date.now());
+}
+
+/** O nome muda; o slug NUNCA. O slug está guardado em cada centro e num
+    endereço que já pode ter sido partilhado — /centros?e=… é um link. */
+function renomearEmergencia(slug, nome) {
+  db.prepare('UPDATE emergencias SET nome = ? WHERE slug = ?').run(nome, slug);
+}
+
+function activarEmergencia(slug, ativa) {
+  db.prepare('UPDATE emergencias SET ativa = ? WHERE slug = ?').run(ativa ? 1 : 0, slug);
+}
+
+/**
+ * Apagar uma emergência solta os centros que estavam nela.
+ *
+ * Não se apagam centros — nunca. Ficam sem emergência, que é o estado em que
+ * todos estavam antes de isto existir e no qual tudo funciona.
+ */
+function apagarEmergencia(slug) {
+  const afectados = db.prepare(`SELECT slug FROM centros WHERE emergencia = ?`).all(slug);
+  db.exec('BEGIN');
+  try {
+    afectados.forEach(r => {
+      const c = db.prepare('SELECT dados FROM centros WHERE slug = ?').get(r.slug);
+      let d = {};
+      try { d = JSON.parse(c.dados); } catch { /* linha corrompida */ }
+      d.emergencia = '';
+      db.prepare(`UPDATE centros SET dados = ?, busca = ?, nome_ord = ?,
+                                     pausado = ?, emergencia = ? WHERE slug = ?`)
+        .run(JSON.stringify(d), ...derivadas(d), r.slug);
+    });
+    db.prepare('DELETE FROM emergencias WHERE slug = ?').run(slug);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return afectados.length;
+}
+
+/* ---------------------------------------------------------------------------
+ * O aviso que aparece no topo de todas as páginas.
+ *
+ * Vive no `estado` e não numa tabela própria porque é UM — não há uma lista de
+ * avisos, e não deve haver: dois avisos vermelhos ao mesmo tempo já não são um
+ * aviso, são um cabeçalho.
+ *
+ * EXPIRA SOZINHO, e essa é a decisão que interessa. Todo este projecto existe
+ * para dizer que um cartaz impresso envelhece e uma página web mente sobre a
+ * sua idade. Uma faixa vermelha que sobrevive ao motivo que a pôs lá é
+ * exactamente essa falha, com o nosso nome em cima: passa a ser papel de
+ * parede, e a emergência seguinte não é lida por ninguém. Por isso a validade
+ * é escolhida no momento em que se escreve, e o fim é calculado aqui em vez de
+ * depender de alguém se lembrar de a desligar.
+ *
+ * `ate = 0` é "até eu desligar". Existe porque há casos em que é a resposta
+ * certa, e a fila de administração diz há quantos dias esse aviso está no ar
+ * precisamente para que ninguém se esqueça dele.
+ * -------------------------------------------------------------------------*/
+function lerAviso() {
+  const texto = lerEstado('aviso_texto', '');
+  if (!texto) return null;
+  const ate = Number(lerEstado('aviso_ate', 0)) || 0;
+  const desde = Number(lerEstado('aviso_desde', 0)) || 0;
+  /* Passou a validade: some sozinho, sem cron e sem ninguém. */
+  if (ate && Date.now() > ate) return null;
+  return { texto, ate, desde };
+}
+
+function escreverAviso(texto, ate) {
+  escreverEstado('aviso_texto', String(texto || ''));
+  escreverEstado('aviso_ate', String(Number(ate) || 0));
+  escreverEstado('aviso_desde', String(Date.now()));
+}
+
+const apagarAviso = () => escreverAviso('', 0);
+
+/* ---------------------------------------------------------------------------
+ * Uma cópia consistente da base de dados.
+ *
+ * `VACUUM INTO` é do próprio SQLite e produz um ficheiro íntegro mesmo com o
+ * servidor a atender pedidos — ao contrário de copiar o ficheiro à mão, que
+ * apanha uma escrita a meio e dá um backup que só se descobre partido no dia
+ * em que se precisa dele.
+ *
+ * O caminho é construído aqui e não vem de fora; ainda assim escapa-se a plica,
+ * porque `VACUUM INTO` não aceita parâmetros ligados e uma string colada dentro
+ * de SQL merece o cuidado de sempre.
+ * -------------------------------------------------------------------------*/
+function exportarPara(caminho) {
+  db.exec(`VACUUM INTO '${String(caminho).replace(/'/g, "''")}'`);
+  return caminho;
 }
 
 /**
@@ -451,7 +625,10 @@ function definirVerificados(slug, campos) {
 }
 
 module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
-                   decidir, listar, procurar, parados, contar, emergencias,
+                   decidir, listar, procurar, parados, contar,
+                   emergencias, emergenciasTodas, emergencia, criarEmergencia,
+                   renomearEmergencia, activarEmergencia, apagarEmergencia,
+                   exportarPara, lerAviso, escreverAviso, apagarAviso,
                    definirVerificados, lerEstado,
                    escreverEstado, definirDerivacao, reindexar,
                    novoCodigo, novoCodigoPara, garantirCodigo, codigoConfere, ESTADOS };

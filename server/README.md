@@ -425,6 +425,101 @@ conjunto. A marca de elo é desenhada em `pagina.js` e **não** entra em
 `field/src/icones.js` de propósito — aquele conjunto é o do papel, e pô-la lá
 punha-a também na lista de onde um coordenador escolhe a marca de um item.
 
+### O painel de administração
+
+Era uma fila de aprovação e passou a ser o sítio de onde se governa o site. Isso
+muda o que o segredo vale, e é por isso que a sessão mudou ao mesmo tempo.
+
+**A sessão.** Chegar a `/admin?t=…` troca o segredo por um cookie
+(`HttpOnly`, `SameSite=Strict`, `Secure` quando o `X-Forwarded-Proto` diz
+`https`, oito horas) e redirecciona para `/admin` limpo. O link do Telegram é
+exactamente o mesmo; o que muda é o que fica no histórico do browser depois de
+o seguir, no que se cola a alguém, e no canto de uma captura de ecrã. `POST`
+continua a aceitar `t` no corpo — não é preguiça, é o que faz um formulário
+aberto antes da sessão expirar continuar a funcionar, e o `t` é a credencial e
+não um atalho para a contornar. `SameSite=Strict` é a defesa contra CSRF de que
+isto passou a precisar no dia em que daqui se escreve em todas as páginas.
+`/admin/sair` limpa o cookie.
+
+**Confirmação onde ela protege alguma coisa.** Publicar o aviso mostra a faixa
+**a sério**, do tamanho e da cor que vai ter; apagar uma emergência diz quantos
+centros ficam sem ela e sugere arquivar; baixar a base de dados diz o que vai
+dentro do ficheiro antes de ele sair. Não são caixas de "tem a certeza?" — são
+o passo em que se vê o que vai acontecer.
+
+**Ver o site.** Uma fila de atalhos que abre em abas novas. Sair do painel para
+conferir uma página e ter de voltar ao Telegram para reentrar é o atrito que faz
+ninguém conferir nada.
+
+**Como está o site.** Quatro faltas que não partem coisa nenhuma e desfazem em
+silêncio uma funcionalidade cada: centros sem coordenadas (não entram na ordem
+por distância), sem perfil, que nunca publicaram, e parados. Mais os canais de
+aviso realmente ligados. Nada disto aparecia em lado nenhum — descobria-se
+abrindo o site e reparando. Há também um botão que **envia um aviso de teste**
+e espera mesmo pelo resultado, ao contrário do `avisar()` normal: sem ele,
+descobria-se que o Telegram estava em baixo no dia em que um pedido real ficasse
+sem resposta.
+
+### O aviso no topo do site
+
+Uma faixa vermelha acima de tudo, em todas as páginas servidas, para o que não
+cabe na lista de um centro e não espera pela publicação seguinte — uma ponte
+cortada, um bairro a evacuar.
+
+**Expira sozinho, e essa é a decisão inteira.** 6h, 24h, 3 dias, ou "até eu
+tirar". Este projecto existe para dizer que um cartaz envelhece e que uma página
+web mente sobre a sua idade; uma faixa vermelha que sobrevive ao motivo que a
+pôs lá é exactamente essa falha, com o nosso nome em cima — passa a ser papel de
+parede e a emergência seguinte não é lida por ninguém. O fim é calculado quando
+se escreve e verificado a cada leitura, sem cron e sem ninguém se lembrar. A
+opção sem prazo existe porque às vezes é a resposta certa, e o painel diz há
+quantos dias esse aviso está no ar precisamente para que ninguém se esqueça dele.
+
+Vive no `estado` e é **um** — dois avisos vermelhos ao mesmo tempo já não são um
+aviso, são um cabeçalho. Não sai no papel. Chega ao `pagina.js` por injecção
+(`P.definirAviso`), pelo mesmo motivo que a derivação das colunas: aquele
+ficheiro desenha páginas e não sabe onde mora o estado.
+
+### As emergências, agora com nome próprio
+
+Passaram de texto livre escrito à mão em cada aprovação para uma tabela. Texto
+livre escrito vinte vezes dá vinte grafias do mesmo acontecimento —
+"Enchentes RS 2026", "enchentes rs", "Enchentes  RS 2026" — e cada uma vira uma
+resposta diferente na barra, partindo a lista em três sem ninguém perceber
+porquê.
+
+**O centro guarda o slug; o nome vive só na tabela.** Corrigir uma gralha é uma
+linha e não uma passagem por todos os centros. O **slug nunca muda**, porque
+está guardado em cada centro e num endereço que já pode ter sido compartilhado:
+`/centros?e=…` é um link.
+
+- **Arquivar** tira-a das escolhas de novos centros e deixa em paz os que já lá
+  estão. O selector continua a mostrar uma emergência arquivada se for a do
+  centro que se está a editar — senão guardar uma correcção de coordenadas
+  tirava-o calado da emergência a que pertence.
+- **Apagar** solta os centros. Nenhum centro é apagado, nunca: ficam sem
+  emergência, que é o estado em que todos estavam antes disto existir.
+
+`migrarEmergencias()` converte dados da versão de texto livre e corre a cada
+arranque. Ser um no-op quando não há nada por converter é de propósito: uma
+migração que só corre uma vez é uma migração que ninguém consegue repetir quando
+restaura um backup antigo.
+
+### A cópia de segurança
+
+`POST /admin/backup` com confirmação. Usa **`VACUUM INTO`**, que é do próprio
+SQLite e produz um ficheiro íntegro com o servidor a atender pedidos — ao
+contrário de copiar o ficheiro à mão, que apanha uma escrita a meio e dá um
+backup que só se descobre partido no dia em que se precisa dele.
+
+O ecrã de confirmação diz o que vai lá dentro: todos os centros, endereços e **os
+telefones dos coordenadores**. Os códigos não — só o hash. Quem baixa tem de
+saber isso antes de deixar o ficheiro na pasta de downloads de um computador
+partilhado.
+
+Isto não substitui uma cópia automática, que continua a ser o item aberto número
+um. Substitui não haver nada.
+
 ### Corrigir depois de aprovar
 
 `POST /admin/verificados` reescreve coordenadas, emergência e perfil de um

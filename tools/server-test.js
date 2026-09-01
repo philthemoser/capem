@@ -167,9 +167,45 @@ const DIA = 86400000;
   console.log('\naprovar');
   r = await get('/admin');
   ok('a fila não abre sem o segredo', r.status === 404, String(r.status));
+
+  /* -------------------------------------------------------------------------
+   * A SESSÃO
+   *
+   * O segredo já não fica no endereço: chegar com `?t=…` troca-o por um cookie
+   * e redirecciona para `/admin` limpo. O link do Telegram continua a ser o
+   * mesmo — muda o que fica no histórico do browser depois de o seguir.
+   * -----------------------------------------------------------------------*/
   r = await get('/admin?t=' + encodeURIComponent(ADMIN));
+  ok('o segredo no endereço é trocado por um cookie', r.status === 303, String(r.status));
+  ok('e o endereço fica limpo', r.headers.get('location') === '/admin',
+    r.headers.get('location'));
+  const posto = r.headers.get('set-cookie') || '';
+  /* HttpOnly: o script da página nunca lhe toca. SameSite=Strict: um POST
+     vindo de outro site não o leva consigo, que é a defesa contra CSRF de que
+     isto precisa agora que daqui se escreve em todas as páginas. */
+  ok('o cookie é HttpOnly e SameSite=Strict',
+    /HttpOnly/.test(posto) && /SameSite=Strict/.test(posto), posto);
+  const sessao = posto.split(';')[0];
+
+  /* Secure só quando a ligação é HTTPS — e atrás do proxy da Railway isso
+     lê-se no cabeçalho, não no socket. Sem isto, um Secure em desenvolvimento
+     dava um cookie que o browser guarda e nunca devolve. */
+  ok('e ganha Secure quando o pedido vem por HTTPS',
+    /Secure/.test((await get('/admin?t=' + encodeURIComponent(ADMIN),
+      { 'x-forwarded-proto': 'https' })).headers.get('set-cookie') || ''));
+  ok('mas não em HTTP, senão o browser guardava-o e nunca o devolvia',
+    !/Secure/.test(posto));
+
+  ok('um segredo errado não abre nem põe cookie',
+    (await get('/admin?t=nao-e-este')).status === 404);
+  ok('sair apaga o cookie',
+    /Max-Age=0/.test((await get('/admin/sair', { cookie: sessao })).headers.get('set-cookie') || ''));
+
+  /* Daqui para a frente a fila abre-se com o cookie, como no browser. */
+  const filaHtml = () => get('/admin', { cookie: sessao }).then(x => x.text());
+  r = await get('/admin', { cookie: sessao });
   html = await r.text();
-  ok('a fila abre com o segredo', r.status === 200, String(r.status));
+  ok('a fila abre com o cookie', r.status === 200, String(r.status));
   ok('e mostra o pedido', html.includes('Paróquia São Sebastião'));
 
   r = await form('/admin/decidir', { t: 'errado', slug, decisao: 'aprovado' });
@@ -600,7 +636,7 @@ const DIA = 86400000;
   ok('e não conta quem publicou hoje',
     !S.db.parados(3).some(c => c.slug === slugFinal), 'contou um fresco');
 
-  html = await (await get('/admin?t=' + encodeURIComponent(ADMIN))).text();
+  html = await filaHtml();
   ok('a fila mostra quem precisa de um empurrão', /Precisam de um empurrão/.test(html));
   ok('com um botão de WhatsApp para o coordenador',
     /href="https:\/\/wa\.me\/5551966660000\?text=/.test(html));
@@ -743,7 +779,7 @@ const DIA = 86400000;
     ok('o código já não abre a lista de um centro encerrado', r.status === 403, String(r.status));
     ok('e diz porquê', /encerrado/.test(await r.text()));
 
-    html = await (await get('/admin?t=' + encodeURIComponent(ADMIN))).text();
+    html = await filaHtml();
     ok('a fila mostra os encerrados', /Encerrados/.test(html) && html.includes('Ponto que Vai Fechar'));
     ok('com um botão de reabrir', /Reabrir/.test(html));
     await form('/admin/decidir', { t: ADMIN, slug: 'vai-fechar', novo_slug: '', decisao: 'aprovado' });
@@ -836,7 +872,7 @@ const DIA = 86400000;
   console.log('\nemitir um código novo');
   /* "Perdi o código" é o pedido de ajuda mais provável que esta ferramenta vai
      receber. Até aqui a única resposta era mexer na base de dados à mão. */
-  html = await (await get('/admin?t=' + encodeURIComponent(ADMIN))).text();
+  html = await filaHtml();
   ok('a fila oferece emitir um código novo', /action="\/admin\/recodigo"/.test(html));
   ok('e diz para confirmar ao telefone primeiro', /confirmar ao telefone/.test(html));
 
@@ -985,7 +1021,11 @@ const DIA = 86400000;
    * =======================================================================*/
   console.log('\nemergência');
   {
-    S.db.definirVerificados(slugFinal, { emergencia: 'Enchentes RS 2026' });
+    /* A emergência passou a ser um catálogo: o centro guarda o SLUG e o nome
+       vive numa tabela. Texto livre escrito vinte vezes dava vinte grafias do
+       mesmo acontecimento, e a lista partia-se em três sem ninguém perceber. */
+    S.db.criarEmergencia('enchentes-rs-2026', 'Enchentes RS 2026');
+    S.db.definirVerificados(slugFinal, { emergencia: 'enchentes-rs-2026' });
 
     /* A coluna e não só o campo dentro do JSON. Esquecer a linha que a deriva
        em server.js não rebenta nada — a coluna fica vazia, o filtro deixa de
@@ -993,14 +1033,14 @@ const DIA = 86400000;
        exactamente o que aconteceu da primeira vez, e é por isso que este teste
        vai ler a COLUNA e não os dados. */
     ok('a emergência chega à coluna derivada, e não só ao JSON',
-      S.db.ler(slugFinal).emergencia === 'Enchentes RS 2026',
+      S.db.ler(slugFinal).emergencia === 'enchentes-rs-2026',
       JSON.stringify(S.db.ler(slugFinal).emergencia));
 
-    const filtrado = await (await get('/centros?e=' + encodeURIComponent('Enchentes RS 2026'))).text();
+    const filtrado = await (await get('/centros?e=enchentes-rs-2026')).text();
     ok('o filtro por emergência encontra o centro', filtrado.includes(slugFinal));
     ok('e a procura leva a emergência consigo, para não a perder ao filtrar',
-      /<input type="hidden" name="e" value="Enchentes RS 2026">/.test(filtrado));
-    const outra = await (await get('/centros?e=Chuvas+BA+2026')).text();
+      /<input type="hidden" name="e" value="enchentes-rs-2026">/.test(filtrado));
+    const outra = await (await get('/centros?e=chuvas-ba-2026')).text();
     ok('uma emergência que não é a dele não o traz', !outra.includes(slugFinal));
 
     /* Com uma resposta só, a barra não existe: um botão sozinho numa barra só
@@ -1013,11 +1053,12 @@ const DIA = 86400000;
     /* Com duas, misturá-las manda alguém atravessar um estado.
        Criado directamente: o formulário de /pedir tem um limite de cinco por
        hora e por IP, e as secções acima já o gastaram. */
+    S.db.criarEmergencia('chuvas-ba-2026', 'Chuvas BA 2026');
     S.db.criar('salvador-ec', { nome: 'Escola Central', tipo: 'Abrigo',
       endereco: 'R. das Flores, 5 — Salvador BA', contato: '(71) 98888-2222' });
     await form('/admin/decidir', { t: ADMIN, slug: 'salvador-ec', decisao: 'aprovado',
       novo_slug: 'salvador-ec', verificados: '1', coords: '',
-      emergencia: 'Chuvas BA 2026', perfil: '' });
+      emergencia: 'chuvas-ba-2026', perfil: '' });
     S.db.publicar('salvador-ec', { ...S.db.ler('salvador-ec').dados, precisa: ['agua'] });
 
     const duas = await (await get(soEste)).text();
@@ -1026,7 +1067,7 @@ const DIA = 86400000;
       /Enchentes RS 2026/.test(duas) && /Chuvas BA 2026/.test(duas));
     ok('a entrada passa a listar as respostas em curso',
       /<section class="emg-inicial">/.test(await (await get('/')).text()));
-    const so = await (await get('/centros?e=Chuvas+BA+2026')).text();
+    const so = await (await get('/centros?e=chuvas-ba-2026')).text();
     ok('o filtro separa mesmo as duas',
       so.includes('salvador-ec') && !so.includes('>Paróquia São Sebastião<'));
   }
@@ -1078,7 +1119,7 @@ const DIA = 86400000;
   {
     const antes = S.db.ler(slugFinal).publicado;
     r = await form('/admin/verificados', { t: ADMIN, slug: slugFinal,
-      coords: '-29.9200, -51.1800', emergencia: 'Enchentes RS 2026',
+      coords: '-29.9200, -51.1800', emergencia: 'enchentes-rs-2026',
       perfil: 'https://instagram.com/paroquiasaosebastiao' });
     const d = S.db.ler(slugFinal);
     ok('a correção entra', d.dados.coords[0] === -29.92, JSON.stringify(d.dados.coords));
@@ -1101,8 +1142,183 @@ const DIA = 86400000;
     await form('/admin/decidir', { t: ADMIN, slug: slugFinal, decisao: 'aprovado', novo_slug: '' });
     const dep = S.db.ler(slugFinal).dados;
     ok('reabrir um centro não lhe apaga as coordenadas', !!dep.coords, JSON.stringify(dep.coords));
-    ok('nem a emergência', dep.emergencia === 'Enchentes RS 2026', dep.emergencia);
+    ok('nem a emergência', dep.emergencia === 'enchentes-rs-2026', dep.emergencia);
     ok('nem o perfil', !!dep.perfil, dep.perfil);
+  }
+
+  /* =========================================================================
+   * O PAINEL DE ADMINISTRAÇÃO
+   *
+   * Era uma fila de aprovação e passou a ser o sítio de onde se governa o site.
+   * Isso muda o que o segredo vale — ver a secção da sessão lá em cima.
+   * =======================================================================*/
+  console.log('\no painel');
+  {
+    const h = await filaHtml();
+    ok('tem a barra do site, para se conferir as páginas de lá',
+      /class="nav-topo"/.test(h));
+    /* Numa aba nova de propósito: sair daqui para ver uma página e ter de
+       voltar ao Telegram para reentrar é o atrito que faz ninguém conferir. */
+    ok('e os atalhos abrem noutra aba, sem largar o painel',
+      (h.match(/class="btn" href="\/[a-z]*" target="_blank"/g) || []).length >= 5);
+    ok('diz por onde saem os avisos', /Avisos por:/.test(h));
+  }
+
+  console.log('\ncomo está o site');
+  {
+    /* Quatro faltas que não partem nada e desfazem uma funcionalidade cada.
+       Nenhuma aparecia em lado nenhum: descobria-se abrindo o site e
+       reparando. */
+    S.db.definirVerificados(slugFinal, { coords: undefined, perfil: '' });
+    const h = await filaHtml();
+    ok('conta os centros sem coordenadas', /sem coordenadas/.test(h));
+    ok('e diz o que isso custa', /ordem por distância/.test(h));
+    ok('conta os que não têm perfil', /sem Instagram ou site/.test(h));
+
+    S.db.definirVerificados(slugFinal, { coords: [-29.9177, -51.1839],
+      perfil: 'https://instagram.com/paroquiasaosebastiao' });
+  }
+
+  console.log('\no aviso no topo do site');
+  {
+    const texto = 'Ponte da BR-386 fechada. Não traga doações a Canoas hoje.';
+
+    /* Primeiro passo: ver a faixa a sério antes de ela sair. Isto aparece
+       acima do nome do centro que a pessoa veio procurar, em todas as
+       páginas — ver é melhor do que ler uma descrição. */
+    r = await form('/admin/aviso', { t: ADMIN, texto, prazo: '24' });
+    let h = await r.text();
+    ok('publicar pede confirmação primeiro', r.status === 200 && /Publicar este aviso/.test(h));
+    ok('e mostra a faixa como ela vai ficar', /class="aviso-global"/.test(h) && h.includes('BR-386'));
+    ok('e ainda não publicou nada', S.db.lerAviso() === null);
+
+    await form('/admin/aviso', { t: ADMIN, texto, prazo: '24', confirmar: '1' });
+    ok('confirmado, o aviso existe', !!S.db.lerAviso());
+
+    const corpo = async p => {
+      const t = await (await get(p)).text();
+      return t.slice(t.indexOf('<body'));   /* fora do CSS, que também diz "aviso-global" */
+    };
+    ok('aparece na lista de centros', (await corpo('/centros')).includes('BR-386'));
+    ok('e na entrada', (await corpo('/')).includes('BR-386'));
+    ok('e na página de um centro, que é onde o QR do cartaz cai',
+      (await corpo('/' + slugFinal)).includes('BR-386'));
+
+    /* A decisão que interessa. Todo este projecto existe para dizer que um
+       cartaz envelhece e uma página web mente sobre a sua idade; uma faixa
+       vermelha que sobrevive ao motivo é essa falha com o nosso nome em cima.
+       Por isso expira sem cron e sem ninguém se lembrar dela. */
+    S.db.escreverAviso(texto, Date.now() - 1000);
+    ok('passado o prazo, sai sozinho', !(await corpo('/centros')).includes('BR-386'));
+    ok('e lerAviso passa a não devolver nada', S.db.lerAviso() === null);
+
+    S.db.escreverAviso('Sem prazo nenhum.', 0);
+    ok('mas "até eu tirar" fica mesmo', (await corpo('/')).includes('Sem prazo nenhum'));
+
+    await form('/admin/aviso', { t: ADMIN, apagar: '1' });
+    ok('tirar à mão limpa as páginas', S.db.lerAviso() === null);
+
+    /* Um aviso é texto escrito à mão que sai em TODAS as páginas. É o sítio
+       mais perigoso do site para um escape em falta. */
+    await form('/admin/aviso', { t: ADMIN, texto: '<script>alert(1)</script>',
+      prazo: '6', confirmar: '1' });
+    const cru = await (await get('/centros')).text();
+    ok('o aviso é escapado, como tudo o resto',
+      !cru.includes('<script>alert(1)') && cru.includes('&lt;script&gt;'));
+    await form('/admin/aviso', { t: ADMIN, apagar: '1' });
+
+    ok('sem o segredo não se publica nada',
+      (await form('/admin/aviso', { t: 'errado', texto: 'x', prazo: '6', confirmar: '1' })).status === 404);
+    ok('e continua sem aviso', S.db.lerAviso() === null);
+  }
+
+  console.log('\nas emergências, geridas');
+  {
+    await form('/admin/emergencia', { t: ADMIN, accao: 'criar', nome: 'Ciclone SC 2027' });
+    const nova = S.db.emergencia('ciclone-sc-2027');
+    ok('criar faz o slug a partir do nome', !!nova && nova.nome === 'Ciclone SC 2027');
+
+    /* O nome muda; o slug NUNCA. O slug está guardado em cada centro e num
+       endereço que já pode ter sido partilhado — /centros?e=… é um link. */
+    await form('/admin/emergencia', { t: ADMIN, accao: 'renomear',
+      slug: 'ciclone-sc-2027', nome: 'Ciclone em Santa Catarina' });
+    ok('renomear muda o nome e não o endereço',
+      S.db.emergencia('ciclone-sc-2027').nome === 'Ciclone em Santa Catarina');
+
+    await form('/admin/emergencia', { t: ADMIN, accao: 'arquivar', slug: 'ciclone-sc-2027' });
+    ok('arquivar não a apaga', S.db.emergencia('ciclone-sc-2027').ativa === 0);
+    await form('/admin/emergencia', { t: ADMIN, accao: 'ativar', slug: 'ciclone-sc-2027' });
+    ok('e reativar devolve-a', S.db.emergencia('ciclone-sc-2027').ativa === 1);
+
+    /* Criar duas vezes o mesmo nome não é um erro: é a mesma emergência. */
+    await form('/admin/emergencia', { t: ADMIN, accao: 'criar', nome: 'Ciclone SC 2027' });
+    ok('criar de novo não duplica',
+      S.db.emergenciasTodas().filter(e => e.slug === 'ciclone-sc-2027').length === 1);
+
+    /* Apagar solta os centros. NENHUM centro é apagado, nunca — ficam no
+       estado em que todos estavam antes de isto existir. */
+    r = await form('/admin/emergencia', { t: ADMIN, accao: 'apagar', slug: 'chuvas-ba-2026' });
+    let h = await r.text();
+    ok('apagar pede confirmação', r.status === 200 && /Apagar/.test(h));
+    ok('e diz quantos centros ficam sem emergência', /1 centro fica/.test(h));
+    ok('e sugere arquivar em vez de apagar', /arquive/.test(h));
+    ok('ainda não apagou', !!S.db.emergencia('chuvas-ba-2026'));
+
+    await form('/admin/emergencia', { t: ADMIN, accao: 'apagar', slug: 'chuvas-ba-2026', confirmar: '1' });
+    ok('confirmado, a emergência desaparece', !S.db.emergencia('chuvas-ba-2026'));
+    ok('mas o centro continua no ar', S.db.ler('salvador-ec').estado === 'aprovado');
+    ok('só que sem emergência', S.db.ler('salvador-ec').emergencia === '');
+
+    ok('sem o segredo não se mexe nas emergências',
+      (await form('/admin/emergencia', { t: 'errado', accao: 'criar', nome: 'Falsa' })).status === 404);
+    ok('e nada foi criado', !S.db.emergencia('falsa'));
+  }
+
+  console.log('\na cópia de segurança');
+  {
+    r = await form('/admin/backup', { t: ADMIN });
+    const h = await r.text();
+    ok('baixar pede confirmação', r.status === 200 && /Baixar a base de dados/.test(h));
+    /* Diz o que vai lá dentro. O ficheiro leva os telefones dos coordenadores;
+       quem o baixa tem de saber isso ANTES de o deixar na pasta de downloads
+       de um computador partilhado. */
+    ok('e diz o que o ficheiro leva', /telefones/.test(h) && /hash/.test(h));
+
+    r = await form('/admin/backup', { t: ADMIN, confirmar: '1' });
+    const bytes = Buffer.from(await r.arrayBuffer());
+    ok('vem como anexo, com a data no nome',
+      /attachment; filename="capem-\d{4}-\d{2}-\d{2}\.db"/.test(r.headers.get('content-disposition') || ''),
+      r.headers.get('content-disposition'));
+    /* VACUUM INTO e não uma cópia do ficheiro à mão: a cópia à mão apanha uma
+       escrita a meio e dá um backup que só se descobre partido no dia em que
+       se precisa dele. */
+    ok('é mesmo um ficheiro SQLite íntegro',
+      bytes.slice(0, 15).toString() === 'SQLite format 3');
+
+    const copia = path.join(os.tmpdir(), `capem-copia-${Date.now()}.db`);
+    fs.writeFileSync(copia, bytes);
+    const { DatabaseSync } = require('node:sqlite');
+    const d2 = new DatabaseSync(copia);
+    ok('a cópia abre e traz os centros',
+      d2.prepare('SELECT COUNT(*) n FROM centros').get().n >= 2);
+    ok('e os códigos continuam só em hash',
+      !/-/.test(d2.prepare('SELECT codigo_hash FROM centros WHERE slug = ?').get(slugFinal).codigo_hash));
+    fs.unlinkSync(copia);
+
+    ok('sem o segredo não sai nada',
+      (await form('/admin/backup', { t: 'errado', confirmar: '1' })).status === 404);
+  }
+
+  console.log('\navisar por engano');
+  {
+    /* Sem isto, descobria-se que o Telegram estava em baixo no dia em que um
+       pedido real ficasse sem resposta. */
+    r = await form('/admin/testar-aviso', { t: ADMIN });
+    ok('o teste responde e volta ao painel',
+      r.status === 303 && /feito=teste/.test(r.headers.get('location') || ''),
+      r.headers.get('location'));
+    ok('sem o segredo, não',
+      (await form('/admin/testar-aviso', { t: 'errado' })).status === 404);
   }
 
   /* =========================================================================

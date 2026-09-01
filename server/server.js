@@ -34,6 +34,8 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
+const crypto = require('node:crypto');
 const { URL } = require('node:url');
 
 const db = require('./db');
@@ -51,6 +53,46 @@ const RAIZ = path.join(__dirname, '..');
 /* Como o armazenamento deriva as colunas de procura. O `db.js` guarda e lê; as
    regras de o que conta como uma correspondência estão no `busca.js`, e é aqui
    que as duas metades se ligam — uma vez, no arranque. */
+/* O aviso do topo do site chega ao desenhador por injecção, e não por um
+   require: `pagina.js` desenha páginas e não sabe onde mora o estado. */
+P.definirAviso(() => db.lerAviso());
+
+/* ---------------------------------------------------------------------------
+ * O que a ferramenta não sabia dizer sobre si própria.
+ *
+ * Quatro faltas que não partem nada e desfazem em silêncio uma funcionalidade
+ * cada: sem coordenadas não há ordem por distância, sem lista publicada a
+ * página está no ar sem dizer o que o centro precisa. Nada disto aparecia em
+ * lado nenhum — descobria-se abrindo o site e reparando.
+ * -------------------------------------------------------------------------*/
+function saudeDoSite() {
+  const noAr = db.listar('aprovado');
+  const tem = (d, k) => {
+    const v = (d || {})[k];
+    return Array.isArray(v) ? v.length === 2 : !!String(v || '').trim();
+  };
+  return {
+    total: noAr.length,
+    semCoords: noAr.filter(c => !tem(c.dados, 'coords')).length,
+    semPerfil: noAr.filter(c => !tem(c.dados, 'perfil')).length,
+    nuncaPublicou: noAr.filter(c => !c.publicado).length,
+    parados: db.parados(DIAS_PARADO).length,
+    diasParado: DIAS_PARADO
+  };
+}
+
+/* As mensagens de "está feito", por chave e não por texto no endereço: um
+   parâmetro que vai directo para o ecrã é um XSS à espera de acontecer. */
+const MENSAGENS = {
+  'aviso-no-ar': 'Aviso publicado. Está no topo de todas as páginas.',
+  'aviso-fora': 'Aviso retirado. As páginas estão limpas.',
+  emergencia: 'Emergências atualizadas.',
+  'emergencia-fora': 'Emergência apagada. Os centros continuam no ar, sem agrupamento.',
+  'teste-ok': 'Aviso de teste enviado. Se não chegou, o canal está mal configurado.',
+  'teste-falhou': 'O aviso de teste falhou em pelo menos um canal — veja o log do servidor.',
+  'backup-falhou': 'Não deu para gerar a cópia. Veja o log do servidor.'
+};
+
 db.definirDerivacao(d => ({
   busca: B.textoDeBusca(d),
   nome_ord: B.nomeDeOrdem(d),
@@ -197,7 +239,70 @@ const json = (res, cod, obj) =>
   responder(res, cod, JSON.stringify(obj), 'application/json; charset=utf-8',
     { 'Access-Control-Allow-Origin': '*' });
 
-const paraOndeIr = (res, url) => { res.writeHead(303, { Location: url }); res.end(); };
+const paraOndeIr = (res, url, extra = {}) => {
+  res.writeHead(303, { Location: url, ...extra }); res.end();
+};
+
+/* ---------------------------------------------------------------------------
+ * A SESSÃO DE ADMINISTRAÇÃO
+ *
+ * O segredo viajava no endereço, em todos os endereços: `/admin?t=…`. Isso quer
+ * dizer que ficava no histórico do browser, no que se cola para alguém, no
+ * canto de qualquer captura de ecrã, e no chat do Telegram para sempre. Sempre
+ * foi assim e sempre foi desconfortável; passou a importar mais quando esta
+ * página ganhou uma faixa vermelha que sai em todas as outras — quem tiver o
+ * link deixa de poder só aprovar centros e passa a poder escrever no site.
+ *
+ * Agora: chegar com `?t=…` troca-o por um cookie e redirecciona para `/admin`
+ * limpo. O link do Telegram continua a funcionar exactamente como funcionava —
+ * é o mesmo link — mas o segredo deixa de aparecer em todos os endereços
+ * seguintes.
+ *
+ * HttpOnly (o JavaScript da página nunca lhe toca), SameSite=Strict (um POST
+ * vindo de outro site não o leva consigo, que é a defesa contra CSRF de que
+ * isto precisa), e Secure quando a ligação é HTTPS — atrás do proxy da Railway
+ * isso lê-se no X-Forwarded-Proto e não no socket.
+ *
+ * Continua a aceitar-se `t` no corpo de um POST. Não é preguiça: é o que faz
+ * um formulário aberto antes da sessão expirar continuar a funcionar, e o
+ * próprio `t` é a credencial, não um atalho para a contornar.
+ * -------------------------------------------------------------------------*/
+const SESSAO = 8 * 3600;   /* uma manhã de trabalho, não uma semana */
+const COOKIE = 'capem_admin';
+
+const seguro = req =>
+  String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+
+function lerCookie(req, nome) {
+  const bruto = req.headers.cookie || '';
+  for (const parte of bruto.split(';')) {
+    const i = parte.indexOf('=');
+    if (i < 0) continue;
+    if (parte.slice(0, i).trim() === nome) {
+      try { return decodeURIComponent(parte.slice(i + 1).trim()); } catch (e) { return ''; }
+    }
+  }
+  return '';
+}
+
+const cookieSessao = (req, valor, segundos) =>
+  `${COOKIE}=${encodeURIComponent(valor)}; Path=/; HttpOnly; SameSite=Strict; `
+  + `Max-Age=${segundos}${seguro(req) ? '; Secure' : ''}`;
+
+/**
+ * Esta pessoa pode administrar?
+ *
+ * Comparação de tempo constante. O segredo tem dezasseis bytes ou mais e um
+ * ataque de temporização por HTTP é teórico — mas custa três linhas, e a
+ * alternativa é justificar um `===` num ficheiro que alguém vai ler daqui a
+ * dois anos.
+ */
+function ehAdmin(req, dado) {
+  const oferecido = String(dado != null ? dado : lerCookie(req, COOKIE));
+  if (!oferecido || !ADMIN) return false;
+  const a = Buffer.from(oferecido), b = Buffer.from(ADMIN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 /* 301 e não 302: um QR fotografado e reenviado no WhatsApp fica a apontar
    para a forma não canónica durante meses. Vale a pena que os browsers e os
@@ -661,16 +766,190 @@ async function encaminhar(req, res) {
   }
 
   /* --- admin --- */
+
+  /* Trocar o segredo do endereço por um cookie, e limpar o endereço.
+     Feito com um redireccionamento e não em silêncio: o que fica no histórico
+     do browser passa a ser `/admin`, e é essa a metade que interessa. */
+  if (caminho === '/admin' && req.method === 'GET' && url.searchParams.get('t')) {
+    if (!ehAdmin(req, url.searchParams.get('t'))) return responder(res, 404, P.paginaNaoExiste());
+    const resto = new URLSearchParams(url.searchParams);
+    resto.delete('t');
+    const q = resto.toString();
+    return paraOndeIr(res, '/admin' + (q ? '?' + q : ''),
+      { 'Set-Cookie': cookieSessao(req, ADMIN, SESSAO) });
+  }
+
+  if (caminho === '/admin/sair') {
+    return paraOndeIr(res, '/', { 'Set-Cookie': cookieSessao(req, '', 0) });
+  }
+
   if (caminho === '/admin' && req.method === 'GET') {
-    if (url.searchParams.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    if (!ehAdmin(req)) return responder(res, 404, P.paginaNaoExiste());
     return responder(res, 200, P.paginaAdmin({
       pendentes: db.listar('pendente'),
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       encerrados: db.listar('encerrado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       parados: db.parados(DIAS_PARADO).map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       erro: url.searchParams.get('erro'),
+      feito: MENSAGENS[url.searchParams.get('feito')] || '',
+      saude: saudeDoSite(),
+      avisoActivo: db.lerAviso(),
+      emergencias: db.emergenciasTodas(),
+      canais: A.canaisActivos(),
       token: ADMIN, contagem: db.contar(), base
     }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+  }
+
+  /* --- o aviso do topo do site --- */
+  if (caminho === '/admin/aviso' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
+
+    if (campos.get('apagar')) {
+      db.apagarAviso();
+      console.log('[aviso-site] retirado');
+      return paraOndeIr(res, '/admin?feito=aviso-fora');
+    }
+
+    const msg = texto(campos.get('texto'), 180);
+    if (!msg) return paraOndeIr(res, '/admin');
+    const horas = Math.max(0, Math.min(720, Number(campos.get('prazo')) || 0));
+
+    /* Primeiro passo: mostra-se a faixa a sério, do tamanho e da cor que vai
+       ter, e só depois é que ela sai. Ver uma coisa é melhor do que ler uma
+       descrição dela — e isto aparece acima do nome do centro que a pessoa
+       veio procurar, em todas as páginas. */
+    if (campos.get('confirmar') !== '1') {
+      return responder(res, 200, P.paginaConfirmar({
+        titulo: 'Publicar este aviso?',
+        aviso: `Vai aparecer no topo de <b>todas</b> as páginas do site, incluindo a `
+             + `página de cada centro — acima do que a pessoa veio ver. `
+             + (horas ? `Sai sozinho daqui a <b>${horas} horas</b>.`
+                      : `<b>Não expira</b>: fica no ar até você o tirar.`),
+        detalhe: `<div class="previa"><div class="aviso-global">`
+               + `<p>${P.esc(msg)}</p></div></div>`,
+        accao: '/admin/aviso',
+        campos: { t: ADMIN, texto: msg, prazo: String(horas) },
+        botao: 'Publicar em todas as páginas',
+        perigo: true,
+        voltar: '/admin'
+      }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
+
+    db.escreverAviso(msg, horas ? Date.now() + horas * 3600e3 : 0);
+    console.log(`[aviso-site] "${msg.slice(0, 60)}" — ${horas ? horas + 'h' : 'sem prazo'}`);
+    return paraOndeIr(res, '/admin?feito=aviso-no-ar');
+  }
+
+  /* --- as emergências --- */
+  if (caminho === '/admin/emergencia' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
+    const accao = campos.get('accao');
+    const nome = texto(campos.get('nome'), LIMITES.emergencia);
+    const slug = texto(campos.get('slug'), 48);
+
+    if (accao === 'criar') {
+      if (!nome) return paraOndeIr(res, '/admin');
+      const novo = fazerSlug(nome, '');
+      if (!novo) return paraOndeIr(res, '/admin?erro=emergencia');
+      /* Já existe: não é erro nenhum, é a mesma emergência. Renomeia-se para o
+         que foi escrito agora e segue-se. */
+      if (db.emergencia(novo)) db.renomearEmergencia(novo, nome);
+      else db.criarEmergencia(novo, nome);
+      console.log(`[emergência] ${novo} — ${nome}`);
+      return paraOndeIr(res, '/admin?feito=emergencia');
+    }
+
+    if (!db.emergencia(slug)) return paraOndeIr(res, '/admin');
+
+    if (accao === 'renomear' && nome) { db.renomearEmergencia(slug, nome); return paraOndeIr(res, '/admin?feito=emergencia'); }
+    if (accao === 'arquivar') { db.activarEmergencia(slug, false); return paraOndeIr(res, '/admin?feito=emergencia'); }
+    if (accao === 'ativar') { db.activarEmergencia(slug, true); return paraOndeIr(res, '/admin?feito=emergencia'); }
+
+    if (accao === 'apagar') {
+      const e = db.emergencia(slug);
+      const quantos = db.emergenciasTodas().filter(x => x.slug === slug).map(x => x.n)[0] || 0;
+      if (campos.get('confirmar') !== '1') {
+        return responder(res, 200, P.paginaConfirmar({
+          titulo: `Apagar "${e.nome}"?`,
+          aviso: quantos
+            ? `<b>${quantos} ${quantos === 1 ? 'centro fica' : 'centros ficam'} sem emergência.</b> `
+              + `Nenhum centro é apagado e nenhum sai do ar — só deixam de estar agrupados. `
+              + `Se só quer parar de a oferecer em novos centros, <b>arquive</b> em vez de apagar.`
+            : 'Nenhum centro está nesta emergência. Apagar não afeta ninguém.',
+          accao: '/admin/emergencia',
+          campos: { t: ADMIN, accao: 'apagar', slug },
+          botao: 'Apagar a emergência',
+          perigo: true,
+          voltar: '/admin'
+        }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+      }
+      const soltos = db.apagarEmergencia(slug);
+      console.log(`[emergência] ${slug} apagada — ${soltos} centro(s) soltos`);
+      return paraOndeIr(res, '/admin?feito=emergencia-fora');
+    }
+    return paraOndeIr(res, '/admin');
+  }
+
+  /* --- um aviso de teste ---
+     Sem isto, descobria-se que o Telegram estava em baixo no dia em que um
+     pedido real ficasse sem resposta. Espera-se mesmo pelo envio, ao contrário
+     do `avisar()` normal: aqui o resultado É o que se quer saber. */
+  if (caminho === '/admin/testar-aviso' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
+    const falhas = [];
+    for (const [nome, ad] of Object.entries(A.ADAPTADORES)) {
+      if (!ad.activo()) continue;
+      try { await ad.enviar({ tipo: 'teste', titulo: 'Teste do CAPEM',
+        corpo: 'Se leu isto, os avisos estão chegando.', url: base + '/admin' }); }
+      catch (e) { falhas.push(`${nome} (${(e && e.message || e).toString().slice(0, 60)})`); }
+    }
+    return paraOndeIr(res, '/admin?feito=' + (falhas.length
+      ? 'teste-falhou&' + new URLSearchParams({ q: falhas.join('; ') })
+      : 'teste-ok'));
+  }
+
+  /* --- a base de dados, num ficheiro --- */
+  if (caminho === '/admin/backup' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
+
+    if (campos.get('confirmar') !== '1') {
+      return responder(res, 200, P.paginaConfirmar({
+        titulo: 'Baixar a base de dados?',
+        aviso: 'O arquivo traz <b>tudo</b>: todos os centros, os endereços, os '
+             + 'telefones dos coordenadores e o hash de cada código. Os códigos '
+             + 'em si não estão lá — só o hash — mas os telefones estão. '
+             + 'Trate como trataria uma lista de contatos: não deixe esse '
+             + 'arquivo na pasta de downloads de um computador que outras '
+             + 'pessoas usam.',
+        accao: '/admin/backup',
+        campos: { t: ADMIN },
+        botao: 'Baixar agora',
+        voltar: '/admin'
+      }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
+
+    const nome = `capem-${new Date().toISOString().slice(0, 10)}.db`;
+    const tmp = path.join(os.tmpdir(), `capem-backup-${Date.now()}.db`);
+    try {
+      db.exportarPara(tmp);
+      const dados = fs.readFileSync(tmp);
+      console.log(`[backup] ${(dados.length / 1024).toFixed(1)} KB`);
+      return responder(res, 200, dados, 'application/octet-stream', {
+        'Content-Disposition': `attachment; filename="${nome}"`,
+        'Content-Length': String(dados.length),
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex'
+      });
+    } catch (e) {
+      console.error('[backup] falhou —', e && e.message);
+      return paraOndeIr(res, '/admin?feito=backup-falhou');
+    } finally {
+      try { fs.unlinkSync(tmp); } catch { /* já não existe */ }
+    }
   }
   /* --- emitir um código novo ---
    *
@@ -687,7 +966,7 @@ async function encaminhar(req, res) {
    */
   if (caminho === '/admin/recodigo' && req.method === 'POST') {
     const campos = new URLSearchParams(await corpo(req));
-    if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
     const slug = db.resolver(texto(campos.get('slug'), 60));
     const centro = slug ? db.ler(slug) : null;
     if (!centro) return paraOndeIr(res, '/admin?t=' + encodeURIComponent(ADMIN));
@@ -708,7 +987,7 @@ async function encaminhar(req, res) {
 
   if (caminho === '/admin/decidir' && req.method === 'POST') {
     const campos = new URLSearchParams(await corpo(req));
-    if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
     const slug = texto(campos.get('slug'), 60);
     const decisao = campos.get('decisao');
     if (!db.existe(slug) || !db.ESTADOS.includes(decisao)) {
@@ -772,7 +1051,7 @@ async function encaminhar(req, res) {
      mentira que o resto do desenho existe para evitar. */
   if (caminho === '/admin/verificados' && req.method === 'POST') {
     const campos = new URLSearchParams(await corpo(req));
-    if (campos.get('t') !== ADMIN) return responder(res, 404, P.paginaNaoExiste());
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
     const slug = texto(campos.get('slug'), 60);
     if (db.existe(slug)) {
       db.definirVerificados(slug, camposVerificados(campos));
@@ -889,7 +1168,7 @@ if (require.main === module) {
     const canais = A.canaisActivos();
     console.log(`avisos por: ${canais.join(', ')}`);
     if (canais.length === 1) {
-      console.log('  (só a consola — ver server/README.md para ligar o Telegram)');
+      console.log('  (só o console — ver server/README.md para ligar o Telegram)');
     }
 
     /* De seis em seis horas verifica; o próprio resumo não sai mais do que uma

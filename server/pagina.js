@@ -258,6 +258,33 @@ function nav(aqui, migalhas) {
 /* ---------------------------------------------------------------------------
  * Molde comum
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * O aviso do topo
+ *
+ * Uma faixa vermelha acima de tudo o resto, em todas as páginas servidas. Serve
+ * para o que não cabe na lista de um centro e não espera pela próxima
+ * publicação — uma ponte cortada, um bairro a evacuar, um ponto que deixou de
+ * receber por hoje.
+ *
+ * Chega aqui por injecção e não por um `require('./db')`, pelo mesmo motivo que
+ * a derivação das colunas: este ficheiro desenha páginas e não sabe onde é que
+ * o estado mora. `server.js` liga as duas metades uma vez, no arranque; um
+ * teste que só queira desenhar HTML não precisa de base de dados nenhuma.
+ * -------------------------------------------------------------------------*/
+let lerAviso = () => null;
+const definirAviso = fn => { lerAviso = fn; };
+
+function faixaAviso() {
+  let a = null;
+  /* Um aviso que rebente não pode levar a página com ele: sem faixa é uma
+     página incompleta, com excepção é uma página em branco. */
+  try { a = lerAviso(); } catch (e) { return ''; }
+  if (!a || !a.texto) return '';
+  return `<div class="aviso-global" role="region" aria-label="Aviso importante">
+  ${svgAnel()}<p>${esc(a.texto)}</p>
+</div>`;
+}
+
 function molde({ titulo, descricao, corpo, classe, aqui, migalhas }) {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -272,6 +299,7 @@ function molde({ titulo, descricao, corpo, classe, aqui, migalhas }) {
 <style>${CSS}</style>
 </head>
 <body class="${classe || ''}">
+${faixaAviso()}
 ${aqui === false ? '' : nav(aqui, migalhas)}
 ${corpo}
 </body>
@@ -457,8 +485,8 @@ function paginaInicial({ contagem, base, emergencias }) {
   <section class="emg-inicial">
     <h2>Respostas em curso</h2>
     <ul class="emergencias">
-      ${emgs.map(e => `<li><a class="emg" href="/centros?e=${encodeURIComponent(e.emergencia)}"
-        >${esc(e.emergencia)} <span class="emg-n">${e.n} ${e.n === 1 ? 'centro' : 'centros'}</span></a></li>`).join('')}
+      ${emgs.map(e => `<li><a class="emg" href="/centros?e=${encodeURIComponent(e.slug)}"
+        >${esc(e.nome)} <span class="emg-n">${e.n} ${e.n === 1 ? 'centro' : 'centros'}</span></a></li>`).join('')}
     </ul>
   </section>` : '';
 
@@ -592,9 +620,9 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias })
   <nav class="emergencias" aria-label="Emergência">
     <a class="emg${c.emergencia ? '' : ' atual'}"
       href="${esc(B.comoEndereco(c, { emergencia: '', pagina: 1 }))}">Todas</a>
-    ${emgs.map(e => `<a class="emg${e.emergencia === c.emergencia ? ' atual' : ''}"
-      href="${esc(B.comoEndereco(c, { emergencia: e.emergencia, pagina: 1 }))}"
-      >${esc(e.emergencia)} <span class="emg-n">${e.n}</span></a>`).join('')}
+    ${emgs.map(e => `<a class="emg${e.slug === c.emergencia ? ' atual' : ''}"
+      href="${esc(B.comoEndereco(c, { emergencia: e.slug, pagina: 1 }))}"
+      >${esc(e.nome)} <span class="emg-n">${e.n}</span></a>`).join('')}
   </nav>` : '';
 
   /* Quantos centros desta página trazem coordenadas. Sem nenhuma, não se
@@ -1506,7 +1534,44 @@ function textoAprovado(d, url, base, codigo) {
   ].join('\n');
 }
 
-function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contagem, base, erro }) {
+/* ---------------------------------------------------------------------------
+ * Quanto tempo falta, dito em português e não em milissegundos.
+ * -------------------------------------------------------------------------*/
+function daqui(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return 'menos de um minuto';
+  if (m < 60) return `${m} ${m === 1 ? 'minuto' : 'minutos'}`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h} ${h === 1 ? 'hora' : 'horas'}`;
+  const d = Math.round(h / 24);
+  return `${d} ${d === 1 ? 'dia' : 'dias'}`;
+}
+
+const desde = ms => daqui(Date.now() - ms);
+
+/* Os canais têm nomes internos em `avisos.js` e um deles é "consola", que é
+   de Portugal. O nome da chave fica; o que chega ao ecrã é traduzido. */
+const CANAL_BR = { consola: 'console' };
+
+/**
+ * O selector de emergência.
+ *
+ * Uma caixa de texto dava vinte grafias do mesmo acontecimento e partia a lista
+ * em três. Uma emergência desactivada continua a aparecer se for a do centro
+ * que se está a editar — senão guardar uma correcção de coordenadas tirava-o
+ * calado da emergência a que pertence.
+ */
+function escolherEmergencia(id, actual, emergencias) {
+  const lista = (emergencias || []).filter(e => e.ativa || e.slug === actual);
+  return `<select id="${esc(id)}" name="emergencia">
+    <option value=""${actual ? '' : ' selected'}>— nenhuma —</option>
+    ${lista.map(e => `<option value="${esc(e.slug)}"${e.slug === actual ? ' selected' : ''}
+      >${esc(e.nome)}${e.ativa ? '' : ' (arquivada)'}</option>`).join('')}
+  </select>`;
+}
+
+function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contagem, base,
+                       erro, feito, saude, avisoActivo, emergencias, canais }) {
   const linha = c => {
     const d = c.dados || {};
     const s = esc(c.slug);
@@ -1519,7 +1584,7 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
         : '—'}</p>
       <p>${svgIcone('telefone')} ${esc(d.contato || '—')}</p>
       ${d.endereco ? `<p class="meta conferir">Abra o endereço antes de aprovar. É o
-        mesmo link que vai aparecer no botão <b>Como chegar</b> de toda a gente:
+        mesmo link que vai aparecer no botão <b>Como chegar</b> de todo mundo:
         se ele cair na rua errada, cai na rua errada para todos.</p>` : ''}
       <form method="POST" action="/admin/decidir">
         <input type="hidden" name="t" value="${esc(token)}">
@@ -1549,12 +1614,12 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
           lista pelo que está mais perto de quem procura. Em branco funciona
           do mesmo jeito.</p>
 
-        <label class="campo" for="e-${s}">Emergência (opcional)</label>
-        <input id="e-${s}" name="emergencia" type="text" value="${esc(d.emergencia || '')}"
-          placeholder="Enchentes RS 2026" maxlength="60" autocomplete="off">
+        <label class="campo" for="e-${s}">Emergência</label>
+        ${escolherEmergencia(`e-${c.slug}`, d.emergencia || '', emergencias)}
         <p class="meta">A que resposta este centro pertence. Enquanto houver só
           uma, não aparece em lugar nenhum — serve para o dia em que houver duas
-          ao mesmo tempo e a lista não puder misturá-las.</p>
+          ao mesmo tempo e a lista não puder misturá-las. Você cria uma lá
+          embaixo, em <b>Emergências</b>.</p>
 
         <label class="campo" for="p-${s}">Instagram ou site (opcional)</label>
         <input id="p-${s}" name="perfil" type="text" value="${esc(d.perfil || '')}"
@@ -1571,18 +1636,167 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
     </article>`;
   };
 
+  const S = saude || {};
+  const emgs = emergencias || [];
+
+  /* Quatro números que a ferramenta não sabia dizer sobre si própria. Cada
+     linha só aparece quando há alguma coisa a apontar: uma lista de zeros
+     ensina a não ler a secção. */
+  const faltas = [
+    S.semCoords ? [`${S.semCoords} sem coordenadas`,
+      'não entram na ordem por distância — corrija em Corrigir mapa, aqui embaixo'] : null,
+    S.semPerfil ? [`${S.semPerfil} sem Instagram ou site`,
+      'menos uma forma de alguém confirmar que o centro é real'] : null,
+    S.nuncaPublicou ? [`${S.nuncaPublicou} nunca publicou uma lista`,
+      'a página está no ar e não diz o que o centro precisa'] : null,
+    S.parados ? [`${S.parados} sem publicar há mais de ${S.diasParado} dias`,
+      'a página já avisa quem a lê; ninguém avisa quem a devia atualizar'] : null
+  ].filter(Boolean);
+
   return molde({
-    aqui: false,
-    titulo: 'CAPEM — pedidos',
+    aqui: null,
+    titulo: 'CAPEM — administração',
     corpo: `
 <main class="admin">
-  <h1>Pedidos</h1>
+  <h1>Administração</h1>
   <p class="entrada">${contagem.pendente} aguardando · ${contagem.aprovado} no ar ·
-    ${contagem.recusado} recusados</p>
+    ${contagem.recusado} recusados · ${contagem.encerrado || 0} encerrados</p>
   ${erro === 'ocupado' ? '<p class="erro-form">Esse endereço já está ocupado. Escolha outro.</p>' : ''}
+  ${erro === 'emergencia' ? '<p class="erro-form">Esse nome de emergência não dá um endereço utilizável. Use letras e números.</p>' : ''}
+  ${feito ? `<p class="feito">${esc(feito)}</p>` : ''}
 
+  <!-- Ver o site sem perder a sessão.
+       Abrem noutro separador de propósito: sair daqui para conferir uma página
+       e ter de voltar ao Telegram para reentrar é o género de atrito que faz
+       ninguém conferir nada. -->
+  <section class="bloco-admin">
+    <h2>Ver o site</h2>
+    <p class="entrada">Abrem numa aba nova — esta fica aberta.</p>
+    <div class="atalhos">
+      <a class="btn" href="/" target="_blank" rel="noopener">Entrada</a>
+      <a class="btn" href="/centros" target="_blank" rel="noopener">Centros</a>
+      <a class="btn" href="/centro" target="_blank" rel="noopener">Meu centro</a>
+      <a class="btn" href="/kit" target="_blank" rel="noopener">Kit</a>
+      <a class="btn" href="/novo" target="_blank" rel="noopener">Pedir página</a>
+      <a class="btn" href="/atualizar" target="_blank" rel="noopener">Atualizar</a>
+    </div>
+  </section>
 
+  <!-- O que a ferramenta não sabia dizer sobre si própria. -->
+  <section class="bloco-admin">
+    <h2>Como está o site</h2>
+    ${faltas.length
+      ? `<ul class="saude">${faltas.map(([o, porque]) =>
+          `<li><b>${esc(o)}</b><span>${esc(porque)}</span></li>`).join('')}</ul>`
+      : '<p class="tudo-bem">Nada por preencher: todos os centros no ar têm coordenadas, perfil e uma lista publicada.</p>'}
+    <p class="meta">Avisos por: <b>${esc((canais || [])
+      .map(c => CANAL_BR[c] || c).join(', ') || '—')}</b>${
+      (canais || []).includes('telegram') ? '' : ' — sem Telegram, um pedido novo só fica no log da máquina'}</p>
+    <form method="POST" action="/admin/testar-aviso" class="em-linha">
+      <input type="hidden" name="t" value="${esc(token)}">
+      <button class="btn pequeno">Enviar um aviso de teste</button>
+    </form>
+  </section>
 
+  <!-- A faixa vermelha. -->
+  <section class="bloco-admin">
+    <h2>Aviso no topo do site</h2>
+    ${avisoActivo ? `
+      <div class="aviso-estado">
+        <p><b>ATIVO</b> — aparece em todas as páginas${avisoActivo.desde
+          ? `, há ${esc(desde(avisoActivo.desde))}` : ''}.</p>
+        <p>${avisoActivo.ate
+          ? `Sai sozinho daqui a <b>${esc(daqui(avisoActivo.ate - Date.now()))}</b>.`
+          : '<b>Não expira.</b> Sai só quando você o tirar — e um aviso que ninguém tira deixa de ser lido.'}</p>
+        <blockquote>${esc(avisoActivo.texto)}</blockquote>
+      </div>
+      <form method="POST" action="/admin/aviso" class="em-linha">
+        <input type="hidden" name="t" value="${esc(token)}">
+        <input type="hidden" name="apagar" value="1">
+        <button class="btn btn-recusar pequeno">Tirar o aviso agora</button>
+      </form>
+      <hr class="fio">
+      <p class="meta">Para trocar o texto, escreva um novo — substitui o que está lá.</p>
+    ` : '<p class="entrada">Nenhum aviso no ar. As páginas estão limpas.</p>'}
+
+    <form method="POST" action="/admin/aviso">
+      <input type="hidden" name="t" value="${esc(token)}">
+      <label class="campo" for="av-texto">Mensagem</label>
+      <input id="av-texto" name="texto" type="text" maxlength="180" autocomplete="off"
+        placeholder="Não traga doações a Canoas hoje: a ponte da BR-386 está fechada.">
+      <p class="meta">Uma frase. É o primeiro que todo mundo lê, antes do nome
+        do centro que veio procurar — por isso serve para o que muda a decisão de
+        sair de casa, e não para recados.</p>
+      <label class="campo" for="av-prazo">Quanto tempo fica</label>
+      <select id="av-prazo" name="prazo">
+        <option value="6">6 horas</option>
+        <option value="24" selected>24 horas</option>
+        <option value="72">3 dias</option>
+        <option value="0">até eu tirar</option>
+      </select>
+      <p class="meta">Sai sozinho no fim do prazo. É de propósito: uma faixa
+        vermelha que sobrevive ao motivo vira papel de parede, e a emergência
+        seguinte não é lida por ninguém.</p>
+      <button class="btn btn-primario">Ver como fica</button>
+    </form>
+  </section>
+
+  <!-- As emergências. -->
+  <section class="bloco-admin">
+    <h2>Emergências</h2>
+    <p class="entrada">A que resposta cada centro pertence. Com uma só, nada
+      disto aparece no site — a lista de centros continua simples. Com duas,
+      a lista deixa de as misturar, porque misturá-las manda alguém atravessar
+      um estado.</p>
+
+    ${emgs.length ? `<ul class="emg-admin">${emgs.map(e => `
+      <li${e.ativa ? '' : ' class="arquivada"'}>
+        <form method="POST" action="/admin/emergencia" class="emg-linha">
+          <input type="hidden" name="t" value="${esc(token)}">
+          <input type="hidden" name="slug" value="${esc(e.slug)}">
+          <label class="sr-only" for="en-${esc(e.slug)}">Nome de ${esc(e.nome)}</label>
+          <input id="en-${esc(e.slug)}" name="nome" type="text" value="${esc(e.nome)}"
+            maxlength="60" autocomplete="off">
+          <span class="emg-meta">/${esc(e.slug)} · ${e.n} ${e.n === 1 ? 'centro' : 'centros'}${
+            e.ativa ? '' : ' · arquivada'}</span>
+          <div class="emg-acoes">
+            <button class="btn pequeno" name="accao" value="renomear">Guardar nome</button>
+            <button class="btn pequeno" name="accao" value="${e.ativa ? 'arquivar' : 'ativar'}"
+              >${e.ativa ? 'Arquivar' : 'Reativar'}</button>
+            <button class="btn pequeno btn-recusar" name="accao" value="apagar">Apagar</button>
+          </div>
+        </form>
+      </li>`).join('')}</ul>
+      <p class="meta">O nome muda à vontade; o endereço (<code>/centros?e=…</code>)
+        nunca muda, porque alguém já pode ter compartilhado o link.
+        <b>Arquivar</b> some das escolhas de novos centros e mantém os que já
+        estão lá. <b>Apagar</b> solta os centros — nenhum centro é apagado, nunca.</p>`
+      : '<p class="vazio">Nenhuma emergência ainda.</p>'}
+
+    <form method="POST" action="/admin/emergencia">
+      <input type="hidden" name="t" value="${esc(token)}">
+      <input type="hidden" name="accao" value="criar">
+      <label class="campo" for="emg-nova">Nova emergência</label>
+      <input id="emg-nova" name="nome" type="text" maxlength="60" autocomplete="off"
+        placeholder="Enchentes RS 2026">
+      <button class="btn">Criar</button>
+    </form>
+  </section>
+
+  <!-- A base de dados inteira, num ficheiro. -->
+  <section class="bloco-admin">
+    <h2>Cópia de segurança</h2>
+    <p class="entrada">Todo o estado do CAPEM é <b>um arquivo só</b>. Não há
+      cópia automática nenhuma: se ele sumir, some junto todos os centros. Baixe
+      uma cópia antes de qualquer mudança arriscada, e guarde longe deste
+      servidor.</p>
+    <form method="POST" action="/admin/backup">
+      <input type="hidden" name="t" value="${esc(token)}">
+      <button class="btn">Baixar a base de dados</button>
+    </form>
+  </section>
+
+  <h2 class="risco">Pedidos aguardando</h2>
   ${pendentes.length
     ? `<div class="pedidos">${pendentes.map(linha).join('')}</div>`
     : '<p class="vazio">Nada aguardando.</p>'}
@@ -1645,8 +1859,7 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
           ${(c.dados || {}).endereco ? `<p class="meta"><a href="${esc(linkMapa((c.dados || {}).endereco, (c.dados || {}).coords))}"
             target="_blank" rel="noopener">Ver onde isto cai agora</a></p>` : ''}
           <label class="campo" for="ee-${esc(c.slug)}">Emergência</label>
-          <input id="ee-${esc(c.slug)}" name="emergencia" type="text"
-            value="${esc((c.dados || {}).emergencia || '')}" maxlength="60" autocomplete="off">
+          ${escolherEmergencia(`ee-${c.slug}`, (c.dados || {}).emergencia || '', emergencias)}
           <label class="campo" for="ep-${esc(c.slug)}">Instagram ou site</label>
           <input id="ep-${esc(c.slug)}" name="perfil" type="text"
             value="${esc((c.dados || {}).perfil || '')}" maxlength="140"
@@ -1678,6 +1891,40 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
         <button class="btn pequeno" name="decisao" value="aprovado">Reabrir</button>
       </form>
     </li>`).join('')}</ul>` : ''}
+</main>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * Um ecrã de confirmação, partilhado.
+ *
+ * Serve o que muda o site inteiro ou o que sai do servidor: publicar a faixa
+ * vermelha, apagar uma emergência, levar a base de dados para fora. Não é uma
+ * caixa de "tem a certeza?" a que se responde sem ler — mostra exactamente o
+ * que vai acontecer, e é escrito para ser lido em dois segundos.
+ *
+ * `detalhe` é HTML já composto por quem chama: a pré-visualização real da
+ * faixa, a contagem de centros afectados. Ver uma coisa é melhor do que ler
+ * uma descrição dela.
+ * -------------------------------------------------------------------------*/
+function paginaConfirmar({ titulo, aviso, detalhe, accao, campos, botao, perigo, voltar }) {
+  return molde({
+    aqui: false,
+    titulo: `${titulo} — CAPEM`,
+    corpo: `
+<main class="admin confirmar">
+  <h1>${esc(titulo)}</h1>
+  ${aviso ? `<p class="entrada">${aviso}</p>` : ''}
+  ${detalhe || ''}
+  <form method="POST" action="${esc(accao)}" class="conf-form">
+    ${Object.entries(campos || {}).map(([k, v]) =>
+      `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join('')}
+    <input type="hidden" name="confirmar" value="1">
+    <div class="botoes">
+      <button class="btn ${perigo ? 'btn-recusar' : 'btn-primario'}">${esc(botao)}</button>
+      <a class="btn" href="${esc(voltar)}">Cancelar</a>
+    </div>
+  </form>
 </main>`
   });
 }
@@ -2010,6 +2257,59 @@ textarea{width:100%;padding:12px;font:500 15px/1.45 var(--fonte);color:var(--tin
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
   overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
+/* --- a faixa de aviso, no topo de tudo ---
+   Vermelha, larga, e acima da barra de navegação: se estiver por baixo, o
+   primeiro toque de quem chega pelo QR de um cartaz passa-lhe ao lado.
+   Não sai no papel — um aviso que expira daqui a um dia impresso numa folha
+   que fica na porta um mês é a mentira que este projecto anda a evitar. */
+.aviso-global{display:flex;align-items:flex-start;gap:12px;
+  padding:14px var(--goteira);background:var(--proibido);color:#fff}
+.aviso-global svg{width:26px;height:26px;flex:none;margin-top:1px}
+.aviso-global svg path,.aviso-global svg rect{fill:#fff}
+.aviso-global p{margin:0;font:700 15px/1.45 var(--fonte);max-width:60ch}
+@media print{.aviso-global{display:none !important}}
+
+/* --- os blocos da administração ---
+   Uma página que passou de uma fila de aprovação a um painel. Cada bloco é uma
+   tarefa fechada, com risco em cima, para se correr a página com os olhos. */
+.bloco-admin{margin:0 0 28px;padding:16px 0 0;border-top:4px solid var(--tinta)}
+.bloco-admin h2{margin:0 0 8px;font-size:clamp(18px,4.5vw,22px)}
+.bloco-admin .entrada{margin-bottom:12px}
+.bloco-admin form{margin:0 0 4px}
+.bloco-admin form.em-linha{display:inline-block;margin:8px 8px 0 0}
+.atalhos{display:flex;flex-wrap:wrap;gap:8px}
+.atalhos .btn{margin:0}
+h2.risco{margin-top:8px;padding-top:16px;border-top:4px solid var(--tinta)}
+.fio{border:0;border-top:1px solid var(--tenue);margin:14px 0}
+
+/* O que falta preencher. Só aparece o que tem alguma coisa a apontar. */
+.saude{list-style:none;margin:0 0 10px;padding:0}
+.saude li{padding:9px 0;border-bottom:1px solid var(--tenue)}
+.saude b{display:block;font:800 15px/1.3 var(--fonte);color:var(--proibido)}
+.saude span{font:500 13px/1.45 var(--fonte);color:var(--texto-2)}
+.tudo-bem{margin:0 0 10px;padding:11px 12px;background:var(--claro);
+  border-left:6px solid var(--permitido);font:600 14px/1.45 var(--fonte)}
+
+/* O estado da faixa vermelha, visto de dentro. */
+.aviso-estado{padding:12px;margin:0 0 10px;background:var(--claro);
+  border-left:6px solid var(--proibido)}
+.aviso-estado p{margin:0 0 6px;font:500 14px/1.45 var(--fonte)}
+.aviso-estado blockquote{margin:8px 0 0;padding:10px 12px;background:var(--papel);
+  border:2px solid var(--tinta);font:700 15px/1.4 var(--fonte)}
+
+/* As emergências. */
+.emg-admin{list-style:none;margin:0 0 12px;padding:0}
+.emg-admin li{padding:11px 0;border-bottom:1px solid var(--tenue)}
+.emg-admin li.arquivada{opacity:.6}
+.emg-linha{display:grid;gap:7px;margin:0}
+.emg-meta{font:600 12px/1.3 var(--mono);color:var(--texto-2)}
+.emg-acoes{display:flex;flex-wrap:wrap;gap:6px}
+
+/* O ecrã de confirmação. */
+.confirmar .conf-form{margin-top:18px}
+.confirmar .previa{margin:14px 0;border:2px dashed var(--fio);padding:0}
+.confirmar .previa .aviso-global{padding:14px 16px}
+
 /* --- inicial, admin, avisos --- */
 .inicial h1,.admin h1,.aviso-pagina h1{margin:0 0 10px;
   font:400 clamp(26px,7vw,42px)/1.02 var(--preta);letter-spacing:-.025em;text-wrap:balance}
@@ -2107,4 +2407,5 @@ module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
                    paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
                    paginaEncerrado, paginaConfirmarEncerrar,
-                   paginaCodigo, paginaAdmin, idade, esc, CSS };
+                   paginaCodigo, paginaAdmin, paginaConfirmar,
+                   definirAviso, idade, esc, CSS };

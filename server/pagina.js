@@ -913,8 +913,8 @@ function paginaCentroEntrada({ base }) {
     <a class="porta" href="/novo">
       ${svgIcone('pino')}
       <span class="porta-t">Pedir minha página</span>
-      <span class="porta-d">Ainda não tem endereço na internet? Peça um — recebe o
-        código na hora. É o que lhe deixa publicar todos os dias.</span>
+      <span class="porta-d">Ainda não tem endereço na internet? Peça um. A gente
+        confere os dados e liga — o código do centro chega depois, por WhatsApp.</span>
     </a>
   </div>
 
@@ -939,10 +939,11 @@ function paginaNovo({ erro }) {
 <main class="inicial">
   <header>
     <h1>Pedir a página do seu centro</h1>
-    <p class="entrada">Recebe um código na hora — é o que lhe deixa publicar a lista
-      todos os dias, a partir do <a href="/kit">kit</a>. Cada pedido é verificado à
-      mão antes de a página ir para o ar: um endereço errado numa emergência manda
-      pessoas para o lugar errado.</p>
+    <p class="entrada">Cada pedido é conferido à mão antes de a página ir para o
+      ar: um endereço errado numa emergência manda pessoas para o lugar errado.
+      Depois disso o <b>código do centro</b> chega por WhatsApp — é com ele que
+      você publica a lista todos os dias, a partir do <a href="/kit">kit</a>.
+      Para imprimir não precisa esperar: o kit só precisa do nome.</p>
   </header>
 
   ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}

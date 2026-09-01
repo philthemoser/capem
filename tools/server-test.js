@@ -102,7 +102,20 @@ const DIA = 86400000;
 
   console.log('\npedir uma página');
   r = await get('/novo');
-  ok('o formulário vive na sua própria página', r.status === 200 && /<form/.test(await r.text()));
+  html = await r.text();
+  ok('o formulário vive na sua própria página', r.status === 200 && /<form/.test(html));
+
+  /* A página de resposta deixou de prometer um código no mesmo instante em que
+     o código passou a nascer na aprovação, mas as páginas que levam até aqui
+     ficaram a dizer "recebe o código na hora" durante semanas — o convite e a
+     promessa vivem em ficheiros diferentes e ninguém os lê ao mesmo tempo. Isto
+     compara-os: nenhuma porta para o pedido pode prometer o que só a aprovação
+     entrega. */
+  const promete = /c[óo]digo na hora|um c[óo]digo na hora|recebe (o|um) c[óo]digo/i;
+  ok('a página do pedido não promete um código na hora', !promete.test(html));
+  ok('e a porta que leva até ela também não', !promete.test(await (await get('/centro')).text()));
+  ok('nem o kit', !promete.test(fs.readFileSync(
+    path.join(__dirname, '..', 'field', 'src', 'kit.template.html'), 'utf8')));
   r = await form('/pedir', {
     nome: 'Paróquia São Sebastião', tipo: 'Ponto de arrecadação',
     endereco: 'R. Bento Gonçalves, 412 — Centro, Canoas/RS',

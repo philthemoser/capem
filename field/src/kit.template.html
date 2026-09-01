@@ -30,7 +30,7 @@
      formulário morto que parece apenas estranho. -->
 <div id="sem-js" class="alerta-boot">
   <b>Esta página não está funcionando como devia.</b>
-  <p>O JavaScript não correu, por isso as listas estão vazias e nada é gerado.
+  <p>O JavaScript não rodou, por isso as listas estão vazias e nada é gerado.
     Quase sempre é porque o arquivo está sendo aberto dentro de um
     visualizador (uma pré-visualização de anexo, um leitor de arquivos) em vez
     de um navegador.</p>
@@ -79,13 +79,13 @@
             <input id="f-codigo" type="text" placeholder="ABCD-2345" autocomplete="off" spellcheck="false">
           </div>
         </div>
-        <button type="button" class="btn largo" id="b-carregar">Puxar os meus dados</button>
+        <button type="button" class="btn largo" id="b-carregar">Puxar meus dados</button>
         <p class="estado-pub" id="estado-carga" hidden></p>
         <p class="ajuda">Ainda não tem página? <a id="link-pedir" href="/">Peça uma aqui</a> —
           recebe um código na hora. Ou preencha à mão, aqui abaixo: o kit imprime
           do mesmo jeito, sem servidor e sem cadastro. O código não fica salvo neste
           aparelho a não ser que o escreva aqui, e nunca sai daqui para outro
-          lugar que não seja o seu servidor.</p>
+          lugar que não seja seu servidor.</p>
       </section>
 
       <section class="bloco">
@@ -115,10 +115,10 @@
           <input type="checkbox" id="f-pausado">
           <label for="f-pausado">Não estamos recebendo agora
             <small>O cartaz passa a dizer isso em vez da lista. Um centro cheio que
-              não consegue pedir para parar continua a receber.</small></label>
+              não consegue pedir para parar continua recebendo.</small></label>
         </div>
         <div id="linha-motivo" hidden>
-          <label class="campo" for="f-motivo">Porquê</label>
+          <label class="campo" for="f-motivo">Motivo</label>
           <input id="f-motivo" type="text" placeholder="Estamos cheios. Ligue antes de vir." autocomplete="off">
         </div>
       </section>
@@ -131,17 +131,17 @@
         <div class="linha-add">
           <label class="sr-only" for="f-livre">Outro item</label>
           <input id="f-livre" type="text" placeholder="Outro item…" autocomplete="off">
-          <button type="button" id="b-add-precisa">Juntar</button>
+          <button type="button" id="b-add-precisa">Adicionar</button>
         </div>
         <ol class="escolhidos" id="lista-precisa"></ol>
         <div class="aviso" id="aviso-itens" hidden>
-          Escolheu <b id="n-itens">0</b> itens. O cartaz mostra os dez primeiros — abaixo
-          disso a marca desce de 26&nbsp;mm e deixa de se ler a dois metros.
+          Você escolheu <b id="n-itens">0</b> itens. O cartaz mostra os dez primeiros — abaixo
+          disso a marca desce de 26&nbsp;mm e deixa de ser legível a dois metros.
         </div>
         <div class="aviso" id="aviso-livres" hidden>
-          <b id="n-livres">0</b> item(ns) sem marca própria. Imprimem uma caixa genérica, que
+          <b id="n-livres">0</b> item(ns) sem marca própria. Saem com uma caixa genérica, que
           não diz nada a quem não lê português — a promessa do kit é que cada peça funcione
-          com o texto ignorado. Use-os com conta.
+          com o texto ignorado. Use com moderação.
         </div>
       </section>
 
@@ -153,7 +153,7 @@
         <div class="linha-add">
           <label class="sr-only" for="f-nao-livre">Outro item que não deve ser trazido</label>
           <input id="f-nao-livre" type="text" placeholder="Outro item…" autocomplete="off">
-          <button type="button" id="b-add-nao">Juntar</button>
+          <button type="button" id="b-add-nao">Adicionar</button>
         </div>
       </section>
 
@@ -161,7 +161,7 @@
       <section class="bloco" id="bloco-enviar">
         <h2>Publicar a lista de hoje</h2>
         <p class="dica">O QR de todas as peças aponta para a página do seu centro.
-          Publicar aqui é o que faz o papel impresso continuar a valer amanhã.
+          Publicar aqui é o que faz o papel impresso continuar valendo amanhã.
           Usa o endereço e o código que escreveu lá em cima.</p>
         <button type="button" class="btn btn-primario largo" id="b-publicar">Publicar a lista de hoje</button>
         <p class="estado-pub" id="estado-pub" hidden></p>
@@ -169,7 +169,7 @@
           <p><b>No ar em <span class="pos-url"></span></b></p>
           <p>Agora mande no grupo. É por aí que a lista chega mais longe — e o
             link nunca fica velho, ao contrário de uma imagem.</p>
-          <button type="button" class="btn btn-wa largo" id="b-partilhar">Mandar no WhatsApp</button>
+          <button type="button" class="btn btn-wa largo" id="b-compartilhar">Mandar no WhatsApp</button>
         </div>
       </section>
 
@@ -217,37 +217,37 @@
         <summary>Todas as marcas disponíveis <span id="conta-marcas"></span></summary>
         <div class="corpo corpo-marcas">
           <p class="nota-marcas">Estas são todas as marcas que existem. Um item
-            escolhido de uma destas lê-se sem texto; um item escrito à mão sai
+            escolhido de uma destas é lido sem texto; um item escrito à mão sai
             com a marca genérica de caixa, a não ser que lhe escolha uma aqui.</p>
           <div class="grade-marcas" id="indice-marcas"></div>
         </div>
       </details>
 
       <details class="porque-assim">
-        <summary>Porque é que estas peças são assim</summary>
+        <summary>Por que estas peças são assim</summary>
         <div class="corpo">
           <div>
             <h4>Funcionam com o texto ignorado</h4>
             <p>Vinte e oito marcas desenhadas, uma por item. Quem não lê português
               — e o sul do Brasil tem comunidades venezuelanas, haitianas e
-              bolivianas, e chegam socorristas de fora — percebe na mesma.</p>
+              bolivianas, e chegam socorristas de fora — entende do mesmo jeito.</p>
           </div>
           <div>
             <h4>Funcionam sem toner de cor</h4>
             <p>O preto e branco é o desenho principal e a cor é uma camada por
               cima. Proibido é <em>anel mais barra</em>, permitido é <em>anel mais
-              visto</em>: são formas, não cores. Carregue no botão e veja.</p>
+              visto</em>: são formas, não cores. Toque no botão e veja.</p>
           </div>
           <div>
             <h4>Funcionam molhadas</h4>
             <p>Traços grossos, contraste alto, nada de fios finos nem texto pequeno
-              em negativo — é o que desaparece primeiro em papel húmido ou dentro
+              em negativo — é o que desaparece primeiro em papel úmido ou dentro
               de um plástico.</p>
           </div>
           <div>
-            <h4>O “não traga” pesa tanto como o “precisamos”</h4>
-            <p>Em 2024, roupa usada chegou a 70% de tudo o que foi arrecadado no
-              país. Mas são pessoas a tentar ajudar, por isso a peça agradece
+            <h4>O “não traga” pesa tanto quanto o “precisamos”</h4>
+            <p>Em 2024, roupa usada chegou a 70% de tudo que foi arrecadado no
+              país. Mas são pessoas tentando ajudar, por isso a peça agradece
               antes de recusar.</p>
           </div>
           <div>
@@ -271,10 +271,10 @@
 
   <footer class="rodape">
     <p><b>Nada sai deste aparelho.</b> Não há cadastro, servidor nem internet envolvidos.
-      O que escrever fica salvo só aqui, para não ter que repetir amanhã. O arquivo
-      funciona aberto de uma pen, sem rede.</p>
+      O que escrever fica salvo só aqui, para não precisar repetir amanhã. O arquivo
+      funciona aberto de um pen drive, sem rede.</p>
     <p style="margin-top:8px"><b>Antes de imprimir cem folhas, imprima uma.</b>
-      Ligue “ver a preto e branco”, imprima o cartaz de porta e leia-o a dois metros.
+      Ative “ver em preto e branco”, imprima o cartaz de porta e leia a dois metros.
       É o teste que conta.</p>
     <p style="margin-top:8px">CAPEM · ferramenta livre · <a href="https://github.com/philthemoser/capem">github.com/philthemoser/capem</a></p>
   </footer>

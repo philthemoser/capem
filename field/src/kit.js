@@ -219,7 +219,7 @@ const PASSOS = [
   { ic: 'caixa', t: 'Etiquetas de caixa',
     d: 'Uma por caixa, colada de fora. A partir daí um voluntário novo separa sozinho, sem perguntar nada a ninguém.' },
   { ic: 'pessoa', t: 'Crachás e faixas de braço',
-    d: 'Um por pessoa, no início do turno. O nome escreve-se à mão.' },
+    d: 'Um por pessoa, no início do turno. Escreva o nome à mão.' },
   { ic: 'seta', t: 'Setas e panfletos',
     d: 'Setas onde as pessoas se enganam no caminho. Panfletos para entregar na rua — uma folha dá quatro.' }
 ];
@@ -236,7 +236,7 @@ const PECAS = [
   {
     id: 'instrucoes', fam: 0, titulo: 'Folha de instruções', fmt: 'A4 retrato · para a parede do fundo',
     w: 210, h: 297, un: 'mm',
-    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue-a onde a equipe passa — não é para o doador, é para quem está trabalhando.',
+    nota: 'Onde pregar o quê, e o que fazer todos os dias. Pregue onde a equipe passa — não é para o doador, é para quem está trabalhando.',
     html: () => `<div class="folha f-instr">
       <div class="topo-c">
         <div class="tipo">${esc(V.nome())}</div>
@@ -261,8 +261,8 @@ const PECAS = [
         </div>
         <div class="bloco-i">
           <div class="h preta">3 · SE FALTAR TINTA</div>
-          <p class="obs">Ligue <b>“ver a preto e branco”</b> antes de imprimir. Nada se perde: o proibido continua a ser o anel com a barra, o permitido continua a ser o visto. A cor nunca carrega sozinha o significado.</p>
-          <p class="obs">Antes de imprimir cem folhas, imprima uma e leia-a a dois metros.</p>
+          <p class="obs">Ative <b>“ver em preto e branco”</b> antes de imprimir. Nada se perde: o proibido continua sendo o anel com a barra, o permitido continua sendo o visto. A cor nunca carrega sozinha o significado.</p>
+          <p class="obs">Antes de imprimir cem folhas, imprima uma e leia a dois metros.</p>
         </div>
       </div>
 
@@ -270,7 +270,7 @@ const PECAS = [
         ${svgAnel()}
         <div>
           <b>A lista do “não traga” evita mais transtorno do que a do “precisamos” resolve.</b>
-          <span>Nas enchentes de 2024 no Rio Grande do Sul, roupa usada chegou a 70% de tudo o que foi arrecadado no país. Mas são pessoas a tentar ajudar — por isso as peças agradecem antes de recusar.</span>
+          <span>Nas enchentes de 2024 no Rio Grande do Sul, roupa usada chegou a 70% de tudo que foi arrecadado no país. Mas são pessoas tentando ajudar — por isso as peças agradecem antes de recusar.</span>
         </div>
       </div>
 
@@ -285,7 +285,7 @@ const PECAS = [
   {
     id: 'cartaz', fam: 1, titulo: 'Cartaz de porta', fmt: 'A4 retrato · 210 × 297 mm',
     w: 210, h: 297, un: 'mm',
-    nota: 'O principal. Colado à entrada. Adapta-se sozinho de 3 a 10 itens.',
+    nota: 'O principal. Colado à entrada. Se adapta sozinho de 3 a 10 itens.',
     html: () => {
       const l = V.link();
       return `<div class="folha f-cartaz">
@@ -356,7 +356,7 @@ const PECAS = [
   {
     id: 'wa-post', fam: 1, titulo: 'Post de WhatsApp', fmt: '1080 × 1350 px',
     w: 1080, h: 1350, un: 'px', ecra: true,
-    nota: 'O artefacto mais partilhado de todos. Sai como imagem, não como impressão.',
+    nota: 'O artefato mais compartilhado de todos. Sai como imagem, não como impressão.',
     html: () => waHTML('post')
   },
 
@@ -542,14 +542,14 @@ const PECAS = [
     html: () => {
       const falas = [
         '“Obrigado por ter vindo até aqui.”',
-        '“Hoje não podemos receber isto — não temos onde guardar e molhado estraga-se.”',
+        '“Hoje não podemos receber isto — não temos onde guardar e molhado estraga.”',
         '“O que faz falta hoje está nesta folha.” <em>(aponte para o cartaz)</em>',
         '“Leve este cartão e ligue antes de voltar — assim não carrega em vão.”'
       ];
       return `<div class="folha f-guiao">
         <div class="topo-c">
           <div class="titulo preta">RECUSAR COM JEITO</div>
-          <div class="sub">Quatro falas. Diga-as por esta ordem.</div>
+          <div class="sub">Quatro falas. Diga nesta ordem.</div>
         </div>
         <div class="falas">${falas.map((f, i) => `<div class="fala"><b>${i + 1}</b><p>${f}</p></div>`).join('')}</div>
         <div class="pe">
@@ -564,7 +564,7 @@ const PECAS = [
   {
     id: 'cracha', fam: 4, titulo: 'Crachás', fmt: '90 × 60 mm · 8-up em A4',
     w: 210, h: 297, un: 'mm',
-    nota: 'Imprima em papel comum e cole em cartão de caixa: aguenta um turno. O nome escreve-se à mão.',
+    nota: 'Imprima em papel comum e cole em papelão: aguenta um turno. Escreva o nome à mão.',
     html: () => {
       const cells = Array.from({ length: 8 }, (_, i) => {
         const f = FUNCOES[i % FUNCOES.length];
@@ -599,11 +599,11 @@ const PECAS = [
 ];
 
 const FAMILIAS = [
-  { n: 0, nome: 'Comece por aqui', desc: 'Uma folha que explica o resto. Imprima-a primeiro e pregue-a na parede do fundo.' },
+  { n: 0, nome: 'Comece por aqui', desc: 'Uma folha que explica o resto. Imprima primeiro e pregue na parede do fundo.' },
   { n: 1, nome: 'Família 1 · Anunciar', desc: 'Virado para fora. Se só imprimir uma coisa, imprima o cartaz de porta.' },
   { n: 2, nome: 'Família 2 · Operar', desc: 'Dentro do centro. Ninguém faz estas peças, e separar doações é o gargalo verdadeiro.' },
   { n: 3, nome: 'Família 3 · Levar', desc: 'Sai com a pessoa e volta amanhã sabendo o que trazer.' },
-  { n: 4, nome: 'Identificação', desc: 'É isto que faz a recusa da mesa de triagem funcionar: um estranho a dizer não é uma discussão, um voluntário identificado é o centro a dizer não.' }
+  { n: 4, nome: 'Identificação', desc: 'É isto que faz a recusa da mesa de triagem funcionar: um estranho dizendo não é uma discussão, um voluntário identificado é o centro dizendo não.' }
 ];
 
 /* ---------------------------------------------------------------------------
@@ -1048,7 +1048,7 @@ function cartao(p, primeira) {
     : `<button type="button" class="acao" data-print="${p.id}">Imprimir já</button>
        <button type="button" class="acao acao-lista${naLista ? ' dentro' : ''}"
          data-lista="${p.id}" aria-pressed="${naLista}">${
-         naLista ? '✓ Na lista' : '+ Juntar à lista'}</button>`;
+         naLista ? '✓ Na lista' : '+ Adicionar à lista'}</button>`;
 
   /* Uma peça multi-folha — dez etiquetas de caixa são cinco folhas — mostra
      só a primeira. Todas ficam no DOM porque todas têm de sair na impressão;
@@ -1177,7 +1177,7 @@ function imprimirVarias(ids) {
   const { w, h } = pecas[0];
   const misturado = pecas.some(p => p.w !== w || p.h !== h);
   if (misturado) {
-    alert('Estas peças têm tamanhos de papel diferentes. Imprima-as uma a uma.');
+    alert('Estas peças têm tamanhos de papel diferentes. Imprima uma de cada vez.');
     return;
   }
 
@@ -1346,7 +1346,7 @@ async function puxarDados(botao) {
     return;
   }
   if (!alvo) {
-    estadoCarga('Não percebemos esse endereço. Cole o endereço completo da página '
+    estadoCarga('Não entendemos esse endereço. Cole o endereço completo da página '
       + 'do seu centro — está impresso no rodapé do cartaz, algo como '
       + 'capem.org/canoas-ss.', 'mau');
     return;
@@ -1365,8 +1365,8 @@ async function puxarDados(botao) {
     if (!r.ok) {
       estadoCarga({
         403: 'Código errado. Confira as letras — não há O nem I nem S no código.',
-        404: 'Não encontrámos esse centro. Confira o endereço.',
-        429: 'Demasiados pedidos. Espere um pouco.'
+        404: 'Não encontramos esse centro. Confira o endereço.',
+        429: 'Pedidos demais. Espere um pouco.'
       }[r.status] || ('Não deu para puxar os dados' + (j.erro ? ': ' + j.erro : '.')), 'mau');
       return;
     }
@@ -1410,9 +1410,9 @@ async function puxarDados(botao) {
        perfeita.) */
     const rede = e instanceof TypeError;
     estadoCarga(rede
-      ? 'Sem ligação ao servidor. Preencha à mão — a impressão funciona na '
-        + 'mesma, e pode publicar mais tarde.'
-      : 'Os dados vieram, mas alguma coisa correu mal a preenchê-los: '
+      ? 'Sem conexão com o servidor. Preencha à mão — a impressão funciona do '
+        + 'mesmo jeito, e você pode publicar mais tarde.'
+      : 'Os dados vieram, mas alguma coisa deu errado ao preencher: '
         + (e && e.message ? e.message : e) + '. Confira o formulário antes de publicar.',
       'mau');
   } finally {
@@ -1428,15 +1428,15 @@ async function publicar(botao) {
     return;
   }
   if (!alvo) {
-    estadoPub('Não percebemos esse endereço. Cole o endereço completo da página '
+    estadoPub('Não entendemos esse endereço. Cole o endereço completo da página '
       + 'do seu centro — está impresso no rodapé do cartaz, algo como '
-      + 'capem.org/canoas-ss. A impressão continua a funcionar sem isto.', 'mau');
+      + 'capem.org/canoas-ss. A impressão continua funcionando sem isso.', 'mau');
     return;
   }
   const { base, slug } = alvo;
 
   const antes = botao.textContent;
-  botao.disabled = true; botao.textContent = 'A publicar…';
+  botao.disabled = true; botao.textContent = 'Publicando…';
   estadoPub('');
   try {
     const r = await fetch(base + '/api/publicar', {
@@ -1452,8 +1452,8 @@ async function publicar(botao) {
     if (!r.ok) {
       estadoPub({
         403: 'Código errado. Confira as letras — não há O nem I nem S no código.',
-        404: 'Não encontrámos esse centro. Confira o endereço.',
-        429: 'Demasiados envios. Espere um pouco.'
+        404: 'Não encontramos esse centro. Confira o endereço.',
+        429: 'Envios demais. Espere um pouco.'
       }[r.status] || ('Não deu para publicar' + (j.erro ? ': ' + j.erro : '.')), 'mau');
     } else if (j.estado !== 'aprovado') {
       estadoPub('Publicado. A página fica no ar assim que o pedido for verificado.', 'bom');
@@ -1471,11 +1471,11 @@ async function publicar(botao) {
     /* Publicar e depois não contar a ninguém não serve de nada. O momento em
        que se carrega em Publicar é o único em que o coordenador tem a lista
        fresca na cabeça e o telemóvel na mão. */
-    if (r.ok && j.url) mostrarPartilha(j.url);
+    if (r.ok && j.url) mostrarCompartilhar(j.url);
   } catch (e) {
     /* Sem sinal não é um erro nesta ferramenta: é o estado normal metade do
        tempo. Por isso a mensagem não pede desculpa, diz o que fazer. */
-    estadoPub('Sem ligação ao servidor. O papel continua a sair; publique quando '
+    estadoPub('Sem conexão com o servidor. O papel continua saindo; publique quando '
       + 'houver sinal.', 'mau');
   }
   botao.disabled = false; botao.textContent = antes;
@@ -1488,7 +1488,7 @@ async function publicar(botao) {
  * coisa. Onde não existir — desktop, browsers antigos — cai para um link
  * wa.me, que faz o mesmo com mais um toque. Sem API, sem número, sem custo.
  */
-function textoPartilha(url) {
+function textoCompartilhar(url) {
   const L = [];
   L.push(`*${V.nome().toUpperCase()}* — ${S.pausado ? 'NÃO estamos recebendo agora' : 'precisamos hoje'}`);
   L.push('');
@@ -1505,22 +1505,22 @@ function textoPartilha(url) {
   return L.join('\n');
 }
 
-function mostrarPartilha(url) {
+function mostrarCompartilhar(url) {
   const caixa = document.getElementById('pos-publicar');
   caixa.hidden = false;
   caixa.querySelector('.pos-url').textContent = url.replace(/^https?:\/\//, '');
 }
 
-async function partilharLista(botao) {
+async function compartilharLista(botao) {
   const url = (S.link || '').trim();
   if (!url) return;
-  const texto = textoPartilha(url);
+  const texto = textoCompartilhar(url);
   if (navigator.share) {
     try { await navigator.share({ text: texto }); return; }
     catch (e) { if (e && e.name === 'AbortError') return; }
   }
   window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
-  avisar(botao, 'A abrir o WhatsApp');
+  avisar(botao, 'Abrindo o WhatsApp');
 }
 
 /* ---------------------------------------------------------------------------
@@ -1696,8 +1696,8 @@ function iniciar() {
     .addEventListener('click', e => publicar(e.currentTarget));
   document.getElementById('b-carregar')
     .addEventListener('click', e => puxarDados(e.currentTarget));
-  document.getElementById('b-partilhar')
-    .addEventListener('click', e => partilharLista(e.currentTarget));
+  document.getElementById('b-compartilhar')
+    .addEventListener('click', e => compartilharLista(e.currentTarget));
   /* Se o kit foi servido pelo servidor, o pedido de página é lá; se foi aberto
      de uma pen, o link não sabe para onde ir e é escondido em vez de mentir. */
   const lp = document.getElementById('link-pedir');

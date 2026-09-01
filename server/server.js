@@ -44,7 +44,7 @@ const B = require('./busca');
 const PORTA = Number(process.env.PORT || 8080);
 const ADMIN = process.env.CAPEM_ADMIN || '';
 const BASE = (process.env.CAPEM_BASE || `http://localhost:${PORTA}`).replace(/\/+$/, '');
-const FICHEIRO_DB = process.env.CAPEM_DB || path.join(__dirname, 'capem.db');
+const ARQUIVO_DB = process.env.CAPEM_DB || path.join(__dirname, 'capem.db');
 
 const RAIZ = path.join(__dirname, '..');
 
@@ -103,7 +103,7 @@ function slugLivre(nome) {
 /* Trava simples por IP. Não é uma defesa a sério — é o suficiente para que um
    script aborrecido não encha a fila de aprovação enquanto ninguém olha. */
 const tentativas = new Map();
-function demasiado(ip, limite, janela) {
+function excedeu(ip, limite, janela) {
   const agora = Date.now();
   const t = (tentativas.get(ip) || []).filter(x => agora - x < janela);
   t.push(agora);
@@ -320,9 +320,9 @@ async function encaminhar(req, res) {
 
   /* --- pedir uma página --- */
   if (caminho === '/pedir' && req.method === 'POST') {
-    if (demasiado(ip, 5, 3600e3)) return responder(res, 429, P.molde({
-      titulo: 'Demasiados pedidos',
-      corpo: '<main class="aviso-pagina"><h1>Demasiados pedidos deste aparelho</h1><p>Tente daqui a uma hora.</p></main>'
+    if (excedeu(ip, 5, 3600e3)) return responder(res, 429, P.molde({
+      titulo: 'Pedidos demais',
+      corpo: '<main class="aviso-pagina"><h1>Pedidos demais deste aparelho</h1><p>Tente daqui a uma hora.</p></main>'
     }));
     const campos = new URLSearchParams(await corpo(req));
     const dados = limparDados({
@@ -369,9 +369,9 @@ async function encaminhar(req, res) {
     return responder(res, 200, P.paginaPedirCodigo({ slug: url.searchParams.get('c') || '' }));
   }
   if (caminho === '/pedir-codigo' && req.method === 'POST') {
-    if (demasiado(ip, 5, 3600e3)) {
+    if (excedeu(ip, 5, 3600e3)) {
       return responder(res, 429, P.paginaPedirCodigo({
-        erro: 'Demasiados pedidos deste aparelho. Tente daqui a uma hora.' }));
+        erro: 'Pedidos demais deste aparelho. Tente daqui a uma hora.' }));
     }
     const campos = new URLSearchParams(await corpo(req));
     const pedido = texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
@@ -381,8 +381,8 @@ async function encaminhar(req, res) {
     if (!centro || centro.estado !== 'aprovado') {
       return responder(res, 404, P.paginaPedirCodigo({
         slug: pedido,
-        erro: 'Não encontrámos esse endereço. Confira-o no rodapé de uma peça '
-            + 'impressa, ou procure o seu centro na lista de centros.'
+        erro: 'Não encontramos esse endereço. Confira no rodapé de uma peça '
+            + 'impressa, ou procure seu centro na lista de centros.'
       }));
     }
     const d = centro.dados || {};
@@ -426,9 +426,9 @@ async function encaminhar(req, res) {
     /* Mais apertado do que publicar: aqui é onde alguém tentaria adivinhar um
        código à força. Vinte por hora chega para um coordenador que se engana
        algumas vezes e não chega para mais nada. */
-    if (demasiado(ip, 20, 3600e3)) {
+    if (excedeu(ip, 20, 3600e3)) {
       return responder(res, 429, P.paginaAtualizarEntrada({
-        erro: 'Demasiadas tentativas deste aparelho. Espere uma hora.' }));
+        erro: 'Tentativas demais deste aparelho. Espere uma hora.' }));
     }
     const campos = new URLSearchParams(await corpo(req));
     const pedido = texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
@@ -520,7 +520,7 @@ async function encaminhar(req, res) {
       centro.publicado = Date.now();
       if (!limpo.precisa.length && !limpo.pausado) {
         erro = 'Publicou uma lista vazia e o centro não está marcado como '
-             + 'fechado. Quem abrir a página não fica a saber o que trazer.';
+             + 'fechado. Quem abrir a página não vai saber o que trazer.';
       }
     }
 
@@ -547,7 +547,7 @@ async function encaminhar(req, res) {
    * centros de uma vez.
    */
   if (caminho === '/api/carregar' && req.method === 'POST') {
-    if (demasiado(ip, 60, 3600e3)) return json(res, 429, { erro: 'demasiados pedidos' });
+    if (excedeu(ip, 60, 3600e3)) return json(res, 429, { erro: 'pedidos demais' });
     let p;
     try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
     const real = db.resolver(texto(p.slug, 60));
@@ -570,7 +570,7 @@ async function encaminhar(req, res) {
   }
 
   if (caminho === '/api/publicar' && req.method === 'POST') {
-    if (demasiado(ip, 120, 3600e3)) return json(res, 429, { erro: 'demasiados envios' });
+    if (excedeu(ip, 120, 3600e3)) return json(res, 429, { erro: 'envios demais' });
     let p;
     try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
     const real = db.resolver(texto(p.slug, 60));
@@ -789,12 +789,12 @@ function resumoDeParados(base) {
 }
 
 if (require.main === module) {
-  db.abrir(FICHEIRO_DB);
+  db.abrir(ARQUIVO_DB);
   criarServidor().listen(PORTA, () => {
     console.log(`CAPEM em ${BASE}  (porta ${PORTA})`);
     console.log(`fila de aprovação: ${BASE}/admin?t=${ADMIN}`);
     const c = db.contar();
-    console.log(`${c.aprovado} no ar · ${c.pendente} à espera`);
+    console.log(`${c.aprovado} no ar · ${c.pendente} aguardando`);
     const canais = A.canaisActivos();
     console.log(`avisos por: ${canais.join(', ')}`);
     if (canais.length === 1) {

@@ -28,15 +28,15 @@ const EXPORTA = [
 const corpo = ler('icones.js') + '\n' + ler('catalogo.js') +
   '\nreturn {' + EXPORTA.join(',') + '};';
 
-const partilhado = new Function(corpo)();
+const compartilhado = new Function(corpo)();
 
 /* Se um destes ficheiros for renomeado ou refeito, isto rebenta ao arrancar o
    servidor em vez de servir páginas sem marcas — que é a falha silenciosa que
    custaria mais. */
 EXPORTA.forEach(n => {
-  if (partilhado[n] === undefined) {
+  if (compartilhado[n] === undefined) {
     throw new Error(`field/src perdeu "${n}" — o servidor e o papel deixariam de concordar`);
   }
 });
 
-module.exports = partilhado;
+module.exports = compartilhado;

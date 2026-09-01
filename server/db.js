@@ -47,8 +47,8 @@ const derivadas = d => {
   return [String(x.busca || ''), String(x.nome_ord || ''), x.pausado ? 1 : 0];
 };
 
-function abrir(ficheiro) {
-  db = new DatabaseSync(ficheiro || path.join(__dirname, 'capem.db'));
+function abrir(arquivo) {
+  db = new DatabaseSync(arquivo || path.join(__dirname, 'capem.db'));
   db.exec(`
     CREATE TABLE IF NOT EXISTS centros (
       slug        TEXT PRIMARY KEY,

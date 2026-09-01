@@ -106,8 +106,8 @@ const DESTINOS = [
 
 function nav(aqui, migalhas) {
   const links = DESTINOS.map(([href, txt]) => {
-    const actual = href === aqui;
-    return `<a href="${esc(href)}"${actual ? ' aria-current="page"' : ''}>${esc(txt)}</a>`;
+    const atual = href === aqui;
+    return `<a href="${esc(href)}"${atual ? ' aria-current="page"' : ''}>${esc(txt)}</a>`;
   }).join('');
 
   /* `migalhas` é uma lista de [texto, href?]. O último não é link: é onde se
@@ -151,14 +151,14 @@ ${corpo}
 }
 
 /* ---------------------------------------------------------------------------
- * Partilhar
+ * Compartilhar
  *
  * O que se manda é o LINK e não uma imagem. Uma imagem de uma lista é o mesmo
  * problema do cartaz impresso — nasce velha e continua a circular meses depois
  * no WhatsApp de alguém. O link diz sempre o que o centro precisa hoje, e diz
  * também quando a lista já não é de hoje.
  * -------------------------------------------------------------------------*/
-function textoPartilhaCentro(d, url) {
+function textoCompartilharCentro(d, url) {
   const L = [];
   const precisa = (d.precisa || []).map(item);
   L.push(`*${String(d.nome || '').toUpperCase()}* — ${d.pausado
@@ -178,8 +178,8 @@ function textoPartilhaCentro(d, url) {
   return L.join('\n');
 }
 
-const linkPartilha = (d, url) =>
-  'https://wa.me/?text=' + encodeURIComponent(textoPartilhaCentro(d, url));
+const linkCompartilhar = (d, url) =>
+  'https://wa.me/?text=' + encodeURIComponent(textoCompartilharCentro(d, url));
 
 /* ---------------------------------------------------------------------------
  * A página pública de um centro — o destino do QR
@@ -231,15 +231,15 @@ function paginaCentro(centro, base, urlCanonica) {
     ${centro.publicado ? `<p class="carimbo">Lista de ${dataCurta(centro.publicado)}</p>` : ''}
   </section>
 
-  <section class="partilhar">
-    <a class="btn btn-wa" id="b-wa" href="${esc(linkPartilha(d, url))}" target="_blank" rel="noopener">
+  <section class="compartilhar">
+    <a class="btn btn-wa" id="b-wa" href="${esc(linkCompartilhar(d, url))}" target="_blank" rel="noopener">
       Mandar esta lista no WhatsApp</a>
-    <p class="nota-partilha">Mande o <b>link</b>, não uma imagem: a imagem fica velha,
+    <p class="nota-compartilhar">Mande o <b>link</b>, não uma imagem: a imagem fica velha,
       o link não.</p>
   </section>
 
   <footer class="pe">
-    <p><b>Leve isto consigo.</b> <a href="${esc(url)}">${esc(url.replace(/^https?:\/\//, ''))}</a></p>
+    <p><b>Leve isso com você.</b> <a href="${esc(url)}">${esc(url.replace(/^https?:\/\//, ''))}</a></p>
     <p class="creditos">CAPEM · ferramenta livre para centros de apoio ·
       <a href="https://github.com/philthemoser/capem">o código é aberto</a></p>
   </footer>
@@ -251,7 +251,7 @@ function paginaCentro(centro, base, urlCanonica) {
 (function () {
   var b = document.getElementById('b-wa');
   if (!b || !navigator.share) return;
-  var t = ${paraScript(textoPartilhaCentro(d, url))};
+  var t = ${paraScript(textoCompartilharCentro(d, url))};
   b.addEventListener('click', function (e) {
     e.preventDefault();
     navigator.share({ text: t }).catch(function () { window.open(b.href, '_blank'); });
@@ -277,7 +277,7 @@ function paginaPendente(centro) {
     corpo: `<main class="aviso-pagina">
       <h1>Esta página ainda não está no ar</h1>
       <p>O pedido para <b>${esc((centro.dados || {}).nome || centro.slug)}</b> foi recebido e
-        está à espera de ser verificado. Isso costuma demorar pouco.</p>
+        está aguardando verificação. Isso costuma demorar pouco.</p>
       <p>Se é o coordenador deste centro, pode ver como a página vai ficar juntando o
         seu código ao endereço:
         <code>?codigo=SEU-CODIGO</code></p>
@@ -289,7 +289,7 @@ function paginaNaoExiste() {
   return molde({
     titulo: 'Página não encontrada',
     corpo: `<main class="aviso-pagina">
-      <h1>Não encontrámos este centro</h1>
+      <h1>Não encontramos este centro</h1>
       <p>O endereço pode estar mal escrito, ou o centro pode ter fechado.</p>
       <p><a href="/">Ver o que é isto</a></p>
     </main>`
@@ -333,7 +333,7 @@ function paginaInicial({ contagem, base }) {
       ${svgIcone('cartaz')}
       <span class="porta-t">Meu centro</span>
       <span class="porta-d">Publique a lista de hoje, gere o material impresso,
-        ou peça a sua página se ainda não tiver.</span>
+        ou peça sua página, se ainda não tiver.</span>
     </a>
   </div>
 
@@ -462,7 +462,7 @@ function paginaCentros({ centros, base, consulta, total, paginas }) {
           <a href="/novo">peça a página do seu centro</a>.</p>`}
 
   <footer class="pe">
-    <p><b>Não encontrou o seu centro?</b> <a href="/novo">Peça a página aqui.</a></p>
+    <p><b>Não encontrou seu centro?</b> <a href="/novo">Peça a página aqui.</a></p>
   </footer>
 </main>
 <script>
@@ -610,7 +610,7 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
     migalhas: [['Meu centro', '/centro'], ['Atualizar a lista', '/atualizar'],
                ['Pedir um código novo']],
     titulo: 'Pedir um código novo — CAPEM',
-    descricao: 'Peça um código novo para o seu centro.',
+    descricao: 'Peça um código novo para seu centro.',
     corpo: `
 <main class="entrar">
   <header>
@@ -636,7 +636,7 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
 
     <label class="campo" for="nota">Quem é, e o que aconteceu (opcional)</label>
     <input id="nota" name="nota" type="text" maxlength="140" autocomplete="off"
-      placeholder="Sou a Ana, da cozinha. O papel com o código molhou-se.">
+      placeholder="Sou a Ana, da cozinha. O papel com o código molhou.">
     <p class="ajuda">Ajuda a saber com quem falar quando ligarmos.</p>
 
     <button class="btn btn-primario largo" type="submit">Pedir</button>
@@ -705,7 +705,7 @@ function paginaAtualizarEntrada({ erro, slug }) {
     <input id="slug" name="slug" type="text" value="${esc(slug || '')}"
       placeholder="canoas-ss" autocomplete="off" spellcheck="false"
       inputmode="url" maxlength="60" required>
-    <p class="ajuda">Só o nome chega — a parte depois da barra. Está no rodapé
+    <p class="ajuda">Só o nome basta — a parte depois da barra. Está no rodapé
       de todas as peças que imprimiu.</p>
 
     <label class="campo" for="codigo">Código</label>
@@ -714,7 +714,7 @@ function paginaAtualizarEntrada({ erro, slug }) {
     <p class="ajuda">Oito letras e números. Não há O, nem I, nem S — se parecer
       um desses, é zero, um ou cinco.</p>
 
-    <button class="btn btn-primario largo" type="submit">Ver a minha lista</button>
+    <button class="btn btn-primario largo" type="submit">Ver minha lista</button>
   </form>
 
   <footer class="pe">
@@ -722,7 +722,7 @@ function paginaAtualizarEntrada({ erro, slug }) {
     <p><b>Perdeu o código?</b> Não há como recuperá-lo — só emitir outro.
       <a href="/pedir-codigo">Peça um código novo aqui.</a></p>
     <p><b>Quer imprimir material novo?</b> <a href="/kit">O kit está aqui</a> —
-      e puxa os seus dados com o mesmo código, sem escrever tudo outra vez.</p>
+      e puxa seus dados com o mesmo código, sem escrever tudo outra vez.</p>
   </footer>
 </main>`
   });
@@ -774,12 +774,12 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     <p class="endereco">${esc(d.endereco || '')}${d.contato ? ' · ' + esc(d.contato) : ''}</p>
   </header>
 
-  ${feito ? `<p class="feito">Publicado. A sua página já mostra esta lista.
+  ${feito ? `<p class="feito">Publicado. Sua página já mostra esta lista.
     <a href="${esc(url)}">Ver a página</a></p>` : ''}
   ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
   ${faixaIdade(centro.publicado)}
   ${i.nivel === 'fresca' && !feito
-    ? '<p class="idade fresca-ok">A sua lista é de hoje. Se nada mudou, não precisa fazer nada.</p>'
+    ? '<p class="idade fresca-ok">Sua lista é de hoje. Se nada mudou, não precisa fazer nada.</p>'
     : ''}
 
   <form method="post" action="/atualizar" class="form-atualizar">
@@ -794,8 +794,8 @@ function paginaAtualizar({ centro, url, erro, feito }) {
         <span>Não estamos recebendo agora</span>
       </label>
       <p class="ajuda">A página passa a dizer isso em vez da lista. Um centro
-        cheio que não consegue pedir para parar continua a receber.</p>
-      <label class="campo" for="motivo">Porquê (opcional)</label>
+        cheio que não consegue pedir para parar continua recebendo.</p>
+      <label class="campo" for="motivo">Motivo (opcional)</label>
       <input id="motivo" name="motivoPausa" type="text" value="${esc(d.motivoPausa || '')}"
         placeholder="Estamos cheios. Ligue antes de vir." maxlength="140" autocomplete="off">
     </section>
@@ -811,7 +811,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
     <section class="bloco-a">
       <h2>Outros itens</h2>
       <p class="ajuda">Um por linha. O que não está no catálogo sai com uma
-        caixa genérica — use com conta, porque não diz nada a quem não lê
+        caixa genérica — use com moderação, porque não diz nada a quem não lê
         português.</p>
       <label class="sr-only" for="livres">Outros itens, um por linha</label>
       <textarea id="livres" name="livres" rows="3" maxlength="600"
@@ -832,7 +832,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
         }).join('')}
       </div>
       <p class="ajuda">É a parte que quase ninguém desenha e a que mais evita
-        transtorno. Nas enchentes de 2024, roupa chegou a 70% de tudo o que foi
+        transtorno. Nas enchentes de 2024, roupa chegou a 70% de tudo que foi
         arrecadado no país.</p>
     </section>
 
@@ -854,7 +854,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
       recebendo</b> lá em cima — é reversível e mantém o centro na lista.</p>
     <p class="ajuda">Encerrar é para quando o ponto acabou. A página sai da
       lista e passa a dizer que fechou, para ninguém aparecer com coisas à
-      porta. O endereço continua a responder, porque há cartazes impressos.</p>
+      porta. O endereço continua respondendo, porque há cartazes impressos.</p>
     <form method="post" action="/atualizar">
       <input type="hidden" name="slug" value="${esc(centro.slug)}">
       <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
@@ -866,8 +866,8 @@ function paginaAtualizar({ centro, url, erro, feito }) {
   <footer class="pe">
     <p><b>O nome, o endereço e o telefone não mudam aqui.</b> Foram conferidos
       à mão quando o centro foi aprovado. Se estiverem errados, fale com quem
-      aprovou — mudá-los sem ninguém ver tirava o valor à verificação.</p>
-    <p><a href="${esc(url)}">Ver a minha página</a> · <a href="/kit">Imprimir material novo</a></p>
+      aprovou — mudá-los sem ninguém ver tiraria o valor da verificação.</p>
+    <p><a href="${esc(url)}">Ver minha página</a> · <a href="/kit">Imprimir material novo</a></p>
   </footer>
 </main>`
   });
@@ -889,8 +889,8 @@ function paginaCentroEntrada({ base }) {
 <main class="portas">
   <header>
     <h1>Meu centro</h1>
-    <p class="entrada">Tudo o que um ponto de arrecadação precisa. A lista de
-      hoje é a que se faz todos os dias — as outras fazem-se uma vez.</p>
+    <p class="entrada">Tudo que um ponto de arrecadação precisa. A lista de
+      hoje é a que se faz todos os dias — as outras, uma vez só.</p>
   </header>
 
   <div class="duas-portas">
@@ -899,7 +899,7 @@ function paginaCentroEntrada({ base }) {
     <a class="porta" href="/atualizar">
       ${svgIcone('relogio')}
       <span class="porta-t">Atualizar a lista</span>
-      <span class="porta-d">Trinta segundos, com o seu código. O que precisam hoje,
+      <span class="porta-d">Trinta segundos, com seu código. O que precisam hoje,
         o que já não precisam, e se pararam de receber. É isto que impede o papel
         colado na porta de ficar velho.</span>
     </a>
@@ -907,12 +907,12 @@ function paginaCentroEntrada({ base }) {
       ${svgIcone('cartaz')}
       <span class="porta-t">Material impresso</span>
       <span class="porta-d">Quinze peças a partir dos mesmos dados — cartaz de porta,
-        etiquetas de caixa, panfletos, crachás. Com o seu código, preenche-se
+        etiquetas de caixa, panfletos, crachás. Com seu código, se preenche
         sozinho.</span>
     </a>
     <a class="porta" href="/novo">
       ${svgIcone('pino')}
-      <span class="porta-t">Pedir a minha página</span>
+      <span class="porta-t">Pedir minha página</span>
       <span class="porta-d">Ainda não tem endereço na internet? Peça um — recebe o
         código na hora. É o que lhe deixa publicar todos os dias.</span>
     </a>
@@ -1001,11 +1001,11 @@ function textoCodigo(nome, slug, codigo, base, url) {
     '',
     `Código: ${codigo}`,
     '',
-    'Com este código atualiza-se a lista do que o centro precisa hoje, em:',
+    'Com este código você atualiza a lista do que o centro precisa hoje, em:',
     `${base}/atualizar`,
     '',
-    'Guarde esta mensagem. Quem estiver de turno vai precisar dela — o código',
-    'não se recupera, só se pede outro.'
+    'Guarde esta mensagem. Quem estiver no turno vai precisar dela — o código',
+    'não dá para recuperar; só pedir outro.'
   ].join('\n');
 }
 
@@ -1049,9 +1049,9 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, contato,
   <section class="codigo-caixa">
     <p class="rotulo">Código do centro</p>
     <p class="codigo">${esc(codigo)}</p>
-    <p class="dica"><b>Esta é a única vez que ele aparece.</b> Guarda-se apenas
-      o resumo criptográfico — nem nós o conseguimos ler outra vez. Se esta
-      página se fechar antes de o mandar, emita outro na fila.</p>
+    <p class="dica"><b>Esta é a única vez que ele aparece.</b> Guardamos apenas
+      o resumo criptográfico — nem nós conseguimos ler de novo. Se esta
+      página fechar antes de você mandar, emita outro na fila.</p>
   </section>
 
   <div class="guardar-codigo">
@@ -1060,10 +1060,10 @@ function paginaCodigo({ slug, codigo, base, url: urlCanonica, nome, contato,
            Mandar para ${esc(contato)}</a>
          <p class="ajuda">É o telefone que está na página do centro — o que foi
            conferido na aprovação. A mensagem leva o endereço, o código, e onde
-           se atualiza${reemitido ? '' : ', e deixa o seu contato salvo no celular do centro'}.</p>`
+           se atualiza${reemitido ? '' : ', e deixa seu contato salvo no celular do centro'}.</p>`
       : `<p class="erro-form">Este centro não tem um telefone utilizável, por
-           isso não há para onde mandar. Ligue-lhe de outra forma — sem o
-           código, a página fica no ar e ninguém a pode atualizar.</p>`}
+           isso não há para onde mandar. Ligue para o centro de outra forma — sem o
+           código, a página fica no ar e ninguém consegue atualizar.</p>`}
     <a class="btn largo" href="${esc(waOutro)}" target="_blank" rel="noopener">
       Mandar para outro número</a>
   </div>
@@ -1107,7 +1107,7 @@ function paginaPedidoRecebido({ slug, url, base }) {
       isso — só do nome do centro. Cartaz de porta, etiquetas de caixa,
       panfletos: quinze peças a partir dos mesmos dados.</p>
     <p>Deixe o campo do link em branco por agora. Quando tiver o código, o kit
-      preenche-se sozinho e os QR passam a apontar para a sua página.</p>
+      se preenche sozinho e os QR passam a apontar para sua página.</p>
   </div>
 
   <p><a class="btn btn-primario largo" href="/kit">Ir para o kit e imprimir</a></p>
@@ -1198,8 +1198,8 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
           <input id="s-${esc(c.slug)}" name="novo_slug" type="text" value="${esc(c.slug)}"
             maxlength="48" autocomplete="off" spellcheck="false">
         </div>
-        <p class="meta">Encurte-o se for longo de ditar ao telefone. O endereço
-          antigo continua a responder.</p>
+        <p class="meta">Encurte se for longo de ditar ao telefone. O endereço
+          antigo continua respondendo.</p>
         <div class="botoes">
           <button class="btn btn-primario" name="decisao" value="aprovado">Aprovar</button>
           <button class="btn btn-recusar" name="decisao" value="recusado">Recusar</button>
@@ -1214,7 +1214,7 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
     corpo: `
 <main class="admin">
   <h1>Pedidos</h1>
-  <p class="entrada">${contagem.pendente} à espera · ${contagem.aprovado} no ar ·
+  <p class="entrada">${contagem.pendente} aguardando · ${contagem.aprovado} no ar ·
     ${contagem.recusado} recusados</p>
   ${erro === 'ocupado' ? '<p class="erro-form">Esse endereço já está ocupado. Escolha outro.</p>' : ''}
 
@@ -1222,7 +1222,7 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
 
   ${pendentes.length
     ? `<div class="pedidos">${pendentes.map(linha).join('')}</div>`
-    : '<p class="vazio">Nada à espera.</p>'}
+    : '<p class="vazio">Nada aguardando.</p>'}
 
   ${parados && parados.length ? `
   <h2>Precisam de um empurrão <span class="conta-n">${parados.length}</span></h2>
@@ -1270,8 +1270,8 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
 
   ${encerrados && encerrados.length ? `
   <h2>Encerrados <span class="conta-n">${encerrados.length}</span></h2>
-  <p class="entrada">Fecharam-se a si próprios. A página de cada um continua a
-    responder e diz que fechou — há cartazes impressos com esses endereços.
+  <p class="entrada">Eles mesmos se fecharam. A página de cada um continua
+    respondendo e diz que fechou — há cartazes impressos com esses endereços.
     <b>Reabrir só se faz aqui</b>: um código que ainda ande num celular não
     pode desfazer isto sozinho.</p>
   <ul class="lista-no-ar">${encerrados.map(c => `
@@ -1395,11 +1395,11 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .contato .lin a span{text-decoration:underline;text-underline-offset:3px}
 .carimbo{margin:16px 0 0;font:600 13px/1.2 var(--mono);color:var(--texto-2)}
 
-/* --- partilhar --- */
-.partilhar{border-top:6px solid var(--tinta)}
+/* --- compartilhar --- */
+.compartilhar{border-top:6px solid var(--tinta)}
 .btn-wa{background:#25D366;border-color:#0f7a3a;color:var(--tinta);font-weight:800;
   display:block;text-align:center;margin-top:0}
-.nota-partilha{margin:10px 0 0;font:500 13px/1.45 var(--fonte);color:var(--texto-2)}
+.nota-compartilhar{margin:10px 0 0;font:500 13px/1.45 var(--fonte);color:var(--texto-2)}
 
 /* --- pé --- */
 /* Sem goteira própria: numa página com goteira somava-se à do main e dava

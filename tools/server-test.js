@@ -758,7 +758,7 @@ const DIA = 86400000;
     html = await r.text();
     ok('sem telefone utilizável, avisa que não há para onde mandar',
       /não tem um telefone utilizável/.test(html));
-    ok('e diz o que está em jogo', /ninguém a pode atualizar/.test(html));
+    ok('e diz o que está em jogo', /ninguém consegue atualizar/.test(html));
     ok('mas o código é gerado na mesma', /class="codigo">[A-Z0-9]{4}-/.test(html));
   }
 

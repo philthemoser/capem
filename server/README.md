@@ -605,6 +605,58 @@ marca que tem um piso de 26 mm para se ler a dois metros.
 
 O limite são oito caracteres, e a lista do "não traga" nunca leva quantidade.
 
+## A sessão de um centro
+
+Setembro de 2026. **Isto reverte uma decisão que estava escrita neste
+repositório**, por isso vale a pena dizer porquê em vez de a apagar em silêncio.
+
+O que lá estava, em `server/server.js`:
+
+> O código anda no formulário como campo escondido e NÃO numa sessão. Sem cookie
+> não há nada para roubar de um telemóvel emprestado, nada para expirar a meio de
+> uma manhã, e fechar o separador é sair.
+
+**O argumento está ao contrário.** Um campo escondido põe a chave em texto no
+DOM, no botão de voltar e no ver-código-fonte *desse mesmo telemóvel
+emprestado*. Um cookie HttpOnly não se lê — nem pela pessoa que tem o aparelho na
+mão, nem por um script. Trocar tira a chave do ecrã, que é o oposto do que a
+frase antiga prometia.
+
+O que se perde é **"fechar o separador é sair"**, e isso repõe-se com três
+coisas, todas à vista: prazo de doze horas (um turno), uma barra que diz em que
+centro se está, e um botão **Sair**.
+
+### O cookie não leva a chave
+
+`/admin` guarda o segredo tal e qual no cookie. Aqui não: o cookie leva
+`slug.expira.assinatura`, com a assinatura em HMAC-SHA256 de uma chave derivada
+do `CAPEM_ADMIN`. Consequências, as duas boas:
+
+- se a base de dados vazar, os cookies que andam por aí não valem nada;
+- se um cookie vazar, vale **um** centro e vale **doze horas** — não vale o
+  código, que continua a não existir em lado nenhum a não ser como hash.
+
+Mudar o `CAPEM_ADMIN` derruba todas as sessões. É o comportamento certo.
+
+### O campo escondido não desapareceu, ficou a ser o plano B
+
+`POST /atualizar` aceita **sessão ou código**, nessa ordem. O primeiro envio
+traz o código, abre a sessão e a partir daí a chave não volta ao HTML. Se o
+navegador não guardar cookies, o envio seguinte chega sem sessão e sem código —
+e tem uma **mensagem própria** ("sua sessão terminou, ou este navegador não
+guarda cookies") em vez de dizer que o código está errado, que mandaria alguém
+procurar um papel que está certo.
+
+`GET /atualizar` com sessão aberta entra direito na lista. É o ponto todo:
+voltar à tarde, no computador da secretaria, sem ir buscar o papel.
+
+### O que isto abre
+
+O balcão de leitura de sacolas e a opção de aceitar sacolas registadas vão viver
+atrás desta mesma entrada. Sem ela, um coordenador escrevia o código três vezes
+por manhã — o que é a forma mais fiável de garantir que ninguém usa nenhuma das
+três coisas.
+
 ## Centros que nunca pediram uma página
 
 Setembro de 2026, com cheias a acontecer no Rio Grande do Sul.

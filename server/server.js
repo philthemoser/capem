@@ -305,6 +305,66 @@ const cookieSessao = (req, valor, segundos) =>
   `${COOKIE}=${encodeURIComponent(valor)}; Path=/; HttpOnly; SameSite=Strict; `
   + `Max-Age=${segundos}${seguro(req) ? '; Secure' : ''}`;
 
+/* ---------------------------------------------------------------------------
+ * A SESSÃO DE UM CENTRO
+ *
+ * Isto reverte uma decisão que estava escrita neste ficheiro, por isso vale a
+ * pena dizer porquê. O que lá estava: o código anda num campo escondido do
+ * formulário e NÃO numa sessão, "para não haver nada que se roube de um
+ * telemóvel emprestado".
+ *
+ * O argumento está ao contrário. Um campo escondido põe a chave em texto no
+ * DOM, no botão de voltar e no ver-código-fonte desse mesmo telemóvel
+ * emprestado. Um cookie HttpOnly não se lê — nem pela pessoa que tem o
+ * aparelho na mão, nem por um script. Trocar tira a chave do ecrã.
+ *
+ * O que se perde é "fechar o separador é sair", e isso repõe-se: prazo curto,
+ * um botão SAIR à vista, e a página a dizer em que centro se está. É o mesmo
+ * padrão que o /admin já usa — só que aqui o cookie NÃO leva a chave, leva o
+ * slug assinado. Se a base de dados vazar, os cookies que andam por aí não
+ * valem nada; se um cookie vazar, vale um centro e vale doze horas.
+ *
+ * Doze horas porque um turno é isso. Um coordenador que entra às oito não pode
+ * ser posto fora a meio da manhã, e no dia seguinte volta a entrar.
+ * -------------------------------------------------------------------------*/
+const SESSAO_CENTRO = 12 * 3600;
+const COOKIE_CENTRO = 'capem_centro';
+/* Derivada do segredo de administração para não haver uma segunda variável de
+   ambiente que alguém se esqueça de definir. Muda o segredo, caem as sessões —
+   que é o comportamento certo. */
+const CHAVE_CENTRO = crypto.createHmac('sha256', 'capem/sessao-centro/v1')
+  .update(String(ADMIN)).digest();
+
+function assinarCentro(slug, expira) {
+  const corpo = `${slug}.${expira}`;
+  const sel = crypto.createHmac('sha256', CHAVE_CENTRO).update(corpo)
+    .digest('base64url').slice(0, 32);
+  return `${corpo}.${sel}`;
+}
+
+/** O slug de quem está com sessão aberta, ou '' — nunca lança. */
+function centroDaSessao(req) {
+  const v = lerCookie(req, COOKIE_CENTRO);
+  if (!v) return '';
+  const p = v.split('.');
+  if (p.length !== 3) return '';
+  const [slug, exp, sel] = p;
+  if (!/^[a-z0-9-]{1,60}$/.test(slug)) return '';
+  const quando = parseInt(exp, 10);
+  if (!Number.isFinite(quando) || quando < Date.now()) return '';
+  const esperado = Buffer.from(assinarCentro(slug, quando).split('.')[2]);
+  const dado = Buffer.from(sel);
+  if (esperado.length !== dado.length || !crypto.timingSafeEqual(esperado, dado)) return '';
+  return slug;
+}
+
+const cookieCentro = (req, valor, segundos) =>
+  `${COOKIE_CENTRO}=${encodeURIComponent(valor)}; Path=/; HttpOnly; SameSite=Strict; `
+  + `Max-Age=${segundos}${seguro(req) ? '; Secure' : ''}`;
+
+const abrirSessaoCentro = (req, slug) =>
+  cookieCentro(req, assinarCentro(slug, Date.now() + SESSAO_CENTRO * 1000), SESSAO_CENTRO);
+
 /**
  * Esta pessoa pode administrar?
  *
@@ -607,7 +667,22 @@ async function encaminhar(req, res) {
    * viaja em cada envio — por HTTPS, para o mesmo servidor a que ele já pertence.
    */
   if (caminho === '/atualizar' && req.method === 'GET') {
+    /* Com sessão aberta entra-se direito à lista. É o ponto todo: voltar aqui
+       à tarde, no computador da secretaria, sem ir procurar o papel do código. */
+    const daSessao = centroDaSessao(req);
+    const cs = daSessao ? db.ler(daSessao) : null;
+    if (cs && cs.estado === 'aprovado') {
+      return responder(res, 200,
+        P.paginaAtualizar({ centro: cs, url: urlDoCentro(cs.slug, base), sessao: true }),
+        'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
     return responder(res, 200, P.paginaAtualizarEntrada({ slug: url.searchParams.get('c') || '' }));
+  }
+
+  /* Sair. Um botão à vista, porque o preço de trocar o campo escondido por um
+     cookie é justamente este: fechar o separador deixou de chegar. */
+  if (caminho === '/atualizar/sair') {
+    return paraOndeIr(res, '/atualizar', { 'Set-Cookie': cookieCentro(req, '', 0) });
   }
   if (caminho === '/atualizar' && req.method === 'POST') {
     /* Mais apertado do que publicar: aqui é onde alguém tentaria adivinhar um
@@ -618,18 +693,30 @@ async function encaminhar(req, res) {
         erro: 'Tentativas demais deste aparelho. Espere uma hora.' }));
     }
     const campos = new URLSearchParams(await corpo(req));
-    const pedido = texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
+    /* Duas maneiras de provar quem é, e a ordem importa. A sessão primeiro,
+       porque é a que existe depois do primeiro envio; o código a seguir, para
+       o primeiro envio e para quem tenha os cookies desligados. */
+    const daSessao = centroDaSessao(req);
+    const pedido = daSessao
+      || texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
     const codigo = texto(campos.get('codigo'), 20);
     const real = db.resolver(pedido);
     const centro = real ? db.ler(real) : null;
+    const entrou = !!(centro && daSessao === centro.slug);
 
     /* Uma mensagem só para "não existe" e para "código errado". Os centros são
        públicos, por isso isto não esconde grande coisa — mas também não há
        vantagem nenhuma em confirmar a alguém que adivinhou metade. */
-    if (!centro || !db.codigoConfere(codigo, centro.codigo_hash)) {
+    if (!centro || !(entrou || db.codigoConfere(codigo, centro.codigo_hash))) {
+      /* Sem sessão e sem código, mas com um endereço: isto não é um código
+         errado, é uma sessão que caiu ou um browser sem cookies. Dizer "código
+         errado" mandava alguém procurar um papel que está certo. */
+      const caiu = !daSessao && !codigo && !!campos.get('slug');
       return responder(res, 403, P.paginaAtualizarEntrada({
         slug: pedido,
-        erro: 'Endereço ou código errados. Confira as letras — no código não há O, nem I, nem S.'
+        erro: caiu
+          ? 'Sua sessão terminou, ou este navegador não guarda cookies. Entre outra vez com o código.'
+          : 'Endereço ou código errados. Confira as letras — no código não há O, nem I, nem S.'
       }));
     }
     /* Um centro encerrado não volta a abrir por aqui: reabrir é uma decisão de
@@ -647,9 +734,11 @@ async function encaminhar(req, res) {
        caber num clique ao lado dos outros. */
     const querEncerrar = campos.get('encerrar');
     if (querEncerrar === 'pedir') {
-      centro.codigoDado = codigo;
+      /* Só quando NÃO houve sessão. Com cookie, a chave não volta ao ecrã —
+         que é a razão de existir desta mudança. */
+      if (!entrou) centro.codigoDado = codigo;
       return responder(res, 200, P.paginaConfirmarEncerrar({
-        centro, url: urlDoCentro(centro.slug, base) }));
+        centro, url: urlDoCentro(centro.slug, base), sessao: entrou }));
     }
     if (querEncerrar === 'confirmar') {
       db.decidir(centro.slug, 'encerrado');
@@ -711,12 +800,22 @@ async function encaminhar(req, res) {
       }
     }
 
-    /* O código volta para o formulário para o envio seguinte não obrigar a
-       escrevê-lo outra vez — é a mesma sessão de trabalho, e uma manhã tem mais
-       do que uma correcção. */
-    centro.codigoDado = codigo;
-    return responder(res, feito ? 200 : 200,
-      P.paginaAtualizar({ centro, url: urlDoCentro(centro.slug, base), feito, erro }));
+    /* Aqui é onde o campo escondido morre. Se a autenticação foi por código,
+       abre-se a sessão agora e o código nunca mais aparece no HTML; se os
+       cookies estiverem desligados, o `centroDaSessao` do envio seguinte devolve
+       vazio e o campo escondido volta a ser a única forma — por isso ele
+       continua a ser escrito nesse caso, e só nesse. */
+    /* O campo escondido morre aqui. Entrou-se com o código uma vez; a partir
+       deste envio quem prova é o cookie, e a chave nunca mais aparece no HTML.
+       Se os cookies estiverem desligados, o envio seguinte chega sem sessão e
+       sem código — e tem uma mensagem própria, em vez de dizer que o código
+       está errado, que seria mentira. */
+    const cab = {};
+    if (!entrou) cab['Set-Cookie'] = abrirSessaoCentro(req, centro.slug);
+    return responder(res, 200,
+      P.paginaAtualizar({ centro, url: urlDoCentro(centro.slug, base), feito, erro,
+                          sessao: true }),
+      'text/html; charset=utf-8', { ...cab, 'X-Robots-Tag': 'noindex' });
   }
 
   /* --- ler os próprios dados com o código ---

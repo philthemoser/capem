@@ -498,14 +498,17 @@ const DIA = 86400000;
   console.log('\natualizar a lista com o código');
   /* A página que se abre todas as manhãs, e a única cujo êxito se mede em
      segundos. Se esta não for usada, tudo o resto envelhece. */
-  const formN = (p, obj, ip) => {
+  const formN = (p, obj, ip, cookie) => {
     const u = new URLSearchParams();
     Object.entries(obj).forEach(([k, v]) =>
       Array.isArray(v) ? v.forEach(x => u.append(k, x)) : u.append(k, v));
     return fetch(base + p, { method: 'POST', redirect: 'manual',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded',
-                 ...(ip ? { 'X-Forwarded-For': ip } : {}) }, body: u.toString() });
+                 ...(ip ? { 'X-Forwarded-For': ip } : {}),
+                 ...(cookie ? { cookie } : {}) }, body: u.toString() });
   };
+  /* O cookie de sessão tal como o browser o guardaria: só o par nome=valor. */
+  const soCookie = r => String(r.headers.get('set-cookie') || '').split(';')[0];
 
   r = await get('/atualizar');
   html = await r.text();
@@ -563,11 +566,57 @@ const DIA = 86400000;
   ok('mas vazia e fechado não é erro nenhum', !/lista vazia/.test(await r.text()));
   ok('e o centro fica em pausa', S.db.ler(slugFinal).dados.pausado === true);
 
-  /* O código volta ao formulário para a correcção seguinte não obrigar a
-     escrevê-lo outra vez. Uma manhã tem mais do que uma correcção. */
+  /* A SESSÃO DE UM CENTRO.
+   *
+   * Isto reverte o que estava aqui antes — "o código volta ao formulário" — e o
+   * teste tem de reverter com ele, senão fica a defender o desenho antigo.
+   *
+   * O que se protege agora: a chave NÃO fica no HTML. Um campo escondido põe-na
+   * no DOM, no botão de voltar e no ver-código-fonte do telemóvel emprestado;
+   * um cookie HttpOnly não se lê. E o cookie não leva a chave, leva o slug
+   * assinado — se ele vazar, vale um centro e vale doze horas. */
   r = await formN('/atualizar', { slug: slugFinal, codigo });
-  ok('o código fica no formulário para o envio seguinte',
-    new RegExp('name="codigo" value="' + codigo + '"').test(await r.text()));
+  let htmlS = await r.text();
+  const galheta = soCookie(r);
+  ok('entrar abre uma sessão', /capem_centro=/.test(galheta), galheta.slice(0, 40));
+  ok('e o cookie é HttpOnly e SameSite=Strict',
+    /HttpOnly/i.test(r.headers.get('set-cookie') || '')
+    && /SameSite=Strict/i.test(r.headers.get('set-cookie') || ''));
+  ok('o código NÃO volta ao formulário',
+    !new RegExp('value="' + codigo + '"').test(htmlS));
+  ok('nem aparece em lado nenhum do HTML', !htmlS.includes(codigo));
+  /* O cookie não pode ser a chave: quem o roubar não pode publicar noutro
+     centro nem recuperar o código. */
+  ok('o cookie não contém o código', !galheta.includes(codigo.replace('-', '')));
+  ok('mas contém o endereço do centro, assinado', galheta.includes(slugFinal));
+
+  /* A partir daqui, quem prova é a sessão. */
+  r = await formN('/atualizar', { publicar: '1', precisa: ['agua'], livres: '' },
+    null, galheta);
+  ok('publicar só com o cookie funciona', r.status === 200, String(r.status));
+  ok('e publicou mesmo', (S.db.ler(slugFinal).dados.precisa || []).length === 1);
+
+  r = await get('/atualizar', { cookie: galheta });
+  htmlS = await r.text();
+  ok('e voltar mais tarde entra direito na lista, sem código',
+    r.status === 200 && /name="precisa"/.test(htmlS), String(r.status));
+  ok('a página diz em que centro se está', htmlS.includes('Paróquia São Sebastião'));
+  ok('e oferece sair', htmlS.includes('/atualizar/sair'));
+
+  /* Um cookie mexido não vale nada. */
+  const falso = galheta.slice(0, -3) + 'aaa';
+  r = await get('/atualizar', { cookie: falso });
+  ok('um cookie com a assinatura mexida não abre nada',
+    /name="codigo"/.test(await r.text()) && !/name="precisa"/.test(await (await get('/atualizar', { cookie: falso })).text()));
+
+  r = await get('/atualizar/sair', { cookie: galheta });
+  ok('sair limpa o cookie', /capem_centro=;|capem_centro=$|Max-Age=0/.test(r.headers.get('set-cookie') || ''));
+
+  /* Sessão caída e cookies desligados dão a mesma coisa — e a mensagem não pode
+     ser "código errado", que mandaria alguém procurar um papel que está certo. */
+  r = await formN('/atualizar', { slug: slugFinal, publicar: '1' });
+  ok('sem sessão e sem código, a mensagem fala da sessão',
+    /sess/i.test(await r.text()), String(r.status));
 
   console.log('\npuxar os dados para o kit');
   r = await api('/api/carregar', { slug: slugFinal, codigo: 'ZZZZ-9999' });

@@ -921,7 +921,7 @@ function paginaConfirmarEncerrar({ centro, url }) {
 
   <form method="post" action="/atualizar">
     <input type="hidden" name="slug" value="${esc(centro.slug)}">
-    <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
+    ${centro.codigoDado ? `<input type="hidden" name="codigo" value="${esc(centro.codigoDado)}">` : ''}
     <input type="hidden" name="encerrar" value="confirmar">
     <button class="btn btn-recusar largo" type="submit">Sim, o centro fechou</button>
   </form>
@@ -1215,7 +1215,7 @@ function paginaAtualizarEntrada({ erro, slug }) {
  * aparelho, o que significa que funciona igual no telemóvel do coordenador, no
  * computador da secretaria e no telemóvel de quem o está a substituir hoje.
  */
-function paginaAtualizar({ centro, url, erro, feito }) {
+function paginaAtualizar({ centro, url, erro, feito, sessao }) {
   const d = centro.dados || {};
   const i = idade(centro.publicado);
   const escolhidos = new Map();
@@ -1259,6 +1259,13 @@ function paginaAtualizar({ centro, url, erro, feito }) {
       errado, fale com quem aprovou seu centro.</p>` : ''}
   </header>
 
+  ${sessao ? `
+  <div class="barra-sessao">
+    <p>Você entrou como <b>${esc(d.nome || centro.slug)}</b>. Fica aberto por
+      doze horas neste aparelho.</p>
+    <a class="btn secundario" href="/atualizar/sair">Sair</a>
+  </div>` : ''}
+
   ${feito ? `<p class="feito">Publicado. Sua página já mostra esta lista.
     <a href="${esc(url)}">Ver a página</a></p>` : ''}
   ${erro ? `<p class="erro-form">${esc(erro)}</p>` : ''}
@@ -1269,7 +1276,11 @@ function paginaAtualizar({ centro, url, erro, feito }) {
 
   <form method="post" action="/atualizar" class="form-atualizar">
     <input type="hidden" name="slug" value="${esc(centro.slug)}">
-    <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
+    <!-- A chave só volta ao HTML quando não houve como abrir sessão (cookies
+         desligados). Com sessão, este campo não existe: um campo escondido põe
+         o código no DOM, no botão de voltar e no ver-código-fonte do telemóvel
+         emprestado, e um cookie HttpOnly não se lê. -->
+    ${centro.codigoDado ? `<input type="hidden" name="codigo" value="${esc(centro.codigoDado)}">` : ''}
     <input type="hidden" name="publicar" value="1">
 
     <section class="bloco-a">
@@ -1342,7 +1353,7 @@ function paginaAtualizar({ centro, url, erro, feito }) {
       porta. O endereço continua respondendo, porque há cartazes impressos.</p>
     <form method="post" action="/atualizar">
       <input type="hidden" name="slug" value="${esc(centro.slug)}">
-      <input type="hidden" name="codigo" value="${esc(centro.codigoDado || '')}">
+      ${centro.codigoDado ? `<input type="hidden" name="codigo" value="${esc(centro.codigoDado)}">` : ''}
       <input type="hidden" name="encerrar" value="pedir">
       <button class="btn btn-recusar" type="submit">Encerrar o centro</button>
     </form>
@@ -2457,6 +2468,17 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .nota-sem-lista{margin:0 0 14px;padding:11px 13px;background:var(--claro);
   border-left:6px solid var(--tinta);font:500 13.5px/1.55 var(--fonte);color:var(--texto-2)}
 .nota-sem-lista a{color:var(--tinta)}
+
+/* --- a barra de sessão ---
+   O preço de trocar o campo escondido por um cookie é que "fechar o separador"
+   deixou de ser sair. Isto repõe-no: diz em que centro se está e tem a porta à
+   vista. Nem alarme nem decoração — é uma barra de estado. */
+.barra-sessao{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+  margin:0;padding:12px var(--goteira);background:var(--claro);
+  border-bottom:1px solid var(--tenue)}
+.barra-sessao p{margin:0;flex:1 1 12em;font:500 13.5px/1.45 var(--fonte);color:var(--texto-2)}
+.barra-sessao b{color:var(--tinta)}
+.barra-sessao .btn{margin:0;flex:none}
 
 /* --- actualização diária ---
    Alvos grandes e poucos por linha. Isto usa-se de manhã, de pé, com uma mão,

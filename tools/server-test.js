@@ -1535,9 +1535,37 @@ const DIA = 86400000;
     /* Aceitar sacolas é opcional e desligado por omissão. */
     ok('um centro não aceita sacolas sem ter marcado',
       !(S.db.ler(slugFinal).dados || {}).sacolas);
-    const listaSem = await (await get('/centros')).text();
+    const corpoDe = h => h.slice(h.indexOf('</style>'));
+    let lista = corpoDe(await (await get('/centros')).text());
     ok('e a lista não promete o que ninguém marcou',
-      !listaSem.slice(listaSem.indexOf('</style>')).includes('lê códigos de sacola'));
+      !lista.includes('lê códigos de sacola'));
+    /* A porta de entrada. Com zero centros a ler códigos ela não existe —
+       oferecê-la seria mandar um doador descrever uma sacola que ninguém do
+       outro lado vai ler. */
+    ok('e não convida a registrar uma sacola quando ninguém lê',
+      !lista.includes('Vou levar doações'));
+    ok('a página do centro também não convida',
+      !corpoDe(await (await get('/' + slugFinal)).text()).includes('Vai trazer uma sacola'));
+
+    /* Agora com um centro que marcou. Despausado ao mesmo tempo, de propósito:
+       um centro fechado não pode convidar ninguém a preparar uma sacola para
+       ele — a secção anterior deixou-o em pausa, e a pausa ganha. */
+    S.db.publicar(slugFinal, { ...S.db.ler(slugFinal).dados, sacolas: true, pausado: true });
+    ok('um centro em pausa não convida, mesmo aceitando sacolas',
+      !corpoDe(await (await get('/' + slugFinal)).text()).includes('Vai trazer uma sacola'));
+    S.db.publicar(slugFinal, { ...S.db.ler(slugFinal).dados, sacolas: true, pausado: false });
+    lista = corpoDe(await (await get('/centros')).text());
+    ok('com alguém a ler, a lista convida a registrar',
+      lista.includes('Vou levar doações') && lista.includes('href="/doar"'));
+    /* O selo é por linha, e a esta altura a suite tem centros que cheguem para
+       haver segunda página — por isso procura-se o centro em vez de esperar que
+       ele calhe na primeira. */
+    const soEle = corpoDe(await (await get('/centros?q='
+      + encodeURIComponent((S.db.ler(slugFinal).dados || {}).nome || slugFinal))).text());
+    ok('e marca quem lê', soEle.includes('lê códigos de sacola'));
+    const pag = corpoDe(await (await get('/' + slugFinal)).text());
+    ok('e a página do centro convida, já com o centro no endereço',
+      pag.includes('Vai trazer uma sacola') && pag.includes('/doar?c=' + slugFinal));
   }
 
   console.log('\ncentros que nunca pediram página');

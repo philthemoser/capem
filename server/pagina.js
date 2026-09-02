@@ -407,6 +407,14 @@ function paginaCentro(centro, base, urlCanonica) {
       : '<p class="vazio">Este centro ainda não publicou uma lista. Ligue antes de vir.</p>'}
   </section>`}
 
+  ${!semDono && d.sacolas && !d.pausado ? `
+  <section class="bloco-sacola">
+    <h2>${svgIcone('caixa')}<span>Vai trazer uma sacola?</span></h2>
+    <p>Diga o que vai dentro antes de sair de casa e escreva o código na sacola.
+      Na porta, um voluntário lê o código e já sabe o que tem — sem abrir.</p>
+    <a class="btn btn-primario" href="/doar?c=${esc(centro.slug)}">Registrar uma sacola</a>
+  </section>` : ''}
+
   ${semDono ? '' : `
   <section class="bloco-nao">
     <h2>${svgAnel()}<span>Por favor, não traga</span></h2>
@@ -589,7 +597,7 @@ function paginaInicial({ contagem, base, emergencias }) {
  * alguém tem no bolso. Com JavaScript, o botão "filtrar" desaparece e as
  * escolhas aplicam-se sozinhas — é um acabamento, nunca o mecanismo.
  * -------------------------------------------------------------------------*/
-function paginaCentros({ centros, base, consulta, total, paginas, emergencias, semDono }) {
+function paginaCentros({ centros, base, consulta, total, paginas, emergencias, semDono, comSacolas }) {
   const c = consulta || B.lerConsulta();
   const ts = B.termos(c.q);
   const emgs = emergencias || [];
@@ -716,6 +724,17 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias, s
       quer doar — escreva <b>cobertor</b> e veja quem está pedindo cobertores.
       <b>Ligue antes de vir</b> se a lista não for de hoje.</p>
   </header>
+
+  ${comSacolas ? `
+  <a class="entrada-sacola" href="/doar">
+    ${svgIcone('caixa')}
+    <span>
+      <b>Vou levar doações</b>
+      <span>Diga o que vai na sacola antes de sair de casa e receba um código
+        para escrever nela. Na porta, o voluntário lê o código e já sabe o que
+        tem dentro — sem abrir a sacola.</span>
+    </span>
+  </a>` : ''}
 
   ${barraEmg}
 
@@ -1683,10 +1702,13 @@ function paginaAtualizar({ centro, url, erro, feito, sessao }) {
       <label class="caixa"><input type="checkbox" name="sacolas" value="1"${d.sacolas ? ' checked' : ''}>
         <span>Aceitamos sacolas registradas em casa</span></label>
       <p class="ajuda">Quem doa descreve a sacola antes de sair de casa e escreve um
-        código nela; na porta, um voluntário abre <b>/balcao</b> no celular, digita
-        as sete letras e vê o que tem dentro sem abrir a sacola. Não precisa de
-        código de centro nem de cadastro. Marque só se alguém aí vai fazer isso —
-        senão a página promete a um doador uma coisa que ninguém faz.</p>
+        código nela; na porta, um voluntário lê o código e vê o que tem dentro sem
+        abrir a sacola. Não precisa de código de centro nem de cadastro. Marque só
+        se alguém aí vai fazer isso — senão a página promete a um doador uma coisa
+        que ninguém faz.</p>
+      <p class="ajuda"><a href="/balcao" target="_blank" rel="noopener">Abrir o balcão
+        de leitura</a> — é essa a página que fica no celular de quem está na porta.
+        É pública: pode mandar o endereço para qualquer voluntário.</p>
 
       <h2>Horário</h2>
       <label class="sr-only" for="horario">Horário</label>
@@ -2820,6 +2842,28 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 /* Na lista: a mesma palavra sem cor de alarme. Um centro sem dono não está
    atrasado — não tem quem publique, e isso não é culpa dele. */
 .c-item.sem-dono .c-quando{color:var(--texto-3)}
+/* O convite na página do próprio centro. Faixa como as outras desta página, e
+   só quando o centro marcou que lê códigos. */
+.bloco-sacola{padding:18px var(--goteira);background:var(--claro);
+  border-bottom:1px solid var(--tenue)}
+.bloco-sacola h2{display:flex;align-items:center;gap:10px;margin:0 0 8px;
+  font-size:clamp(17px,4.6vw,21px)}
+.bloco-sacola h2 svg{width:26px;height:26px;flex:none}
+.bloco-sacola p{margin:0 0 12px;font:500 14.5px/1.55 var(--fonte);color:var(--texto-2)}
+.bloco-sacola .btn{margin:0}
+
+/* A entrada para registar uma sacola, no topo de "Quero ajudar". Só aparece
+   quando há pelo menos um centro que lê códigos: oferecê-la com zero seria
+   prometer a um doador uma coisa que ninguém do outro lado faz — o mesmo erro
+   que a opção por centro existe para evitar, um andar acima. */
+.entrada-sacola{display:flex;gap:14px;align-items:flex-start;margin:0 0 18px;
+  padding:16px;border:3px solid var(--tinta);background:var(--claro);
+  text-decoration:none;color:var(--tinta)}
+.entrada-sacola svg{width:34px;height:34px;flex:none;margin-top:2px}
+.entrada-sacola > span{display:block}
+.entrada-sacola b{display:block;font:800 17px/1.25 var(--fonte);margin-bottom:4px}
+.entrada-sacola span span{font:500 13.5px/1.5 var(--fonte);color:var(--texto-2)}
+
 /* O selo de quem aceita sacolas registadas. Texto e não marca nova: as 29 são
    itens e utilitários, e inventar uma trigésima para um estado de ecrã é o
    mesmo erro que pôr lá o elo do perfil. */

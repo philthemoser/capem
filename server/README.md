@@ -670,6 +670,23 @@ que alguém vai. A lista marca os que aceitam; o selo é **texto e não uma marc
 nova** — as 29 são itens e utilitários, e inventar uma trigésima para um estado
 de ecrã é o mesmo erro que pôr lá o elo do perfil.
 
+### As portas de entrada
+
+Construir as páginas e não ligar nada a elas foi o erro da primeira versão: as
+rotas estavam no ar e o único caminho para `/doar` era uma página a que só se
+chegava *depois* de registar uma sacola. Circular, e invisível.
+
+Agora: um bloco no topo de `/centros` — que é o que a porta "Quero ajudar"
+abre — e um convite na página de cada centro que marcou. Nenhum dos dois
+aparece quando **nenhum** centro lê códigos: oferecer isso com zero do outro
+lado seria mandar um doador descrever uma sacola que ninguém vai ler, que é o
+mesmo erro que a opção por centro existe para evitar, um andar acima. E um
+centro em pausa também não convida — quem está fechado não pede que preparem
+sacolas para ele.
+
+A homepage continua com **duas portas e mais nada**. Isto vive dentro de "Quero
+ajudar", que é onde está quem tem alguma coisa para dar.
+
 ### O histórico é do aparelho
 
 O doador guarda os códigos no `localStorage` do próprio telemóvel, e

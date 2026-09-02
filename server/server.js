@@ -595,7 +595,10 @@ async function encaminhar(req, res) {
                         /* Quantos ficaram de fora de uma procura por necessidade
                            só por não terem quem publique uma. A página diz-o em
                            voz alta em vez de os deixar invisíveis. */
-                        semDono: db.contarSemDono() }),
+                        semDono: db.contarSemDono(),
+                        /* A entrada para registar uma sacola só aparece quando
+                           há quem leia códigos do outro lado. */
+                        comSacolas: centrosQueLeem(base).length }),
       'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
   }
   /* --- registrar uma sacola ---

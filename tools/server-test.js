@@ -1393,6 +1393,153 @@ const DIA = 86400000;
   }
 
 
+  console.log('\nsacolas registradas em casa');
+  {
+    /* O que estas asserções existem para apanhar, por ordem:
+       1. UM CÓDIGO QUE DESCODIFICA OUTRA COISA. A ordem de ITENS é um formato
+          de dados: trocar dois itens de sítio passa a ler cobertores como
+          sabão em todas as sacolas já registadas, em silêncio, para sempre.
+       2. DUAS SACOLAS COM O MESMO CÓDIGO. Sem série, "recebida às 09:14" quer
+          dizer *uma* sacola como a sua, e não a sua.
+       3. COORDENADAS GUARDADAS. A regra é que nada sobre quem visita chega ao
+          servidor; aqui elas entram, resolvem um centro e morrem no pedido.
+       4. UM CÓDIGO MAL LIDO A PARAR UMA DOAÇÃO. Nunca. */
+    const SACOLA = require('../server/sacola.js');
+
+    /* A impressão digital da ordem. Se alguém reordenar o catálogo e arrastar
+       esta lista atrás, isto pára a compilação em vez de estragar códigos. */
+    ok('a ordem dos itens do código não mudou',
+      SACOLA.ITENS.join(',') === 'agua,alimento,formula,racao,limpeza,alvejante,balde,'
+        + 'vassoura,higiene,sabao,fralda,absorvente,colchonete,cobertor,botas,primeiros-socorros',
+      SACOLA.ITENS.join(','));
+    ok('e são dezasseis, que é o que cabe nos bits reservados', SACOLA.ITENS.length === 16);
+
+    /* Ida e volta, com séries e volumes ao acaso. */
+    let voltas = 0, mau = 0;
+    for (let i = 0; i < 3000; i++) {
+      const ids = SACOLA.ITENS.filter(() => Math.random() < 0.25);
+      const outros = Math.random() < 0.3;
+      if (!ids.length && !outros) continue;
+      const vol = 1 + Math.floor(Math.random() * 8);
+      const serie = Math.floor(Math.random() * SACOLA.SERIAIS);
+      const d = SACOLA.descodificar(SACOLA.codificar(ids, outros, vol, serie));
+      voltas++;
+      if (!d || d.volumes !== vol || d.outros !== outros
+          || d.ids.join() !== ids.join() || d.serie !== serie) mau++;
+    }
+    ok('o código dá a volta sem perder nada', mau === 0, `${mau} de ${voltas}`);
+    ok('e tem sete letras, três e quatro',
+      /^[A-Z2-9]{3}-[A-Z2-9]{4}$/.test(SACOLA.codificar(['agua'], false, 1, 7)));
+    ['', 'abc', 'DZQ-8LA', '1234567', 'DZQ8LAYX'].forEach(x =>
+      ok(`"${x}" não é um código`, SACOLA.descodificar(x) === null));
+
+    /* O doador. Uma sacola de cada vez, de propósito: cada sacola tem o seu
+       código, e juntá-las obrigaria a inventar estado entre pedidos para quem
+       não tem — nem deve ter — sessão. */
+    let r2 = await get('/doar');
+    ok('a página de registrar uma sacola responde', r2.status === 200, String(r2.status));
+
+    r2 = await formN('/doar', { itens: ['agua', 'alimento'], volumes: '2' });
+    let h2 = await r2.text();
+    const cod = (h2.match(/[A-Z2-9]{3}-[A-Z2-9]{4}/) || [])[0];
+    ok('registrar devolve um código', !!cod, String(cod));
+    ok('com o QR a sério, e não um desenho', h2.includes('<svg class="qr"'));
+    ok('e diz para escrever na sacola com caneta', /caneta/i.test(h2));
+    /* O endereço do QR não está escrito no HTML — está dentro dos pixéis. Por
+       isso compara-se com o SVG que o mesmo codificador dá para o endereço que
+       se espera: se o destino mudar, isto falha. E o endereço aparece TAMBÉM
+       por escrito, porque um QR que não lê deixaria o voluntário sem nada. */
+    const alvoQR = base + '/balcao?c=' + String(cod).replace('-', '');
+    ok('o QR aponta para o balcão, já com o código',
+      h2.includes(require('../server/qr.js').svg(alvoQR, 132,
+        { label: 'QR da sacola ' + cod })));
+    ok('e o endereço também vai por escrito, para quando o QR não ler',
+      h2.includes('/balcao?c=' + String(cod).replace('-', '')));
+
+    /* Sem itens não há sacola — e a mensagem diz o que fazer. */
+    r2 = await formN('/doar', { volumes: '1' });
+    ok('uma sacola sem nada dentro é recusada com jeito',
+      r2.status === 400 && /ao menos um item/.test(await r2.text()));
+
+    /* Duas sacolas embaladas exactamente da mesma maneira. */
+    r2 = await formN('/doar', { itens: ['agua', 'alimento'], volumes: '2' });
+    const cod2 = ((await r2.text()).match(/[A-Z2-9]{3}-[A-Z2-9]{4}/) || [])[0];
+    ok('duas sacolas iguais têm códigos diferentes', cod !== cod2, `${cod} / ${cod2}`);
+    ok('e as três primeiras letras são iguais, porque a descrição é igual',
+      cod.slice(0, 3) === cod2.slice(0, 3));
+
+    /* O balcão. Público, sem código de centro, sem cadastro. */
+    r2 = await formN('/balcao', { c: cod });
+    h2 = await r2.text();
+    ok('qualquer pessoa lê uma sacola', r2.status === 200, String(r2.status));
+    ok('e vê o que tem dentro', h2.includes('Água potável') && h2.includes('Alimento não perecível'));
+    ok('e quantos volumes', /2 volumes/.test(h2));
+    ok('e pode escolher onde está', h2.includes('Aqui não está na lista'));
+
+    r2 = await formN('/balcao', { c: 'nada disto' });
+    ok('um código impossível explica-se em vez de dar erro',
+      r2.status === 400 && /sete letras/.test(await r2.text()));
+
+    /* Confirmar no sítio: as coordenadas decidem o GRAU, nunca o centro. */
+    r2 = await formN('/balcao/receber', {
+      c: cod, centro: slugFinal, lat: '-29.9177', lon: '-51.1839' });
+    h2 = await r2.text();
+    ok('confirmar responde com a sacola recebida', /Recebida/.test(h2));
+    let linha = S.db.lerSacola(cod);
+    ok('a sacola fica recebida', !!linha.recebida);
+    ok('com o centro que o voluntário escolheu', linha.centro === slugFinal, linha.centro);
+    ok('e no grau alto, porque as coordenadas batem certo',
+      linha.grau === 'coordenadas', linha.grau);
+    /* A regra que não se negoceia. */
+    ok('as coordenadas NÃO ficam guardadas em lado nenhum da linha',
+      !JSON.stringify(linha).includes('29.9') && !JSON.stringify(linha).includes('51.1'),
+      JSON.stringify(linha));
+
+    /* Confirmar de longe: mesma sacola recebida, grau baixo. */
+    r2 = await formN('/balcao/receber', { c: cod2, centro: slugFinal, lat: '-23.55', lon: '-46.63' });
+    ok('confirmar de longe também recebe', !!S.db.lerSacola(cod2).recebida);
+    ok('mas fica no grau aberto, que é o que protege a medição',
+      S.db.lerSacola(cod2).grau === 'aberto', S.db.lerSacola(cod2).grau);
+
+    /* A primeira porta é a porta. */
+    await formN('/balcao/receber', { c: cod, centro: 'outro-qualquer' });
+    ok('confirmar outra vez não muda o centro', S.db.lerSacola(cod).centro === slugFinal);
+
+    /* Um código que não está registado nunca pára uma doação. */
+    const inventado = SACOLA.codificar(['botas'], false, 1, 3);
+    r2 = await formN('/balcao/receber', { c: inventado, centro: slugFinal });
+    h2 = await r2.text();
+    ok('um código desconhecido não trava nada, e diz para receber pelo que se vê',
+      /pelo que se vê/.test(h2));
+    ok('e não inventa uma linha na base de dados', S.db.lerSacola(inventado) === null);
+
+    /* O QR abre a leitura já preenchida. */
+    r2 = await get('/balcao?c=' + cod.replace('-', ''));
+    ok('o QR abre o balcão com o código lido', (await r2.text()).includes('Água potável'));
+
+    /* O histórico vive no aparelho de quem doou; a API só devolve o que quem
+       pergunta já sabia — o código é a chave, e quem o tem tem a sacola. */
+    r2 = await api('/api/sacolas', { codigos: [cod, 'lixo'] });
+    const linhas = await r2.json();
+    ok('a API devolve o estado das sacolas deste aparelho', linhas.length === 1);
+    ok('com a hora e o centro', linhas[0].recebida === true && /São Sebastião/.test(linhas[0].centro));
+    ok('a página do histórico não precisa do servidor para existir',
+      (await (await get('/minhas-sacolas')).text()).includes('capem.sacolas'));
+
+    /* A medição, que é a razão de existir do grau. */
+    const cont = S.db.contarSacolas();
+    ok('a contagem separa registadas, recebidas e confirmadas no local',
+      cont.registadas >= 2 && cont.recebidas >= 2 && cont.noLocal === 1,
+      JSON.stringify(cont));
+
+    /* Aceitar sacolas é opcional e desligado por omissão. */
+    ok('um centro não aceita sacolas sem ter marcado',
+      !(S.db.ler(slugFinal).dados || {}).sacolas);
+    const listaSem = await (await get('/centros')).text();
+    ok('e a lista não promete o que ninguém marcou',
+      !listaSem.slice(listaSem.indexOf('</style>')).includes('lê códigos de sacola'));
+  }
+
   console.log('\ncentros que nunca pediram página');
   {
     /* O que estas asserções existem para apanhar, por ordem:

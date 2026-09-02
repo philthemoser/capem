@@ -62,6 +62,10 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
       endereco: 'Rua Exemplo ' + i, precisa: ['agua'] });
   }
 
+  /* Uma sacola registada, para o balcão ter o que mostrar. */
+  const SACOLA_DE_TESTE = require('../server/sacola.js')
+    .codificar(['agua', 'alimento'], false, 2, 4821).replace('-', '');
+
   const servidor = S.criarServidor();
   await new Promise(r => servidor.listen(0, r));
   const base = `http://127.0.0.1:${servidor.address().port}`;
@@ -84,6 +88,10 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     ['centro sem dono', '/sem-dono'],
     ['assumir um centro sem dono', '/sou-daqui?c=sem-dono'],
     ['lista só de centros sem lista', '/centros?semlista=1'],
+    ['registrar uma sacola', '/doar'],
+    ['balcão, entrada', '/balcao'],
+    ['balcão com uma sacola lida', '/balcao?c=' + SACOLA_DE_TESTE],
+    ['minhas sacolas', '/minhas-sacolas'],
     ['fila de aprovação', '/admin?t=' + encodeURIComponent(process.env.CAPEM_ADMIN)]
   ];
 

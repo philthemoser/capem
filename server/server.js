@@ -41,6 +41,7 @@ const { URL } = require('node:url');
 const db = require('./db');
 const P = require('./pagina');
 const A = require('./avisos');
+const SAC = require('./sacola');
 const B = require('./busca');
 
 const PORTA = Number(process.env.PORT || 8080);
@@ -126,7 +127,7 @@ if (!ADMIN || ADMIN.length < 16) {
 /* O tamanho máximo de uma quantidade, vindo do catálogo para não haver dois
    números diferentes a dizer a mesma coisa. Era 8, o que cortava "20 caixas"
    — que é literalmente o exemplo que o texto de ajuda dá. */
-const { MAX_Q } = require('./compartilhado');
+const { MAX_Q, ROTULO_BR } = require('./compartilhado');
 
 /* `link` é o destino do QR — a própria página do centro. `perfil` é outra coisa
    por completo: o Instagram ou o site do centro, para onde um visitante vai. Os
@@ -467,6 +468,45 @@ function urlDoCentro(slug, base) {
   return `${u.protocol}//${slug}.${u.host}`;
 }
 
+/* ---------------------------------------------------------------------------
+ * Onde uma sacola pode ser entregue, e onde ela está
+ * -------------------------------------------------------------------------*/
+/** Os centros que ligaram a leitura de códigos. Nunca uma condição, só uma dica. */
+const centrosQueLeem = base => db.listar('aprovado')
+  .filter(c => (c.dados || {}).sacolas && !(c.dados || {}).pausado)
+  .map(c => ({ ...c, url: urlDoCentro(c.slug, base) }));
+
+/** Todos os centros no ar, para o voluntário escolher à mão. */
+const centrosProximos = () => db.listar('aprovado');
+
+/* Distância em metros pela fórmula do haversine. Chega e sobra: a pergunta é
+   "estou nesta porta ou na de outro centro", e não navegação. */
+function metrosEntre(la1, lo1, la2, lo2) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLa = (la2 - la1) * r, dLo = (lo2 - lo1) * r;
+  const a = Math.sin(dLa / 2) ** 2
+          + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/**
+ * O centro mais próximo de um par de coordenadas, ou null.
+ *
+ * Só olha para centros com coordenadas — e é por isso que as coordenadas
+ * deixaram de ser opcionais na aprovação: um centro sem elas nunca é sugerido,
+ * e o voluntário cai sempre na lista.
+ */
+function centroMaisPerto(lat, lon) {
+  let melhor = null;
+  db.listar('aprovado').forEach(c => {
+    const co = (c.dados || {}).coords;
+    if (!Array.isArray(co) || co.length !== 2) return;
+    const m = metrosEntre(lat, lon, Number(co[0]), Number(co[1]));
+    if (!melhor || m < melhor.metros) melhor = { slug: c.slug, metros: m };
+  });
+  return melhor;
+}
+
 /** Só os campos que conhecemos, cortados ao tamanho, nada mais. */
 function limparDados(d) {
   const out = {};
@@ -558,6 +598,170 @@ async function encaminhar(req, res) {
                         semDono: db.contarSemDono() }),
       'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
   }
+  /* --- registrar uma sacola ---
+   *
+   * Uma sacola de cada vez, e é de propósito: cada sacola tem o seu código, por
+   * isso juntá-las num rascunho só servia para inventar estado entre pedidos
+   * numa ferramenta que não tem sessão para quem doa — e não deve ter.
+   */
+  if (caminho === '/doar' && req.method === 'GET') {
+    const c = db.resolver(texto(url.searchParams.get('c'), 60));
+    const centro = c ? db.ler(c) : null;
+    return responder(res, 200, P.paginaDoar({
+      centro: centro && centro.estado === 'aprovado' ? (centro.dados || {}).nome : ''
+    }), 'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  if (caminho === '/doar' && req.method === 'POST') {
+    if (excedeu(ip, 40, 3600e3, 'doar')) {
+      return responder(res, 429, P.paginaDoar({
+        erro: 'Registros demais deste aparelho. Espere uma hora.' }));
+    }
+    const campos = new URLSearchParams(await corpo(req));
+    const ids = campos.getAll('itens').map(x => texto(x, 40))
+      .filter(x => SAC.ITENS.indexOf(x) >= 0).slice(0, 16);
+    const outros = campos.get('outros') === '1';
+    const volumes = Math.max(1, Math.min(SAC.MAX_VOLUMES,
+      parseInt(campos.get('volumes'), 10) || 1));
+    if (!ids.length && !outros) {
+      return responder(res, 400, P.paginaDoar({
+        erro: 'Escolha ao menos um item, ou marque que tem coisa fora da lista.' }));
+    }
+    const descricao = SAC.descrever(ids, outros, volumes);
+    const sacola = db.criarSacola(descricao, serie => SAC.codificar(ids, outros, volumes, serie));
+    console.log(`[sacola] ${sacola.codigo} — ${ids.length} itens, ${volumes} volume(s)`);
+    /* Os centros que leem códigos, para o doador saber onde a sacola é esperada.
+       Nunca é uma condição: o código não fica preso a nenhum centro. */
+    return responder(res, 200, P.paginaSacolaCriada({
+      sacola, base, centros: centrosQueLeem(base).slice(0, 6)
+    }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+  }
+
+  if (caminho === '/minhas-sacolas' && req.method === 'GET') {
+    return responder(res, 200, P.paginaMinhasSacolas(),
+      'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+  }
+
+  /* O estado de sacolas que o aparelho já conhece. Não devolve nada que quem
+     pergunta não tivesse já: o código é a chave, e quem o tem tem a sacola. */
+  if (caminho === '/api/sacolas' && req.method === 'POST') {
+    if (excedeu(ip, 120, 3600e3, 'api-sacolas')) {
+      return json(res, 429, { erro: 'pedidos demais' });
+    }
+    let pedido = {};
+    try { pedido = JSON.parse(await corpo(req)); } catch { pedido = {}; }
+    const codigos = Array.isArray(pedido.codigos) ? pedido.codigos.slice(0, 60) : [];
+    const fora = [];
+    codigos.forEach(x => {
+      const d = SAC.descodificar(x);
+      if (!d) return;
+      const linha = db.lerSacola(d.codigo);
+      const c = linha && linha.centro ? db.ler(linha.centro) : null;
+      fora.push({
+        codigo: d.codigo,
+        itens: d.ids.map(id => ROTULO_BR[id] || id).join(', ')
+               + (d.outros ? (d.ids.length ? ' + fora da lista' : 'fora da lista') : ''),
+        recebida: !!(linha && linha.recebida),
+        quando: linha && linha.recebida ? new Date(linha.recebida)
+          .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '',
+        centro: c ? ((c.dados || {}).nome || c.slug) : ''
+      });
+    });
+    return json(res, 200, fora);
+  }
+
+  /* --- o balcão ---
+   *
+   * Público, e sem nada por trás: quem está na porta com uma sacola na mão não
+   * tem código de centro nenhum, e não deve ter — o código de publicação é de
+   * quem coordena. O conteúdo nunca foi segredo: quem segura a sacola pode
+   * abrir e ver.
+   */
+  if (caminho === '/balcao' && req.method === 'GET') {
+    const c = texto(url.searchParams.get('c'), 12);
+    if (c) {
+      const d = SAC.descodificar(c);
+      if (d) return responder(res, 200, P.paginaBalcaoSacola({
+        sacola: { decodificada: d, linha: db.lerSacola(d.codigo) },
+        centros: centrosProximos(null, null)
+      }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
+    return responder(res, 200, P.paginaBalcao({ codigo: c }),
+      'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  if (caminho === '/balcao' && req.method === 'POST') {
+    if (excedeu(ip, 200, 3600e3, 'balcao')) {
+      return responder(res, 429, P.paginaBalcao({ erro: 'Leituras demais deste aparelho. Espere uma hora.' }));
+    }
+    const campos = new URLSearchParams(await corpo(req));
+    const d = SAC.descodificar(texto(campos.get('c'), 12));
+    if (!d) {
+      return responder(res, 400, P.paginaBalcao({
+        codigo: texto(campos.get('c'), 12),
+        erro: 'Isso não parece um código de sacola. São sete letras, três e quatro — '
+            + 'sem I, O e S, sem 0, 1 e 5.'
+      }));
+    }
+    return responder(res, 200, P.paginaBalcaoSacola({
+      sacola: { decodificada: d, linha: db.lerSacola(d.codigo) },
+      centros: centrosProximos(null, null)
+    }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+  }
+
+  /* Confirmar que a sacola chegou.
+   *
+   * AS COORDENADAS NÃO SE GUARDAM. Chegam neste pedido, resolvem-se para um
+   * centro, e morrem com a variável. `capem-state.md` diz que nada sobre quem
+   * visita chega ao servidor, e chama a isso "uma restrição de desenho, não um
+   * detalhe de implementação". Quem confirma uma sacola é um voluntário a
+   * trabalhar e não alguém a procurar ajuda, por isso o espírito aguenta — mas
+   * só enquanto o que fica na linha for o CENTRO e nunca o par de números.
+   *
+   * E isto é uma verificação de plausibilidade, não uma autenticação: a
+   * localização do browser falsifica-se em dez segundos. Serve para separar
+   * "confirmado por quem estava lá" de "confirmado por qualquer pessoa", que é
+   * o que mantém a medição honesta.
+   */
+  if (caminho === '/balcao/receber' && req.method === 'POST') {
+    if (excedeu(ip, 200, 3600e3, 'balcao')) {
+      return responder(res, 429, P.paginaBalcao({ erro: 'Confirmações demais deste aparelho.' }));
+    }
+    const campos = new URLSearchParams(await corpo(req));
+    const d = SAC.descodificar(texto(campos.get('c'), 12));
+    if (!d) return paraOndeIr(res, '/balcao');
+
+    const lat = Number(campos.get('lat')), lon = Number(campos.get('lon'));
+    const temCoords = Number.isFinite(lat) && Number.isFinite(lon) && (lat || lon);
+    const escolhido = fazerSlug(texto(campos.get('centro'), 60), '');
+    const perto = temCoords ? centroMaisPerto(lat, lon) : null;
+
+    /* O centro é o que o voluntário escolheu; as coordenadas só decidem o GRAU.
+       Confirmar com a lista é sempre possível, porque num ginásio com telhado de
+       metal o GPS dá 50 a 500 metros ou nada. */
+    const slug = escolhido && db.existe(escolhido) ? escolhido : '';
+    const grau = (slug && perto && perto.slug === slug && perto.metros <= 400)
+      ? 'coordenadas' : 'aberto';
+
+    const linha = db.receberSacola(d.codigo, slug, grau);
+    if (!linha) {
+      /* Um código que não está registado não pára a doação: diz-se e segue-se.
+         Um código ilegível nunca deve fazer um voluntário recusar fraldas. */
+      return responder(res, 200, P.paginaBalcaoSacola({
+        sacola: { decodificada: d, linha: null },
+        centros: centrosProximos(null, null),
+        erro: 'Este código não consta como registrado, por isso não há o que marcar. '
+            + 'Receba a sacola pelo que se vê.'
+      }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+    }
+    const c = slug ? db.ler(slug) : null;
+    console.log(`[recebida] ${d.codigo} — ${slug || 'sem centro'} (${grau})`);
+    return responder(res, 200, P.paginaBalcaoRecebida({
+      sacola: { decodificada: d },
+      nomeCentro: c ? ((c.dados || {}).nome || c.slug) : ''
+    }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
+  }
+
   if (caminho === '/centro' && req.method === 'GET') {
     return responder(res, 200, P.paginaCentroEntrada({ base }));
   }
@@ -788,7 +992,12 @@ async function encaminhar(req, res) {
         pausado: campos.get('pausado') === '1',
         motivoPausa: texto(campos.get('motivoPausa'), LIMITES.motivoPausa)
       };
+      /* Ler códigos de sacola é opcional, e desligado por omissão. Um centro que
+         não quer digitar códigos na porta não pode ter a sua página a prometer a
+         um doador que alguém vai. */
+      dados.sacolas = campos.get('sacolas') === '1';
       const limpo = limparDados(dados);
+      limpo.sacolas = !!dados.sacolas;
       db.publicar(centro.slug, { ...centro.dados, ...limpo });
       console.log(`[publicado] ${centro.slug} — ${limpo.precisa.length} itens${limpo.pausado ? ' (pausado)' : ''} (via /atualizar)`);
       feito = true;

@@ -103,6 +103,42 @@ function abrir(arquivo) {
        aprovação, para encurtar o que vai ser ditado ao telefone — o endereço
        velho continua a responder e redireciona. Um endereço que já saiu da
        impressora não se corrige. */
+    /* ---------------------------------------------------------------------
+     * As sacolas registadas antes de saírem de casa.
+     *
+     * Uma linha por sacola, e uma sacola não é uma pessoa: guarda-se o que vai
+     * dentro, quantos volumes, a hora, e — depois de chegar — o centro. Não há
+     * nome, nem telefone, nem nada que aponte para alguém, e é por isso que
+     * estas linhas podem ficar. O dia em que houver um campo de texto livre
+     * ("2 caixas de leite marca X") é o dia em que isto passa a ser uma decisão
+     * de retenção tomada à pressa; por isso não há.
+     *
+     * A coluna descricao são os vinte bits que também estão dentro do código.
+     * (Sem crases nesta zona: isto é um template literal, e uma crase num
+     * comentário fecha-o. O mesmo que já aconteceu no CSS do pagina.js.) Ficam
+     * repetidos de propósito: o código descodifica-se sozinho na porta sem
+     * rede, e a coluna existe para se poder perguntar "quantas sacolas de água
+     * chegaram" sem descodificar tudo em JavaScript.
+     * ------------------------------------------------------------------- */
+    CREATE TABLE IF NOT EXISTS sacolas (
+      codigo    TEXT PRIMARY KEY,
+      descricao INTEGER NOT NULL,
+      serie     INTEGER NOT NULL,
+      criada    INTEGER NOT NULL,
+      /* Nulo até alguém a ler numa porta. É esse o modelo: uma sacola que
+         ainda não chegou a lado nenhum não é de ninguém. */
+      recebida  INTEGER,
+      centro    TEXT NOT NULL DEFAULT '',
+      /* 'coordenadas' se quem confirmou estava no sítio, 'aberto' se foi
+         qualquer pessoa. Não é para proteger o doador — não se move nada de
+         valor aqui — é para proteger A MEDIÇÃO: registadas contra lidas é o
+         único número que diz se isto valeu a pena, e não vale nada se contar
+         toques anónimos ao lado de confirmações no local. */
+      grau      TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_sacolas_centro ON sacolas(centro, recebida);
+    CREATE INDEX IF NOT EXISTS idx_sacolas_criada ON sacolas(criada);
+
     CREATE TABLE IF NOT EXISTS aliases (
       alias TEXT PRIMARY KEY,
       slug  TEXT NOT NULL
@@ -467,6 +503,81 @@ function procurar({ termos = [], ordem = 'uteis', aceitando = false,
   return { linhas, total, pagina: p, paginas: Math.max(1, Math.ceil(total / porPagina)) };
 }
 
+/* ---------------------------------------------------------------------------
+ * Sacolas
+ * -------------------------------------------------------------------------*/
+/**
+ * Registar uma sacola e emitir-lhe um número de série livre.
+ *
+ * `fazerCodigo(serie)` vem de fora pela mesma razão que a derivação das colunas
+ * de procura vem: este ficheiro é armazenamento e não sabe — nem deve passar a
+ * saber — como se escreve um código. Quem sabe é `server/sacola.js`, que não
+ * fala com a base de dados para poder ser servido tal e qual ao navegador no
+ * dia em que houver uma aplicação offline.
+ *
+ * A série é sorteada e não sequencial: sequencial diria a toda a gente quantas
+ * sacolas existem, e faria adivinhar a seguinte. Há 20.856 por descrição, por
+ * isso a colisão é rara e resolve-se tentando outra vez.
+ */
+function criarSacola(descricao, fazerCodigo, tentativas = 12) {
+  const ins = db.prepare(`INSERT INTO sacolas (codigo, descricao, serie, criada)
+                          VALUES (?, ?, ?, ?)`);
+  for (let i = 0; i < tentativas; i++) {
+    const serie = crypto.randomInt(0, 20856);
+    const codigo = String(fazerCodigo(serie)).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    try {
+      ins.run(codigo, descricao, serie, Date.now());
+      return { codigo, serie };
+    } catch (e) {
+      /* PK ocupada: outra sacola igual apanhou esta série. Tenta outra. */
+      if (!/UNIQUE|PRIMARY/i.test(String(e && e.message))) throw e;
+    }
+  }
+  throw new Error('não foi possível emitir um código para esta sacola');
+}
+
+const chaveSacola = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function lerSacola(codigo) {
+  return db.prepare('SELECT * FROM sacolas WHERE codigo = ?').get(chaveSacola(codigo)) || null;
+}
+
+/**
+ * Marcar como recebida. Só a primeira vez conta.
+ *
+ * Uma sacola que já foi recebida noutro sítio não muda de centro por alguém
+ * carregar no botão outra vez: a primeira porta é a porta. Devolve a linha como
+ * ficou, ou `null` se o código não existe.
+ */
+function receberSacola(codigo, centro, grau) {
+  const c = chaveSacola(codigo);
+  const r = db.prepare('SELECT * FROM sacolas WHERE codigo = ?').get(c);
+  if (!r) return null;
+  if (r.recebida) return r;
+  db.prepare('UPDATE sacolas SET recebida = ?, centro = ?, grau = ? WHERE codigo = ?')
+    .run(Date.now(), String(centro || ''), String(grau || ''), c);
+  return db.prepare('SELECT * FROM sacolas WHERE codigo = ?').get(c);
+}
+
+/** O que chegou a um centro, mais recente primeiro. Um registo, não um stock. */
+function sacolasDoCentro(slug, limite = 200) {
+  return db.prepare(`SELECT * FROM sacolas WHERE centro = ? AND recebida IS NOT NULL
+                     ORDER BY recebida DESC LIMIT ?`).all(String(slug || ''), limite);
+}
+
+/**
+ * O único número que diz se a fase 3 valeu a pena: quantas foram registadas
+ * contra quantas foram lidas numa porta. `noLocal` conta só as confirmadas por
+ * quem estava lá.
+ */
+function contarSacolas() {
+  const r = db.prepare(`SELECT COUNT(*) registadas,
+                               SUM(recebida IS NOT NULL) recebidas,
+                               SUM(grau = 'coordenadas') noLocal
+                        FROM sacolas`).get();
+  return { registadas: r.registadas || 0, recebidas: r.recebidas || 0, noLocal: r.noLocal || 0 };
+}
+
 const lerEstado = (chave, recurso = null) => {
   const r = db.prepare('SELECT valor FROM estado WHERE chave = ?').get(chave);
   return r ? r.valor : recurso;
@@ -684,5 +795,6 @@ module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
                    renomearEmergencia, activarEmergencia, apagarEmergencia,
                    exportarPara, lerAviso, escreverAviso, apagarAviso,
                    definirVerificados, guardarCampos, contarSemDono, lerEstado,
+                   criarSacola, lerSacola, receberSacola, sacolasDoCentro, contarSacolas,
                    escreverEstado, definirDerivacao, reindexar,
                    novoCodigo, novoCodigoPara, garantirCodigo, codigoConfere, ESTADOS };

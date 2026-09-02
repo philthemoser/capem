@@ -15,6 +15,8 @@
 const { svgIcone, svgProibido, svgAnel, item, ROTULO_BR, ICONES, GRUPOS, RECUSAS } = require('./compartilhado');
 const { linkWhatsApp } = require('./avisos');
 const B = require('./busca');
+const SAC = require('./sacola');
+const QR = require('./qr');
 
 const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -641,6 +643,8 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias, s
           : precisa.length
             ? `<span class="c-marcas">${precisa.map(y => svgIcone(y.id)).join('')}</span>`
             : ''}
+        ${!d.pausado && d.sacolas
+          ? '<span class="c-sacolas">lê códigos de sacola</span>' : ''}
       </a>
       ${acoes}
     </li>`;
@@ -1163,6 +1167,348 @@ function paginaSouDaquiRecebido({ centro, base }) {
   });
 }
 
+/* ===========================================================================
+ * SACOLAS — o doador em casa, e o voluntário na porta
+ *
+ * A ideia inteira: a doação é descrita ANTES de sair de casa, e a porta passa a
+ * ser uma leitura em vez de um interrogatório. O código descodifica-se sozinho,
+ * por isso funciona sem rede; o servidor acrescenta a hora e nunca é a
+ * condição para haver resposta.
+ * ========================================================================= */
+
+/** Os dezasseis itens, agrupados como no catálogo — sem os quatro que afogam. */
+function gradeDeItens(escolhidos) {
+  const on = new Set(escolhidos || []);
+  return GRUPOS.map(g => {
+    const ids = g.ids.filter(id => SAC.ITENS.indexOf(id) >= 0);
+    if (!ids.length) return '';
+    return `<fieldset class="grupo">
+      <legend>${esc(g.g)}</legend>
+      <div class="itens">
+        ${ids.map(id => `<label class="item${on.has(id) ? ' ligado' : ''}">
+          <input type="checkbox" name="itens" value="${esc(id)}"${on.has(id) ? ' checked' : ''}>
+          ${svgIcone(id)}
+          <span class="it-nome">${esc(ROTULO_BR[id] || id)}</span>
+        </label>`).join('')}
+      </div>
+    </fieldset>`;
+  }).join('');
+}
+
+function paginaDoar({ erro, escolhidos, centro }) {
+  const naoTraga = RECUSAS.map(id => `<li>${svgProibido(id)}<span>${esc(ROTULO_BR[id] || id)}</span></li>`).join('');
+  return molde({
+    aqui: '/centros',
+    migalhas: [['Centros de apoio', '/centros'], ['Registrar uma sacola']],
+    titulo: 'Registrar uma sacola — CAPEM',
+    descricao: 'Diga o que vai dentro antes de sair de casa e receba um código para escrever na sacola.',
+    corpo: `
+<main class="doar">
+  <header>
+    <h1>Registrar uma sacola</h1>
+    <p class="entrada">Diga o que vai dentro antes de sair de casa. Você recebe um
+      código curto para escrever na sacola com caneta. Na porta, o voluntário lê o
+      código e já sabe o que tem dentro — sem abrir a sacola e sem fila parada.</p>
+    ${centro ? `<p class="dica">Você veio da página de <b>${esc(centro)}</b>. O código
+      não fica preso a nenhum centro: se mudar de ideias no caminho, vale igual.</p>` : ''}
+  </header>
+
+  ${erro ? `<p class="erro-form" role="alert">${esc(erro)}</p>` : ''}
+
+  <form method="post" action="/doar" class="form-atualizar">
+    <h2>O que vai nesta sacola?</h2>
+    <p class="ajuda">Uma categoria por sacola. É isso que deixa a sacola ir direto
+      para a prateleira, em vez de ser aberta e espalhada no chão. Se levar coisas
+      de categorias diferentes, registre uma sacola de cada vez.</p>
+    ${gradeDeItens(escolhidos)}
+
+    <h2>Quantas sacolas iguais a esta?</h2>
+    <p class="ajuda">O mesmo código serve para todas as sacolas com o mesmo
+      conteúdo. Acima de oito volumes, ligue para o centro antes de sair: uma
+      carga que chega sem aviso ocupa a porta, o corredor e o pátio.</p>
+    <label class="campo" for="volumes">Volumes</label>
+    <input id="volumes" name="volumes" type="number" value="1" min="1" max="8" inputmode="numeric">
+
+    <label class="caixa"><input type="checkbox" name="outros" value="1">
+      <span>Tem alguma coisa que não está na lista</span></label>
+    <p class="ajuda">O código guarda que existe, não o quê — escreva num papel e
+      ponha dentro da sacola. Um código que levasse texto livre deixaria de caber
+      numa etiqueta escrita à mão.</p>
+
+    <button class="btn btn-primario largo" type="submit">Registrar e gerar o código</button>
+  </form>
+
+  <section class="bloco-nao">
+    <h2>${svgAnel()}<span>Por favor, não traga</span></h2>
+    <p class="porque">Roupa usada foi 70% de tudo que chegou ao Rio Grande do Sul em
+      2024. Triar é o trabalho que mais consome voluntário, e o que sobra apodrece
+      no pátio. Recusar aqui não custa nada; recusar na porta custa sua viagem.</p>
+    <ul class="marcas">${naoTraga}</ul>
+  </section>
+
+  <p class="ajuda">O registro guarda o que vai dentro da sacola e mais nada.
+    Não pedimos quem você é, e não temos como saber.</p>
+</main>`
+  });
+}
+
+function paginaSacolaCriada({ sacola, base, centros }) {
+  const d = SAC.descodificar(sacola.codigo);
+  const lista = d.ids.map(id => ROTULO_BR[id] || id).join(', ');
+  const url = `${base}/balcao?c=${d.codigo.replace('-', '')}`;
+  return molde({
+    migalhas: [['Centros de apoio', '/centros'], ['Registrar uma sacola']],
+    titulo: `Sacola ${d.codigo} — CAPEM`,
+    corpo: `
+<main class="doar">
+  <header>
+    <h1>Pronto. Agora escreva.</h1>
+  </header>
+
+  <section class="caneta">
+    <h2>Escreva o código na sacola, com caneta</h2>
+    <p>Papel molha, celular fica sem bateria, tela quebra. Sete letras escritas na
+      própria sacola chegam ao centro em qualquer um desses dias.</p>
+  </section>
+
+  <div class="codigo-caixa">
+    <p class="rotulo">Sacola · ${d.volumes} ${d.volumes === 1 ? 'volume' : 'volumes'}</p>
+    <p class="codigo">${esc(d.codigo)}</p>
+    <p class="cc-itens">${esc(lista)}${d.outros ? ' + o que estiver escrito no papel dentro' : ''}</p>
+  </div>
+
+  <section class="qr-sacola">
+    ${QR.svg(url, 132, { label: `QR da sacola ${d.codigo}` })}
+    <p>Quem tiver celular na porta pode ler o QR em vez de digitar — ele abre a
+      página de leitura já com o código preenchido. O que está escrito na sacola
+      continua sendo o que vale.</p>
+    <p class="qr-endereco">Se o QR não ler, o endereço é
+      <b>${esc(url.replace(/^https?:\/\//, ''))}</b> — ou <b>${esc(base.replace(/^https?:\/\//, ''))}/balcao</b>
+      e o código à mão.</p>
+  </section>
+
+  <h2>Onde entregar</h2>
+  ${centros && centros.length ? `
+  <p class="ajuda">Estes centros leem códigos de sacola. O código não fica preso a
+    nenhum deles — pode entregar em qualquer lugar.</p>
+  <ul class="centros">${centros.map(c => {
+    const dd = c.dados || {};
+    return `<li class="c-item"><a class="c-cartao" href="${esc(c.url || base + '/' + c.slug)}">
+      <span class="c-nome">${esc(dd.nome || c.slug)}</span>
+      <span class="c-endereco">${esc(dd.endereco || '')}</span>
+    </a></li>`;
+  }).join('')}</ul>` : `
+  <p class="ajuda">Nenhum centro perto de você lê códigos de sacola ainda — é novo,
+    e eles ligam quando querem. O código continua valendo: na porta, o voluntário
+    pode ler pelo celular. Veja a lista completa e ligue antes de vir.</p>`}
+  <p><a class="btn largo" href="/centros">Ver todos os centros</a></p>
+
+  <p><a class="btn largo" href="/doar">Registrar outra sacola</a></p>
+  <p><a class="btn largo" href="/minhas-sacolas">Minhas sacolas</a></p>
+</main>
+<script>
+/* O histórico do doador vive NESTE aparelho e em mais lado nenhum, para o
+   servidor não ter de saber de quem são as sacolas. Sem JavaScript nada disto
+   acontece — e não faz falta: o código está no ecrã, em letras grandes, e a
+   instrução é escrevê-lo na sacola. */
+(function () {
+  try {
+    var k = 'capem.sacolas';
+    var v = JSON.parse(localStorage.getItem(k) || '[]');
+    if (v.indexOf(${paraScript(d.codigo)}) < 0) v.unshift(${paraScript(d.codigo)});
+    localStorage.setItem(k, JSON.stringify(v.slice(0, 60)));
+  } catch (e) { /* modo privado, armazenamento cheio: perde-se o histórico e mais nada */ }
+})();
+</script>`
+  });
+}
+
+function paginaMinhasSacolas() {
+  return molde({
+    migalhas: [['Minhas sacolas']],
+    titulo: 'Minhas sacolas — CAPEM',
+    corpo: `
+<main class="doar">
+  <header>
+    <h1>Minhas sacolas</h1>
+    <p class="entrada">Ficam guardadas neste aparelho. Não sabemos que são suas —
+      só este celular sabe. Limpar os dados do navegador apaga esta lista e mais
+      nada: as sacolas continuam valendo.</p>
+  </header>
+  <div id="lista"><p class="ajuda">Carregando…</p></div>
+  <noscript><p class="erro-form">Esta página precisa de JavaScript, porque a lista
+    está guardada no seu próprio aparelho. O código escrito na sacola funciona sem
+    ela.</p></noscript>
+  <p><a class="btn largo" href="/doar">Registrar uma sacola</a></p>
+</main>
+<script>
+(function () {
+  var alvo = document.getElementById('lista');
+  var v = [];
+  try { v = JSON.parse(localStorage.getItem('capem.sacolas') || '[]'); } catch (e) {}
+  if (!v.length) {
+    alvo.innerHTML = '<p class="ajuda">Nenhuma sacola registrada neste aparelho ainda.</p>';
+    return;
+  }
+  fetch('/api/sacolas', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigos: v.slice(0, 60) }) })
+    .then(function (r) { return r.json(); })
+    .then(function (linhas) {
+      alvo.innerHTML = linhas.map(function (x) {
+        var quando = x.recebida
+          ? '<span class="selo-bom">Recebida ' + x.quando + '</span>' +
+            (x.centro ? ' <span class="c-endereco">' + x.centro + '</span>' : '')
+          : '<span class="selo-espera">Ainda não entregue</span>';
+        return '<div class="sacola-linha"><p class="codigo-pequeno">' + x.codigo + '</p>' +
+               '<p class="cc-itens">' + x.itens + '</p><p>' + quando + '</p></div>';
+      }).join('');
+    })
+    .catch(function () {
+      alvo.innerHTML = '<p class="ajuda">Não deu para conferir agora. Os códigos ' +
+        'escritos nas sacolas continuam valendo.</p>';
+    });
+})();
+</script>`
+  });
+}
+
+/* --- o balcão ------------------------------------------------------------ */
+function paginaBalcao({ codigo, erro }) {
+  return molde({
+    aqui: '/balcao',
+    migalhas: [['Balcão']],
+    titulo: 'Ler uma sacola — CAPEM',
+    descricao: 'Digite o código escrito na sacola e veja o que tem dentro.',
+    corpo: `
+<main class="balcao">
+  <header>
+    <h1>Ler uma sacola</h1>
+    <p class="entrada">Sete letras escritas na sacola. Digite e o que tem dentro
+      aparece. <b>Qualquer pessoa pode ler</b> — não precisa de cadastro, nem de
+      código de centro, nem que o centro esteja na lista.</p>
+  </header>
+
+  ${erro ? `<p class="erro-form" role="alert">${esc(erro)}</p>` : ''}
+
+  <form method="post" action="/balcao" class="entrar">
+    <label class="campo" for="c">Código da sacola</label>
+    <input id="c" name="c" type="text" value="${esc(codigo || '')}" maxlength="9"
+      placeholder="ABC-2345" autocomplete="off" spellcheck="false"
+      autocapitalize="characters" required>
+    <p class="ajuda">Sem I, sem O e sem S; sem 0, sem 1 e sem 5. Essas letras se
+      confundem quando alguém escreve com caneta numa sacola molhada, por isso
+      não entram em nenhum código.</p>
+    <button class="btn btn-primario largo" type="submit">Ler</button>
+  </form>
+</main>`
+  });
+}
+
+function paginaBalcaoSacola({ sacola, centros, erro }) {
+  const d = sacola.decodificada;
+  const linhas = d.ids.map(id => `<div class="linha-item">${svgIcone(id)}
+      <b>${esc(ROTULO_BR[id] || id)}</b></div>`).join('');
+  const jaRecebida = sacola.linha && sacola.linha.recebida;
+  return molde({
+    aqui: '/balcao',
+    migalhas: [['Balcão', '/balcao'], [d.codigo]],
+    titulo: `Sacola ${d.codigo} — CAPEM`,
+    corpo: `
+<main class="balcao">
+  <header>
+    <h1>O que tem dentro</h1>
+  </header>
+
+  ${erro ? `<p class="erro-form" role="alert">${esc(erro)}</p>` : ''}
+
+  <div class="achado">
+    <p class="codigo">${esc(d.codigo)}</p>
+    <p class="a-sub">${d.volumes} ${d.volumes === 1 ? 'volume' : 'volumes'} ·
+      ${sacola.linha
+        ? (jaRecebida
+            ? `recebida em ${esc(dataCurta(sacola.linha.recebida))}${sacola.linha.centro ? ' · ' + esc(sacola.linha.centro) : ''}`
+            : 'registrada, ainda não recebida')
+        : 'não confirmada'}</p>
+    ${linhas}
+    ${d.outros ? `<div class="linha-item">${svgIcone('caixa')}
+      <b>Tem coisa fora da lista — o papel dentro da sacola diz o quê</b></div>` : ''}
+  </div>
+
+  ${!sacola.linha ? `<p class="idade velha">Este código não consta como registrado.
+    Ou foi digitado errado, ou a sacola foi descrita sem internet. <b>Receba pelo
+    que se vê</b> — um código que não confere nunca deve parar uma doação na
+    porta.</p>` : ''}
+
+  ${jaRecebida ? `<p class="idade fresca-ok">Esta sacola já foi recebida. A primeira
+    porta é a porta: confirmar outra vez não muda nada.</p>` : `
+  <form method="post" action="/balcao/receber" class="entrar">
+    <input type="hidden" name="c" value="${esc(d.codigo)}">
+    <input type="hidden" name="lat" id="lat" value="">
+    <input type="hidden" name="lon" id="lon" value="">
+    <h2>Onde você está?</h2>
+    <p class="ajuda" id="perto-diz">O celular pode dizer em qual centro você está.
+      Se não quiser dar a localização, escolha na lista — funciona igual.</p>
+    <p><button class="btn" type="button" id="b-perto">Usar minha localização</button></p>
+    <label class="campo" for="centro">Centro</label>
+    <select id="centro" name="centro">
+      <option value="">Aqui não está na lista</option>
+      ${(centros || []).map(c => `<option value="${esc(c.slug)}">${esc((c.dados || {}).nome || c.slug)}</option>`).join('')}
+    </select>
+    <button class="btn btn-primario largo" type="submit">Recebida aqui</button>
+  </form>
+  <p><a class="btn largo" href="/balcao">Não é para aqui — ler outra</a></p>`}
+</main>
+${jaRecebida ? '' : `<script>
+/* A localização é finalização, nunca mecanismo: sem JavaScript a lista de
+   centros continua a ser um formulário que funciona. O que o script faz é
+   preencher dois campos escondidos, e o servidor resolve as coordenadas para um
+   centro e DEITA-AS FORA no mesmo pedido — nunca ficam guardadas, nem numa
+   linha, nem num log. Ver o comentário em /balcao/receber. */
+(function () {
+  var b = document.getElementById('b-perto');
+  if (!b || !navigator.geolocation) return;
+  b.addEventListener('click', function () {
+    var diz = document.getElementById('perto-diz');
+    diz.textContent = 'Procurando…';
+    navigator.geolocation.getCurrentPosition(function (p) {
+      document.getElementById('lat').value = p.coords.latitude;
+      document.getElementById('lon').value = p.coords.longitude;
+      diz.textContent = 'Localização pronta. Confirme o centro abaixo antes de salvar.';
+      b.disabled = true;
+    }, function () {
+      diz.textContent = 'Não deu para pegar a localização. Escolha o centro na lista.';
+    }, { enableHighAccuracy: true, timeout: 8000 });
+  });
+})();
+</script>`}`
+  });
+}
+
+function paginaBalcaoRecebida({ sacola, nomeCentro }) {
+  const d = sacola.decodificada;
+  return molde({
+    aqui: '/balcao',
+    migalhas: [['Balcão', '/balcao'], [d.codigo]],
+    titulo: `Recebida — ${d.codigo}`,
+    corpo: `
+<main class="balcao">
+  <header>
+    <h1>Recebida</h1>
+  </header>
+  <div class="achado">
+    <p class="codigo">${esc(d.codigo)}</p>
+    <p class="a-sub">${d.volumes} ${d.volumes === 1 ? 'volume' : 'volumes'}${
+      nomeCentro ? ' · ' + esc(nomeCentro) : ' · centro não informado'}</p>
+    ${d.ids.map(id => `<div class="linha-item">${svgIcone(id)}
+      <b>${esc(ROTULO_BR[id] || id)}</b></div>`).join('')}
+  </div>
+  <p class="ajuda">Quem registrou esta sacola vê esta hora no próprio celular.
+    Até este toque ela existia sozinha, sem centro.</p>
+  <p><a class="btn btn-primario largo" href="/balcao">Ler a próxima</a></p>
+</main>`
+  });
+}
+
 function paginaAtualizarEntrada({ erro, slug }) {
   return molde({
     aqui: '/centro',
@@ -1333,6 +1679,15 @@ function paginaAtualizar({ centro, url, erro, feito, sessao }) {
     </section>
 
     <section class="bloco-a">
+      <h2>Sacolas com código</h2>
+      <label class="caixa"><input type="checkbox" name="sacolas" value="1"${d.sacolas ? ' checked' : ''}>
+        <span>Aceitamos sacolas registradas em casa</span></label>
+      <p class="ajuda">Quem doa descreve a sacola antes de sair de casa e escreve um
+        código nela; na porta, um voluntário abre <b>/balcao</b> no celular, digita
+        as sete letras e vê o que tem dentro sem abrir a sacola. Não precisa de
+        código de centro nem de cadastro. Marque só se alguém aí vai fazer isso —
+        senão a página promete a um doador uma coisa que ninguém faz.</p>
+
       <h2>Horário</h2>
       <label class="sr-only" for="horario">Horário</label>
       <input id="horario" name="horario" type="text" value="${esc(d.horario || '')}"
@@ -2465,6 +2820,12 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 /* Na lista: a mesma palavra sem cor de alarme. Um centro sem dono não está
    atrasado — não tem quem publique, e isso não é culpa dele. */
 .c-item.sem-dono .c-quando{color:var(--texto-3)}
+/* O selo de quem aceita sacolas registadas. Texto e não marca nova: as 29 são
+   itens e utilitários, e inventar uma trigésima para um estado de ecrã é o
+   mesmo erro que pôr lá o elo do perfil. */
+.c-sacolas{display:inline-block;margin-top:4px;padding:3px 7px;border:1px solid var(--fio);
+  font:700 10.5px/1.4 var(--fonte);text-transform:uppercase;letter-spacing:.08em;
+  color:var(--texto-2)}
 .nota-sem-lista{margin:0 0 14px;padding:11px 13px;background:var(--claro);
   border-left:6px solid var(--tinta);font:500 13.5px/1.55 var(--fonte);color:var(--texto-2)}
 .nota-sem-lista a{color:var(--tinta)}
@@ -2479,6 +2840,38 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .barra-sessao p{margin:0;flex:1 1 12em;font:500 13.5px/1.45 var(--fonte);color:var(--texto-2)}
 .barra-sessao b{color:var(--tinta)}
 .barra-sessao .btn{margin:0;flex:none}
+
+/* --- sacolas --- */
+.caneta{margin:0 0 18px;padding:16px var(--goteira);background:var(--tinta);color:var(--papel)}
+.caneta h2{margin:0 0 6px;font-size:clamp(16px,4.4vw,19px);color:var(--papel)}
+.caneta p{margin:0;font:500 14.5px/1.55 var(--fonte);color:#D9D5CE}
+.codigo-caixa .cc-itens{margin:6px 0 0;font:500 14px/1.5 var(--fonte);color:var(--texto-2)}
+.codigo-pequeno{margin:0 0 4px;font:700 20px/1 var(--mono);letter-spacing:.08em}
+.qr-sacola{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin:0 0 22px}
+.qr-sacola svg{width:132px;height:132px;flex:none;border:1px solid var(--tenue)}
+.qr-sacola p{margin:0;flex:1 1 14em;font:500 13.5px/1.55 var(--fonte);color:var(--texto-2)}
+/* O endereço por escrito, debaixo do QR. Um QR que não lê — ecrã rachado, sol a
+   bater, impressão fraca — deixa o voluntário sem nada se o endereço só existir
+   dentro dos pixéis. */
+.qr-endereco{margin-top:8px!important;font-size:12.5px!important;word-break:break-all}
+.qr-endereco b{font-family:var(--mono);font-weight:700}
+.achado{border:3px solid var(--tinta);background:var(--papel);padding:16px;margin:0 0 18px}
+.achado .codigo{margin:0}
+.achado .a-sub{margin:4px 0 10px;font:600 13px/1.45 var(--mono);color:var(--texto-2)}
+.linha-item{display:flex;align-items:center;gap:12px;padding:11px 0;
+  border-top:1px solid var(--tenue)}
+.linha-item svg{width:34px;height:34px;flex:none}
+.linha-item b{font:700 15.5px/1.3 var(--fonte)}
+.sacola-linha{border:2px solid var(--tinta);padding:12px 14px;margin:0 0 10px}
+.sacola-linha p{margin:0 0 4px}
+.sacola-linha p:last-child{margin-bottom:0}
+.selo-bom{display:inline-block;padding:5px 9px;background:var(--permitido);color:#fff;
+  font:800 11.5px/1 var(--fonte);text-transform:uppercase;letter-spacing:.08em}
+.selo-espera{display:inline-block;padding:5px 9px;background:var(--tenue);color:var(--texto-2);
+  font:800 11.5px/1 var(--fonte);text-transform:uppercase;letter-spacing:.08em}
+.doar .bloco-nao,.doar .marcas{margin-top:0}
+.balcao select,.doar select{width:100%;padding:12px;font:600 15px/1.2 var(--fonte);
+  color:var(--tinta);background:var(--papel);border:2px solid var(--tinta);border-radius:0}
 
 /* --- actualização diária ---
    Alvos grandes e poucos por linha. Isto usa-se de manhã, de pé, com uma mão,
@@ -2680,6 +3073,8 @@ module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
                    paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
                    paginaSouDaqui, paginaSouDaquiRecebido,
+                   paginaDoar, paginaSacolaCriada, paginaMinhasSacolas,
+                   paginaBalcao, paginaBalcaoSacola, paginaBalcaoRecebida,
                    paginaEncerrado, paginaConfirmarEncerrar,
                    paginaCodigo, paginaAdmin, paginaConfirmar,
                    definirAviso, idade, esc, CSS };

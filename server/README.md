@@ -605,6 +605,83 @@ marca que tem um piso de 26 mm para se ler a dois metros.
 
 O limite são oito caracteres, e a lista do "não traga" nunca leva quantidade.
 
+## Sacolas registadas antes de saírem de casa
+
+A fase 3. Uma doação descrita em casa, e uma porta que passa a ser uma leitura
+em vez de um interrogatório.
+
+**O código tem sete caracteres, `XXX-XXXX`.** A frente é a descrição — que itens
+do catálogo, se há coisa fora da lista, quantos volumes iguais — e o resto é uma
+série sorteada pelo servidor. 30^7 dá 21.870.000.000; a descrição ocupa 2^20, e
+sobram **20.856 séries por descrição**, que é o que faz duas pessoas que embalem
+a mesma coisa receberem códigos diferentes. Sem isso, "recebida às 09:14" queria
+dizer *uma* sacola como a sua.
+
+**A soma de controlo foi o que a série custou**, e a troca é boa: com rede a
+verificação passou a ser exacta (de 21,87 mil milhões só existem os emitidos, por
+isso um código mal escrito é *desconhecido* e não "provavelmente errado"), e a
+futura aplicação offline deve levar a **lista**, não uma soma — um aparelho que
+sincronizou hoje sabe quais existem. Frio e sem rede é o único caso fraco, e aí o
+ecrã tem de dizer que não confirmou nada.
+
+**`server/sacola.js` não depende de nada e não fala com a base de dados**, para
+poder ser servido tal e qual ao navegador no dia em que houver aplicação offline.
+Uma função, dois sítios.
+
+**A ordem de `ITENS` é um formato de dados.** Cada posição é um bit. Reordenar não
+rebenta: passa a ler cobertores como sabão em todas as sacolas já registadas, em
+silêncio, para sempre. Há um teste que compara a lista com uma impressão digital,
+para essa alteração parar a compilação.
+
+### A porta
+
+`/balcao` é **público**: nem cadastro, nem código de centro, nem o centro estar na
+lista. Quem está na porta com uma sacola na mão não tem chave nenhuma e não deve
+ter — o código de publicação é de quem coordena. O conteúdo nunca foi segredo:
+quem segura a sacola pode abrir e ver.
+
+**Estar lá é a credencial.** O voluntário carrega em "usar minha localização", o
+servidor resolve as coordenadas para um centro e **deita-as fora no mesmo
+pedido** — nunca ficam numa linha nem num log. `capem-state.md` chama a "nada
+sobre quem visita chega ao servidor" uma restrição de desenho e não um detalhe;
+quem confirma uma sacola é um voluntário a trabalhar e não alguém a procurar
+ajuda, mas o espírito só aguenta enquanto o que fica guardado for o **centro**.
+
+É uma **verificação de plausibilidade, não uma autenticação** — a localização do
+browser falsifica-se em dez segundos. Serve para separar `coordenadas` de
+`aberto` no campo `grau`, e isso não protege o doador (não se move nada de valor)
+mas **a medição**: registadas contra lidas numa porta é o único número que diz se
+a fase 3 valeu a pena, e não vale nada se contar toques anónimos.
+
+**A localização é finalização, nunca mecanismo.** Sem JavaScript a lista de
+centros continua a ser um `<select>` num formulário que funciona — e tem de
+continuar, porque num ginásio com telhado de metal o GPS dá 50 a 500 metros ou
+nada.
+
+**Um código desconhecido nunca pára uma doação.** A página diz para receber pelo
+que se vê. O dia em que isto fizer um voluntário recusar fraldas por causa de uma
+letra mal lida é o dia em que fez mal.
+
+### Aceitar sacolas é opcional
+
+`dados.sacolas`, desligado por omissão, marcado em `/atualizar`. Um centro que não
+quer digitar códigos na porta não pode ter a sua página a prometer a um doador
+que alguém vai. A lista marca os que aceitam; o selo é **texto e não uma marca
+nova** — as 29 são itens e utilitários, e inventar uma trigésima para um estado
+de ecrã é o mesmo erro que pôr lá o elo do perfil.
+
+### O histórico é do aparelho
+
+O doador guarda os códigos no `localStorage` do próprio telemóvel, e
+`POST /api/sacolas` devolve o estado só dos códigos que quem pergunta já tinha —
+o código é a chave, e quem o tem tem a sacola. O servidor nunca sabe de quem é
+nenhuma sacola. Limpar os dados do navegador perde o histórico e mais nada.
+
+**Não há campo de texto livre numa sacola, e é uma decisão.** "2 caixas de leite
+marca X" é onde um nome acaba por aparecer, e nesse dia a retenção deixa de ser
+uma questão de armazenamento e passa a ser uma decisão tomada à pressa. O que
+está fora do catálogo leva um bit e um papel dentro da sacola.
+
 ## A sessão de um centro
 
 Setembro de 2026. **Isto reverte uma decisão que estava escrita neste

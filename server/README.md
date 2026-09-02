@@ -605,6 +605,88 @@ marca que tem um piso de 26 mm para se ler a dois metros.
 
 O limite são oito caracteres, e a lista do "não traga" nunca leva quantidade.
 
+## Centros que nunca pediram uma página
+
+Setembro de 2026, com cheias a acontecer no Rio Grande do Sul.
+
+Até aqui, um centro só entrava na lista pedindo-a. Isso está certo para a
+verificação e está errado para o primeiro dia de uma emergência, que é
+justamente quando a lista vale mais: no primeiro dia quase nenhum centro ouviu
+falar do CAPEM. Uma lista feita só de quem já nos conhece manda alguém com
+cobertores no carro passar à porta de um ginásio aberto para ir a outro mais
+longe. **Numa emergência esta ferramenta não está a disputar utilizadores.**
+
+Então `/admin` ganhou um formulário: nome, endereço, telefone, horário, redes, e
+**a fonte** de onde isso saiu. O centro entra no ar na hora, com
+`dados.origem = 'encontrado'`.
+
+O que ele **não** tem:
+
+- **Código.** `codigo_hash` fica vazio, que é o que `codigoConfere` já rejeitava
+  explicitamente. Ninguém publica em nome dele porque não há chave nenhuma.
+- **Lista de necessidades.** Ninguém de lá disse o que precisa. Inventá-la seria
+  falar em nome de uma casa que não falou connosco.
+- **As quatro recusas.** São um conselho bom, e continuam a não ser nossas para
+  dar em nome de quem não falou. Chegam quando o centro for entregue.
+
+O que ele tem, igual a qualquer outro centro: morada com link para o mapa,
+telefone que liga, horário, Instagram ou site. **Tudo o que serve para lá
+chegar.** Cortar isto seria castigar um centro por não usar a nossa ferramenta,
+e o custo desse castigo é pago por quem procura, não por quem o merecia.
+
+E tem uma faixa, no lugar da lista, a dizer que **ninguém daquele centro
+confirmou a página**, com a fonte e a data à vista. É a regra da idade da lista
+um andar acima: uma página parece sempre confirmada, tal como parece sempre
+nova.
+
+### A ordem da lista, que era onde o castigo se escondia
+
+Sem dono, `publicado` é NULL, e o escalão de sempre atirava isso para o mesmo
+lugar de quem tem coordenador e não publica há três semanas — ou seja, para o
+fim de todas as listas. Um centro não deve descer por não usar a ferramenta, e
+"nunca publicou porque não há quem publique" não é a mesma falha que "tem quem
+publique e não publica".
+
+O escalão passou a olhar primeiro para `sem_dono` e a pôr estes centros no
+escalão 1, ao lado de uma lista de dois a seis dias: dizem menos do que a lista
+de hoje, e mais do que o silêncio de quem devia estar a publicar. Há um teste
+que compara as duas posições — comparar no HTML não serviria, porque a suite já
+tem centros que cheguem para haver segunda página.
+
+`sem_dono` é uma **quinta coluna derivada**, e a derivação vive em `server.js`
+como as outras quatro. Esquecê-la não rebenta nada: a coluna fica a zero e a
+lista castiga em silêncio. Aconteceu com `emergencia`, e voltou a acontecer aqui
+— o teste que lê a coluna, e não o JSON, apanhou-o na primeira execução.
+
+### A procura por necessidade, que não os alcança
+
+Quem escreve "cobertor" nunca encontra um centro sem dono: o texto de busca é
+feito das necessidades e eles não têm nenhuma. Responder como se não existissem
+é a versão silenciosa de os esconder.
+
+Não se inventa uma necessidade que ninguém publicou. Diz-se que eles estão lá:
+numa procura por item, a lista escreve quantos centros ainda não publicaram o
+que precisam e leva a `/centros?semlista=1`.
+
+### Sou deste centro
+
+`/sou-daqui?c=<slug>` é o caminho de volta, e **não entrega nada** — pelo mesmo
+motivo que `/pedir-codigo` não entrega: os nomes dos centros estão numa lista
+pública, por isso um formulário que emitisse a chave bastaria saber um nome para
+tomar conta da página de uma paróquia. Guarda o pedido, toca o telefone de quem
+administra, e a verificação é o telefonema. Sempre foi.
+
+`/admin/entregar`, depois da chamada, emite o código, limpa a marca de
+"encontrado", devolve as quatro recusas e a página deixa de dizer que ninguém a
+confirmou. A partir daí é um centro como os outros.
+
+**O risco que fica.** Mandar quarenta pessoas a uma porta que fechou na semana
+passada é pior do que não listar o centro. Isso é um argumento para dizer alto
+de onde veio a informação e quando, e para a correcção ser um toque — não para
+deixar o centro de fora. Confira duas fontes antes de acrescentar; uma fonte só
+é boato, e a regra é do Verificado19S, que publicou uma cidade inteira em 2017
+sem publicar nada com menos de duas confirmações.
+
 ## Decisões que valem a pena conhecer
 
 **A aprovação continua a valer depois do primeiro envio.** Publicar muda a lista

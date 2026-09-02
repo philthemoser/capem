@@ -50,6 +50,13 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     precisa: [{ texto: 'Ração para cães', marca: 'caixa' }] }, 20);
   fazer('fechou', { nome: 'Ponto que Encerrou', endereco: 'Rua Final, 1', precisa: [] });
   S.db.decidir('fechou', 'encerrado');
+  /* Um centro que nós acrescentámos: sem código, sem lista, com a faixa que diz
+     que ninguém de lá confirmou a página. Nunca publica, por isso não passa
+     pelo `fazer` acima. */
+  S.db.criar('sem-dono', { nome: 'Ginásio do Bairro', endereco: 'Rua Nova, 7 — Canoas/RS',
+    contato: '(51) 90000-1111', horario: '9h às 17h', precisa: [], naoTraga: [],
+    origem: 'encontrado', fonte: 'https://exemplo.gov.br/pontos', fonteEm: Date.now() });
+  S.db.decidir('sem-dono', 'aprovado');
   for (let i = 0; i < 45; i++) {
     fazer('extra-' + i, { nome: 'Ponto ' + String(i).padStart(2, '0'),
       endereco: 'Rua Exemplo ' + i, precisa: ['agua'] });
@@ -74,6 +81,9 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
     ['centro em pausa', '/zona-norte'],
     ['centro com lista velha', '/bela-vista'],
     ['centro encerrado', '/fechou'],
+    ['centro sem dono', '/sem-dono'],
+    ['assumir um centro sem dono', '/sou-daqui?c=sem-dono'],
+    ['lista só de centros sem lista', '/centros?semlista=1'],
     ['fila de aprovação', '/admin?t=' + encodeURIComponent(process.env.CAPEM_ADMIN)]
   ];
 

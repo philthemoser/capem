@@ -111,10 +111,19 @@ const TROCAS = [
      o dizer. O que trai Portugal é a ênclise com verbo conjugado
      ("preenche-se") e com imperativo ("Pregue-a"). A primeira versão desta
      regra não fazia a distinção e acusou onze frases certas na coluna pt do
-     protótipo, que é como o erro apareceu. */
+     protótipo, que é como o erro apareceu.
+
+     TERCEIRO BURACO, fechado em Setembro de 2026 e da mesma família dos dois
+     anteriores: a excepção só conhecia as vogais acentuadas, porque só tinha
+     visto verbos em -ar e -er ("triá-las", "recebê-lo"). Nos verbos em -ir o
+     -r cai e o i fica sem acento — "assumi-la", "conferi-lo", "imprimi-la" —
+     e a regra acusou uma frase certa outra vez. É seguro: depois de vogal, o
+     pronome só cola em -lo/-la quando caiu um -r, e com i isso é o
+     infinitivo. Uma excepção que só conhece os casos que já apanhou não é uma
+     excepção. */
   [/(?<![\wçãõáéíóúâêôàü-])[a-zçãõáéíóúâêô]{2,}-(a|o|as|os|se|me|te|nos|vos|lhe|lhes|lo|la|los|las)(?![\wçãõáéíóú-])/gi,
     'pronome antes do verbo ("se escreve"), ou fora dele ("Escreva o nome")',
-    /[áâéêíô]-l[oa]s?$/i],
+    /[áâéêíôi]-l[oa]s?$/i],
 
   /* Artigo antes de possessivo: "o seu código" é de Portugal, "seu código" é
      daqui. As contracções (do seu, no seu, ao seu) são normais nos dois e a

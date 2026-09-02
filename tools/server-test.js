@@ -1344,6 +1344,140 @@ const DIA = 86400000;
   }
 
 
+  console.log('\ncentros que nunca pediram página');
+  {
+    /* O que estas asserções existem para apanhar, por ordem:
+       1. UMA NECESSIDADE INVENTADA. Um centro que nós acrescentámos não disse
+          o que precisa. Se a página lhe puser uma lista — mesmo as quatro
+          recusas, que são bom conselho — passamos a falar em nome de uma casa
+          que não falou connosco.
+       2. UMA PÁGINA QUE NÃO DIZ QUE NINGUÉM A CONFIRMOU. É a mesma falha da
+          idade da lista, um andar acima: uma página parece sempre confirmada.
+       3. UM CASTIGO DISFARÇADO DE ORDENAÇÃO. Sem dono, `publicado` é NULL, e o
+          escalão de sempre atirava-o para o fim de todas as listas. Um centro
+          não deve descer na lista por não usar a ferramenta.
+       4. UM FORMULÁRIO PÚBLICO QUE ENTREGA A CHAVE. `/sou-daqui` não pode
+          emitir nada: os nomes dos centros são públicos. */
+    const t = '?t=' + encodeURIComponent(ADMIN);
+
+    let r2 = await form('/admin/encontrado' + t, {
+      t: ADMIN, nome: 'Ginásio do Bairro Rio Branco', endereco: 'Rua Um, 100, Canoas',
+      contato: '(51) 3000-0000', tipo: 'Ginásio', horario: '9h às 17h',
+      fonte: 'https://prefeitura.exemplo.gov.br/pontos', novo_slug: 'rio-branco'
+    });
+    ok('o admin acrescenta um centro sem coordenador', r2.status === 303, String(r2.status));
+
+    const sd = S.db.ler('rio-branco');
+    ok('e ele fica no ar na hora', sd && sd.estado === 'aprovado');
+    ok('sem código nenhum', sd && sd.codigo_hash === '');
+    ok('sem lista de necessidades', sd && (sd.dados.precisa || []).length === 0);
+    /* As quatro recusas são um conselho bom e continuam a não ser nossas para
+       dar em nome de quem não falou. */
+    ok('e sem recusas — nem as quatro de sempre', sd && (sd.dados.naoTraga || []).length === 0);
+    ok('a fonte fica guardada com a data', !!(sd.dados.fonte && sd.dados.fonteEm));
+    /* A coluna derivada. Esquecê-la não rebenta nada — falha em silêncio e o
+       centro cai no escalão errado. Já aconteceu com `emergencia`. */
+    const col = S.db.ler('rio-branco');
+    ok('a coluna sem_dono foi escrita', col.sem_dono === 1, String(col.sem_dono));
+
+    r2 = await form('/admin/encontrado' + t, { t: ADMIN, nome: 'Sem fonte', endereco: 'Rua Dois' });
+    ok('sem fonte não entra', r2.status === 303 && /erro=encontrado/.test(r2.headers.get('location') || ''));
+
+    r2 = await get('/rio-branco');
+    let h2 = await r2.text();
+    ok('a página diz que ninguém a confirmou',
+      h2.includes('Ninguém deste centro confirmou esta página'));
+    ok('e mostra de onde veio', h2.includes('prefeitura.exemplo.gov.br'));
+    ok('e NÃO diz "Precisamos hoje"', !h2.includes('Precisamos hoje'));
+    ok('e NÃO diz "Por favor, não traga"', !h2.includes('Por favor, não traga'));
+    ok('e não oferece mandar uma lista que não existe',
+      !h2.includes('Mandar esta lista no WhatsApp'));
+    /* Tudo o que serve para lá chegar continua igual ao de qualquer centro. */
+    ok('o telefone continua a ligar', /href="tel:\d/.test(h2));
+    ok('o endereço continua a abrir o mapa', h2.includes('https://www.google.com/maps'));
+    ok('e oferece a quem for da casa assumir a página',
+      h2.includes('/sou-daqui?c=rio-branco'));
+    /* O horário leva um relógio e não o visto de "aberto": um visto ao lado da
+       hora, numa página que diz logo abaixo que ninguém a confirmou, é a
+       página a contradizer-se em dois centímetros. */
+    ok('e o horário não leva a marca de "aberto", que ninguém confirmou',
+      !/class="horas">[^]{0,400}M18 32 L27 42/.test(h2));
+
+    r2 = await get('/centros?q=rio+branco');
+    h2 = await r2.text();
+    ok('aparece na lista como qualquer outro centro',
+      h2.includes('Ginásio do Bairro Rio Branco'));
+    ok('com "sem lista publicada" e não "ainda sem lista"',
+      h2.includes('sem lista publicada') && !h2.includes('ainda sem lista'));
+
+    /* O castigo disfarçado de ordenação, medido onde ele acontece: no SQL.
+       Com o escalão antigo, `publicado IS NULL` atirava um centro sem dono
+       para o mesmo lugar de quem tem coordenador e não publica há semanas — ou
+       seja, para o fim de todas as listas, por não usar a ferramenta. Comparar
+       posições no HTML não serviria: a esta altura a suite já tem centros que
+       cheguem para haver segunda página. */
+    S.db.criar('nunca-publicou', { nome: 'Zzz Centro Que Nunca Publicou', endereco: 'Rua Tres' });
+    S.db.decidir('nunca-publicou', 'aprovado');
+    const ordenados = S.db.procurar({
+      ordem: 'uteis', porPagina: 500,
+      fresca: Date.now() - DIA, envelhecida: Date.now() - 7 * DIA
+    }).linhas.map(x => x.slug);
+    ok('e fica à frente de quem tem coordenador e nunca publicou',
+      ordenados.indexOf('rio-branco') < ordenados.indexOf('nunca-publicou'),
+      `sem dono em ${ordenados.indexOf('rio-branco')}, sem lista em ${ordenados.indexOf('nunca-publicou')}`);
+
+    /* Uma procura por necessidade nunca o alcança — o texto de busca é feito
+       das necessidades e ele não tem nenhuma. Responder como se não existisse
+       manda alguém passar à porta de um ginásio aberto. */
+    r2 = await get('/centros?q=cobertor');
+    h2 = await r2.text();
+    ok('uma procura por item avisa que há centros sem lista',
+      h2.includes('ainda não publicaram o que precisam') ||
+      h2.includes('ainda não publicou o que precisa'));
+    ok('e leva a uma lista só deles', h2.includes('semlista=1'));
+
+    r2 = await get('/centros?semlista=1');
+    h2 = await r2.text();
+    ok('essa lista mostra o centro sem dono', h2.includes('Ginásio do Bairro Rio Branco'));
+    ok('e não mostra os centros com coordenador', !h2.includes('canoas-ss'));
+
+    /* Sou deste centro. */
+    r2 = await get('/sou-daqui?c=rio-branco');
+    ok('o formulário de assumir a página responde', r2.status === 200, String(r2.status));
+    r2 = await get('/sou-daqui?c=' + slugFinal);
+    ok('e não existe para um centro que já tem coordenador', r2.status === 404, String(r2.status));
+
+    r2 = await form('/sou-daqui', { slug: 'rio-branco', nome: 'Ana', contato: '(51) 99999-0000',
+      papel: 'coordeno a triagem' });
+    h2 = await r2.text();
+    ok('o pedido é aceite', r2.status === 200, String(r2.status));
+    ok('e não emite código nenhum', !/[A-Z2-9]{4}-[A-Z2-9]{4}/.test(h2));
+    ok('o centro continua sem código depois do pedido',
+      S.db.ler('rio-branco').codigo_hash === '');
+    ok('e o pedido fica guardado', !!S.db.ler('rio-branco').dados.reivindicacao);
+
+    /* Com o cookie e não com `?t=`: chegar com o segredo no endereço redireciona
+       para um /admin limpo, e um `redirect: manual` traz o 303 em vez da página. */
+    h2 = await filaHtml();
+    ok('o painel mostra quem quer assumir a página', h2.includes('Querem assumir a página'));
+    ok('com o nome e o telefone de quem pediu', h2.includes('Ana') && h2.includes('99999-0000'));
+
+    r2 = await form('/admin/entregar' + t, { t: ADMIN, slug: 'rio-branco' });
+    h2 = await r2.text();
+    ok('entregar mostra o código uma vez', /[A-Z2-9]{4}-[A-Z2-9]{4}/.test(h2));
+    const depois = S.db.ler('rio-branco');
+    ok('e o centro passa a ter código', depois.codigo_hash !== '');
+    ok('deixa de ser um centro sem dono', depois.dados.origem !== 'encontrado');
+    ok('a coluna derivada acompanha', depois.sem_dono === 0, String(depois.sem_dono));
+    ok('e recebe as quatro recusas de sempre', (depois.dados.naoTraga || []).length === 4);
+
+    r2 = await get('/rio-branco');
+    h2 = await r2.text();
+    ok('a página deixa de dizer que ninguém a confirmou',
+      !h2.includes('Ninguém deste centro confirmou'));
+    ok('e volta a ter a secção do que não trazer', h2.includes('Por favor, não traga'));
+  }
+
   servidor.close();
 
   /* -------------------------------------------------------------------------

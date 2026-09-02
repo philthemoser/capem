@@ -84,6 +84,11 @@ function lerConsulta(params) {
     aceitando: p.get('aceitando') === '1',
     recentes: p.get('recentes') === '1',
     emergencia: String(p.get('e') || '').slice(0, 60),
+    /* Só os centros que ainda não têm quem publique. Existe para a linha que
+       aparece numa procura por necessidade — "cobertor" nunca encontra estes,
+       porque o texto de busca é feito das necessidades e eles não têm nenhuma.
+       Sem esta página, a procura responde como se eles não existissem. */
+    semLista: p.get('semlista') === '1',
     pagina: num(p.get('p'), 1, 10000, 1),
     porPagina: POR_PAGINA
   };
@@ -98,6 +103,7 @@ function comoEndereco(c, mudanca = {}) {
   if (v.aceitando) p.set('aceitando', '1');
   if (v.recentes) p.set('recentes', '1');
   if (v.emergencia) p.set('e', v.emergencia);
+  if (v.semLista) p.set('semlista', '1');
   if (v.pagina > 1) p.set('p', String(v.pagina));
   const s = p.toString();
   return '/centros' + (s ? '?' + s : '');

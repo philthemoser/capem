@@ -62,6 +62,11 @@ function faixaIdade(pub) {
   return `<p class="idade ${nivel}">${esc(txt)}</p>`;
 }
 
+/** O anfitrião de um endereço, para a fonte se ler sem ocupar a página toda. */
+function nomeDaFonte(u) {
+  try { return new URL(u).host.replace(/^www\./, ''); } catch { return String(u).slice(0, 40); }
+}
+
 const dataCurta = ms => {
   const d = new Date(ms);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -349,18 +354,41 @@ function paginaCentro(centro, base, urlCanonica) {
   const mapa = linkMapa(d.endereco, d.coords);
   const perfil = lerPerfil(d.perfil);
   const url = urlCanonica || `${base}/${centro.slug}`;
+  /* Um centro que nunca pediu esta página. Ver `/admin/encontrado` em
+     server.js: entrou porque alguém o encontrou numa fonte pública durante uma
+     emergência. Tudo o que serve para lá chegar — morada, telefone, horário,
+     redes — fica igual ao de qualquer outro centro; o que muda é que não há
+     lista de necessidades nenhuma, porque ninguém de lá disse o que precisa. */
+  const semDono = d.origem === 'encontrado';
 
   const corpo = `
 <main class="centro faixas">
   <header class="topo-c">
     <p class="tipo">${esc(d.tipo || 'Ponto de arrecadação')}</p>
     <h1>${esc(d.nome || centro.slug)}</h1>
-    ${d.horario ? `<p class="horas">${svgIcone(d.pausado ? 'fechado' : 'aberto')}<span>${esc(d.horario)}</span></p>` : ''}
+    ${d.horario ? `<p class="horas">${svgIcone(
+      /* A marca de "aberto" é um visto, e um visto ao lado do horário de uma
+         página que diz logo abaixo que ninguém a confirmou é a página a
+         contradizer-se em dois centímetros. Sem dono, o horário leva um
+         relógio: diz a hora que encontrámos, não que ela está confirmada. */
+      semDono ? 'relogio' : d.pausado ? 'fechado' : 'aberto'
+    )}<span>${esc(d.horario)}</span></p>` : ''}
   </header>
 
-  ${faixaIdade(centro.publicado)}
+  ${semDono ? '' : faixaIdade(centro.publicado)}
 
-  ${d.pausado ? `
+  ${semDono ? `
+  <section class="sem-dono">
+    <h2>${svgIcone('cartaz')}<span>Ninguém deste centro confirmou esta página</span></h2>
+    <p>Nós montamos esta página com informações públicas, para a lista não deixar
+      de fora um centro que ainda não conhece o CAPEM. <b>Ligue antes de vir</b> —
+      o horário pode ter mudado, e não sabemos o que eles precisam hoje.</p>
+    <p class="fonte">${d.fonte
+      ? `Encontrado em <a href="${esc(d.fonte)}" target="_blank" rel="noopener nofollow ugc"
+          >${esc(nomeDaFonte(d.fonte))}</a>`
+      : 'Encontrado em fontes públicas'}${d.fonteEm ? ` · ${esc(dataCurta(d.fonteEm))}` : ''}</p>
+    <a class="btn" href="/sou-daqui?c=${esc(centro.slug)}">Sou deste centro</a>
+  </section>` : d.pausado ? `
   <section class="pausa">
     ${svgIcone('fechado')}
     <div>
@@ -377,11 +405,12 @@ function paginaCentro(centro, base, urlCanonica) {
       : '<p class="vazio">Este centro ainda não publicou uma lista. Ligue antes de vir.</p>'}
   </section>`}
 
+  ${semDono ? '' : `
   <section class="bloco-nao">
     <h2>${svgAnel()}<span>Por favor, não traga</span></h2>
     <p class="porque">Não temos onde guardar — e obrigado por querer ajudar.</p>
     <ul class="marcas">${nao.map(i => `<li>${svgProibido(i.id)}<span>${esc(i.rotulo)}</span></li>`).join('')}</ul>
-  </section>
+  </section>`}
 
   <section class="contato">
     ${d.endereco ? `<p class="lin"><a href="${esc(mapa)}" target="_blank" rel="noopener"
@@ -399,12 +428,13 @@ function paginaCentro(centro, base, urlCanonica) {
       ${svgIcone('telefone')}<span>Ligar antes de vir</span></a>` : ''}
   </section>` : ''}
 
+  ${semDono ? '' : `
   <section class="compartilhar">
     <a class="btn btn-wa" id="b-wa" href="${esc(linkCompartilhar(d, url))}" target="_blank" rel="noopener">
       Mandar esta lista no WhatsApp</a>
     <p class="nota-compartilhar">Mande o <b>link</b>, não uma imagem: a imagem fica velha,
       o link não.</p>
-  </section>
+  </section>`}
 
   <footer class="pe">
     <p><b>Leve isso com você.</b> <a href="${esc(url)}">${esc(url.replace(/^https?:\/\//, ''))}</a></p>
@@ -431,9 +461,11 @@ function paginaCentro(centro, base, urlCanonica) {
   return molde({
     migalhas: [['Centros de apoio', '/centros'], [d.nome || centro.slug]],
     titulo: `${d.nome || centro.slug} — o que precisamos hoje`,
-    descricao: d.pausado
-      ? `${d.nome || centro.slug} não está recebendo doações agora.`
-      : (lista ? `Precisamos hoje: ${lista}.` : 'Ponto de arrecadação.'),
+    descricao: semDono
+      ? `${d.nome || centro.slug} — ponto de arrecadação. Ligue antes de vir.`
+      : d.pausado
+        ? `${d.nome || centro.slug} não está recebendo doações agora.`
+        : (lista ? `Precisamos hoje: ${lista}.` : 'Ponto de arrecadação.'),
     corpo
   });
 }
@@ -555,7 +587,7 @@ function paginaInicial({ contagem, base, emergencias }) {
  * alguém tem no bolso. Com JavaScript, o botão "filtrar" desaparece e as
  * escolhas aplicam-se sozinhas — é um acabamento, nunca o mecanismo.
  * -------------------------------------------------------------------------*/
-function paginaCentros({ centros, base, consulta, total, paginas, emergencias }) {
+function paginaCentros({ centros, base, consulta, total, paginas, emergencias, semDono }) {
   const c = consulta || B.lerConsulta();
   const ts = B.termos(c.q);
   const emgs = emergencias || [];
@@ -565,8 +597,14 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias })
     /* Se alguém procurou "cobertor", a marca do cobertor tem de ser a primeira
        que se vê — senão a lista responde sem mostrar a resposta. */
     const precisa = B.realcar((d.precisa || []).map(item), ts).slice(0, 8);
-    const quando = { fresca: 'lista de hoje', 'a-envelhecer': `há ${i.dias} dias`,
-      velha: `há ${i.dias} dias`, nunca: 'ainda sem lista' }[i.nivel];
+    /* Um centro que nós acrescentámos nunca publicou nada, e nunca vai publicar
+       enquanto não tiver quem publique. "ainda sem lista" leria-se como
+       negligência de alguém; a verdade é mais simples e diz-se em três
+       palavras. */
+    const sd = d.origem === 'encontrado';
+    const quando = sd ? 'sem lista publicada'
+      : { fresca: 'lista de hoje', 'a-envelhecer': `há ${i.dias} dias`,
+          velha: `há ${i.dias} dias`, nunca: 'ainda sem lista' }[i.nivel];
     const nome = d.nome || x.slug;
     const tel = telDe(d.contato);
     const mapa = linkMapa(d.endereco, d.coords);
@@ -593,7 +631,7 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias })
           >${svgIcone('pino')}<span>Como chegar</span></a>` : ''}
       </div>` : '';
 
-    return `<li class="c-item ${i.nivel}"${c2 ? ` data-lat="${c2[0]}" data-lon="${c2[1]}"` : ''}>
+    return `<li class="c-item ${sd ? 'sem-dono' : i.nivel}"${c2 ? ` data-lat="${c2[0]}" data-lon="${c2[1]}"` : ''}>
       <a class="c-cartao" href="${esc(x.url || base + '/' + x.slug)}">
         <span class="c-nome">${esc(nome)}</span>
         <span class="c-endereco">${esc(d.endereco || '')}</span>
@@ -632,11 +670,24 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias })
 
   /* Quantos resultados, e por causa de quê. Uma lista filtrada que não diz que
      está filtrada faz alguém concluir que o seu bairro não tem centro nenhum. */
-  const filtrada = !!(c.q || c.aceitando || c.recentes);
+  const filtrada = !!(c.q || c.aceitando || c.recentes || c.semLista);
   const conta = total === 1 ? '1 centro' : `${total} centros`;
-  const resumo = filtrada
-    ? `${conta} ${total === 1 ? 'encontrado' : 'encontrados'}${c.q ? ` para “${esc(c.q)}”` : ''}`
-    : `${conta} no ar`;
+  const resumo = c.semLista
+    ? `${conta} ${total === 1 ? 'sem lista publicada' : 'sem lista publicada'}`
+    : filtrada
+      ? `${conta} ${total === 1 ? 'encontrado' : 'encontrados'}${c.q ? ` para “${esc(c.q)}”` : ''}`
+      : `${conta} no ar`;
+
+  /* Quem procura "cobertor" nunca encontra um centro sem dono: o texto de busca
+     é feito das necessidades e eles não têm nenhuma. Responder como se não
+     existissem manda alguém passar à porta de um ginásio aberto. Não se
+     inventa uma necessidade que ninguém publicou — diz-se que estão lá. */
+  const nota = (c.q && !c.semLista && semDono) ? `
+  <p class="nota-sem-lista">${semDono === 1
+      ? '1 centro na lista ainda não publicou o que precisa'
+      : `${semDono} centros na lista ainda não publicaram o que precisam`} —
+    esta procura não alcança nenhum deles.
+    <a href="${esc(B.comoEndereco(c, { q: '', semLista: true, pagina: 1 }))}">Ver ${semDono === 1 ? 'esse centro' : 'esses centros'}</a>.</p>` : '';
 
   const paginacao = paginas > 1 ? `
   <nav class="paginas" aria-label="Páginas de resultados">
@@ -691,7 +742,8 @@ function paginaCentros({ centros, base, consulta, total, paginas, emergencias })
   </form>
 
   <p class="resumo" role="status">${resumo}${
-    filtrada ? ` · <a href="${esc(B.comoEndereco(c, { q: '', aceitando: false, recentes: false, pagina: 1 }))}">ver todos</a>` : ''}</p>
+    (filtrada || c.semLista) ? ` · <a href="${esc(B.comoEndereco(c, { q: '', aceitando: false, recentes: false, semLista: false, pagina: 1 }))}">ver todos</a>` : ''}</p>
+  ${nota}
 
   ${comCoords ? `
   <div class="perto-barra" id="perto-barra" hidden>
@@ -1023,6 +1075,94 @@ function paginaPedirCodigo({ erro, feito, slug, nome }) {
  *     razão para ele estar aqui, e a única coisa que a página sabe melhor do
  *     que ele.
  * -------------------------------------------------------------------------*/
+/* ---------------------------------------------------------------------------
+ * "Sou deste centro"
+ *
+ * O caminho de volta de uma página que nós criámos sem falar com ninguém.
+ *
+ * Não entrega nada, e é preciso dizer porquê: os nomes dos centros estão numa
+ * lista pública, por isso um formulário que emitisse o código bastaria saber um
+ * nome para tomar conta da página de uma paróquia. A verificação é o telefonema
+ * — a mesma que já é para todos os outros — e é a única que existe.
+ * -------------------------------------------------------------------------*/
+function paginaSouDaqui({ centro, erro }) {
+  const d = centro.dados || {};
+  const nome = d.nome || centro.slug;
+  return molde({
+    migalhas: [['Centros de apoio', '/centros'], [nome, '/' + centro.slug], ['Sou deste centro']],
+    titulo: `Sou deste centro — ${nome}`,
+    descricao: 'Assuma a página do seu centro e publique o que ele precisa hoje.',
+    corpo: `
+<main class="entrar">
+  <header>
+    <h1>Sou deste centro</h1>
+    <p class="entrada">A página de <b>${esc(nome)}</b> foi montada por nós, com
+      informações públicas, para o centro não ficar de fora da lista. Quem é da
+      casa pode assumir a página e publicar o que falta lá hoje.</p>
+  </header>
+
+  ${erro ? `<p class="erro" role="alert">${esc(erro)}</p>` : ''}
+
+  <form method="POST" action="/sou-daqui">
+    <input type="hidden" name="slug" value="${esc(centro.slug)}">
+    <label class="campo" for="sd-nome">Seu nome</label>
+    <input id="sd-nome" name="nome" type="text" maxlength="80" required autocomplete="name">
+
+    <label class="campo" for="sd-contato">Telefone</label>
+    <input id="sd-contato" name="contato" type="tel" maxlength="40" required
+      autocomplete="tel" inputmode="tel">
+    <p class="ajuda">Vamos ligar para este número antes de entregar o código. É a
+      única conferência que existe, e não há formulário que a faça.</p>
+
+    <label class="campo" for="sd-papel">O que você faz lá (opcional)</label>
+    <input id="sd-papel" name="papel" type="text" maxlength="60" autocomplete="off"
+      placeholder="coordeno a triagem">
+
+    <button class="btn btn-primario">Enviar</button>
+  </form>
+
+  <section class="pedir">
+    <h2>Enquanto isso</h2>
+    <p class="dica">O material impresso nunca precisou de código nenhum, só do
+      nome do centro. Se estão recebendo doações hoje, imprima já:
+      <a href="/kit?slug=${esc(centro.slug)}">cartazes, placas e crachás</a>.</p>
+  </section>
+</main>`
+  });
+}
+
+function paginaSouDaquiRecebido({ centro, base }) {
+  const d = centro.dados || {};
+  const nome = d.nome || centro.slug;
+  return molde({
+    migalhas: [['Centros de apoio', '/centros'], [nome, '/' + centro.slug], ['Sou deste centro']],
+    titulo: 'Recebemos seu pedido',
+    corpo: `
+<main class="entrar">
+  <header>
+    <h1>Recebemos</h1>
+    <p class="entrada">Vamos ligar para conferir que você é mesmo de
+      <b>${esc(nome)}</b>. Depois disso o código de publicação vai para o telefone
+      que você deixou — e a partir daí a página deixa de dizer que ninguém a
+      confirmou.</p>
+  </header>
+
+  <div class="aviso-caixa">
+    <p><b>A página continua no ar</b> como está, com endereço e telefone. Nada
+      some enquanto esperamos.</p>
+    <p>Se alguma informação estiver errada, diga no telefonema: nome, endereço e
+      telefone só mudam com uma pessoa do outro lado.</p>
+  </div>
+
+  <section class="pedir">
+    <h2>Não espere por nós para começar</h2>
+    <p class="dica">Imprima o material hoje — nunca precisou de código:
+      <a href="/kit?slug=${esc(centro.slug)}">cartazes, placas e crachás</a>.</p>
+  </section>
+</main>`
+  });
+}
+
 function paginaAtualizarEntrada({ erro, slug }) {
   return molde({
     aqui: '/centro',
@@ -1570,7 +1710,8 @@ function escolherEmergencia(id, actual, emergencias) {
   </select>`;
 }
 
-function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contagem, base,
+function paginaAdmin({ pendentes, aprovados, encerrados, parados, reivindicados,
+                       token, contagem, base,
                        erro, feito, saude, avisoActivo, emergencias, canais }) {
   const linha = c => {
     const d = c.dados || {};
@@ -1795,6 +1936,94 @@ function paginaAdmin({ pendentes, aprovados, encerrados, parados, token, contage
       <button class="btn">Baixar a base de dados</button>
     </form>
   </section>
+
+  <section class="bloco-admin">
+    <h2>Acrescentar um centro que não pediu página</h2>
+    <p class="entrada">A lista vale mais no primeiro dia de uma cheia do que em
+      qualquer outro, e no primeiro dia quase nenhum centro ouviu falar do CAPEM.
+      Uma lista feita só de quem já nos conhece manda alguém com cobertores no
+      carro passar à porta de um ginásio aberto para ir a outro mais longe.</p>
+    <p class="entrada">O centro entra <b>no ar na hora</b>, sem código e
+      <b>sem lista de necessidades</b> — ninguém de lá disse o que precisa, e
+      inventar isso seria pôr palavras na boca de quem não falou. A página diz de
+      onde vieram as informações e oferece a quem for da casa assumi-la.</p>
+    <form method="POST" action="/admin/encontrado">
+      <input type="hidden" name="t" value="${esc(token)}">
+      <label class="campo" for="en-nome">Nome</label>
+      <input id="en-nome" name="nome" type="text" maxlength="80" required autocomplete="off">
+
+      <label class="campo" for="en-endereco">Endereço</label>
+      <input id="en-endereco" name="endereco" type="text" maxlength="140" required autocomplete="off">
+
+      <label class="campo" for="en-contato">Telefone</label>
+      <input id="en-contato" name="contato" type="tel" maxlength="40" autocomplete="off" inputmode="tel">
+
+      <label class="campo" for="en-tipo">Tipo</label>
+      <input id="en-tipo" name="tipo" type="text" maxlength="60" autocomplete="off"
+        placeholder="Paróquia · Escola · Ginásio">
+
+      <label class="campo" for="en-horario">Horário</label>
+      <input id="en-horario" name="horario" type="text" maxlength="80" autocomplete="off"
+        placeholder="8h às 18h">
+
+      <label class="campo" for="en-fonte">De onde veio isto</label>
+      <input id="en-fonte" name="fonte" type="text" maxlength="200" required
+        autocomplete="off" spellcheck="false" inputmode="url"
+        placeholder="prefeitura.rs.gov.br/... ou instagram.com/...">
+      <p class="meta">Vai <b>à vista na página</b>, com a data de hoje. Confira em
+        duas fontes antes de acrescentar: uma fonte só é boato, e mandar quarenta
+        pessoas a uma porta fechada é pior do que não listar o centro.</p>
+
+      <label class="campo" for="en-coords">Coordenadas (opcional)</label>
+      <input id="en-coords" name="coords" type="text" maxlength="48" autocomplete="off"
+        spellcheck="false" placeholder="-29.9177, -51.1839">
+
+      <label class="campo" for="en-perfil">Instagram ou site (opcional)</label>
+      <input id="en-perfil" name="perfil" type="text" maxlength="140" autocomplete="off"
+        spellcheck="false" inputmode="url">
+
+      <label class="campo" for="en-emergencia">Emergência</label>
+      ${escolherEmergencia('en-emergencia', '', emergencias)}
+
+      <label class="campo" for="en-slug">Endereço da página (opcional)</label>
+      <div class="linha-slug"><span>/</span>
+        <input id="en-slug" name="novo_slug" type="text" maxlength="48"
+          autocomplete="off" spellcheck="false" placeholder="canoas-ss"></div>
+
+      <button class="btn btn-primario">Acrescentar e pôr no ar</button>
+    </form>
+  </section>
+
+  ${reivindicados && reivindicados.length ? `
+  <h2 class="risco">Querem assumir a página <span class="conta-n">${reivindicados.length}</span></h2>
+  <p class="entrada">Estas pessoas dizem ser da casa de um centro que
+    <b>nós</b> acrescentámos. <b>Ligue primeiro.</b> Entregar o código é dar
+    acesso de escrita a uma página pública, e o nome de um centro está numa
+    lista que qualquer pessoa lê — o telefonema é a única conferência que
+    existe.</p>
+  <div class="pedidos">${reivindicados.map(c => {
+    const d = c.dados || {};
+    const r = d.reivindicacao || {};
+    const wa = linkWhatsApp(r.contato, `Oi! Aqui é do CAPEM, sobre a página de ${d.nome || c.slug}.`);
+    return `<article class="pedido">
+      <h3>${esc(d.nome || c.slug)}</h3>
+      <p class="meta">${esc(r.nome || '')}${r.papel ? ` · ${esc(r.papel)}` : ''} ·
+        pediu em ${esc(dataCurta(r.em || Date.now()))}</p>
+      <p>${svgIcone('telefone')} ${esc(r.contato || '—')}</p>
+      <p class="meta">Telefone que estava na página: ${esc(d.contato || '—')}</p>
+      <div class="botoes">
+        ${wa ? `<a class="btn btn-wa" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        <a class="btn" href="${esc(c.url || base + '/' + c.slug)}" target="_blank" rel="noopener">Ver</a>
+      </div>
+      <form method="POST" action="/admin/entregar">
+        <input type="hidden" name="t" value="${esc(token)}">
+        <input type="hidden" name="slug" value="${esc(c.slug)}">
+        <button class="btn btn-primario">Entregar o código</button>
+      </form>
+      <p class="meta">Emite o código, tira o aviso de "ninguém confirmou" da
+        página e devolve as quatro recusas. Só depois do telefonema.</p>
+    </article>`;
+  }).join('')}</div>` : ''}
 
   <h2 class="risco">Pedidos aguardando</h2>
   ${pendentes.length
@@ -2207,6 +2436,28 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 .migalhas b{color:var(--tinta);font-weight:700}
 @media(min-width:800px){.migalhas{padding:14px var(--goteira) 0}}
 
+/* --- centros sem dono ---
+   Uma faixa e não um cartão: isto atravessa a página porque é a primeira coisa
+   que muda o sentido de tudo o que está por baixo. Traço a cheio à esquerda,
+   como o aviso de idade — a mesma família de "leia isto antes de acreditar no
+   resto". Sem vermelho: não é um erro nem um perigo, é uma página honesta
+   sobre o que não sabe. */
+.sem-dono{padding:18px var(--goteira);background:var(--claro);
+  border-left:8px solid var(--tinta);border-bottom:1px solid var(--tenue)}
+.sem-dono h2{display:flex;align-items:center;gap:10px;margin:0 0 8px;
+  font-size:clamp(17px,4.6vw,21px)}
+.sem-dono h2 svg{width:26px;height:26px;flex:none}
+.sem-dono p{margin:0 0 8px;font:500 15px/1.55 var(--fonte);color:var(--texto-2)}
+.sem-dono b{color:var(--tinta)}
+.sem-dono .fonte{font:600 13px/1.5 var(--mono);color:var(--texto-3);word-break:break-word}
+.sem-dono .btn{margin-top:6px}
+/* Na lista: a mesma palavra sem cor de alarme. Um centro sem dono não está
+   atrasado — não tem quem publique, e isso não é culpa dele. */
+.c-item.sem-dono .c-quando{color:var(--texto-3)}
+.nota-sem-lista{margin:0 0 14px;padding:11px 13px;background:var(--claro);
+  border-left:6px solid var(--tinta);font:500 13.5px/1.55 var(--fonte);color:var(--texto-2)}
+.nota-sem-lista a{color:var(--tinta)}
+
 /* --- actualização diária ---
    Alvos grandes e poucos por linha. Isto usa-se de manhã, de pé, com uma mão,
    por alguém que tem outras dezassete coisas para fazer. */
@@ -2406,6 +2657,7 @@ module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
                    paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
                    paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
+                   paginaSouDaqui, paginaSouDaquiRecebido,
                    paginaEncerrado, paginaConfirmarEncerrar,
                    paginaCodigo, paginaAdmin, paginaConfirmar,
                    definirAviso, idade, esc, CSS };

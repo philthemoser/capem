@@ -38,7 +38,8 @@ let derivar = d => ({
   busca: String((d && d.nome) || '').toLowerCase(),
   nome_ord: String((d && d.nome) || '').toLowerCase(),
   pausado: !!(d && d.pausado),
-  emergencia: String((d && d.emergencia) || '')
+  emergencia: String((d && d.emergencia) || ''),
+  semDono: (d && d.origem) === 'encontrado'
 });
 
 const definirDerivacao = fn => { derivar = fn; };
@@ -46,7 +47,7 @@ const definirDerivacao = fn => { derivar = fn; };
 const derivadas = d => {
   const x = derivar(d || {});
   return [String(x.busca || ''), String(x.nome_ord || ''), x.pausado ? 1 : 0,
-          String(x.emergencia || '')];
+          String(x.emergencia || ''), x.semDono ? 1 : 0];
 };
 
 function abrir(arquivo) {
@@ -82,7 +83,17 @@ function abrir(arquivo) {
       busca       TEXT NOT NULL DEFAULT '',
       nome_ord    TEXT NOT NULL DEFAULT '',
       pausado     INTEGER NOT NULL DEFAULT 0,
-      emergencia  TEXT NOT NULL DEFAULT ''
+      emergencia  TEXT NOT NULL DEFAULT '',
+
+      /* Um centro que nunca pediu nada.
+         Está na lista porque alguém aqui o encontrou numa fonte pública durante
+         uma emergência, e uma lista que só tem quem já nos conhece não serve a
+         quem tem cobertores no carro. Não tem código, não tem lista de
+         necessidades, e diz na própria página de onde veio.
+         Coluna e não só um campo no JSON porque decide a ordem da lista — e
+         ordenar por uma coisa que obriga a desempacotar mil JSON é o desenho
+         que esta página já teve e que custou 1,6 MB. */
+      sem_dono    INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_estado ON centros(estado, criado);
     CREATE INDEX IF NOT EXISTS idx_lista ON centros(estado, publicado);
@@ -199,7 +210,10 @@ function migrar() {
        filtro que obrigue a desempacotar todos os JSON é o desenho que esta
        página já teve uma vez e que custou 1,6 MB. Vazia enquanto ninguém a
        preencher, e vazia é exactamente o comportamento de hoje. */
-    emergencia: "TEXT NOT NULL DEFAULT ''"
+    emergencia: "TEXT NOT NULL DEFAULT ''",
+    /* Centros acrescentados por nós, sem coordenador. Zero em toda a parte
+       numa base antiga, que é exactamente o comportamento de antes. */
+    sem_dono: 'INTEGER NOT NULL DEFAULT 0'
   };
   Object.entries(novas).forEach(([c, t]) => {
     if (!tem.has(c)) db.exec(`ALTER TABLE centros ADD COLUMN ${c} ${t}`);
@@ -219,7 +233,7 @@ function migrar() {
 function reindexar() {
   const linhas = db.prepare('SELECT slug, dados FROM centros').all();
   const upd = db.prepare(`UPDATE centros SET busca = ?, nome_ord = ?, pausado = ?,
-                                             emergencia = ? WHERE slug = ?`);
+                                             emergencia = ?, sem_dono = ? WHERE slug = ?`);
   db.exec('BEGIN');
   try {
     linhas.forEach(r => {
@@ -285,8 +299,8 @@ function codigoConfere(codigo, guardado) {
  */
 function criar(slug, dados) {
   db.prepare(`INSERT INTO centros (slug, estado, codigo_hash, dados, criado,
-                                   busca, nome_ord, pausado, emergencia)
-              VALUES (?, 'pendente', '', ?, ?, ?, ?, ?, ?)`)
+                                   busca, nome_ord, pausado, emergencia, sem_dono)
+              VALUES (?, 'pendente', '', ?, ?, ?, ?, ?, ?, ?)`)
     .run(slug, JSON.stringify(dados), Date.now(), ...derivadas(dados));
 }
 
@@ -332,7 +346,8 @@ function renomear(antigo, novo) {
 
 function publicar(slug, dados) {
   db.prepare(`UPDATE centros SET dados = ?, publicado = ?,
-                                 busca = ?, nome_ord = ?, pausado = ?, emergencia = ?
+                                 busca = ?, nome_ord = ?, pausado = ?, emergencia = ?,
+                                 sem_dono = ?
               WHERE slug = ?`)
     .run(JSON.stringify(dados), Date.now(), ...derivadas(dados), slug);
 }
@@ -397,10 +412,15 @@ function listar(estado) {
  * -------------------------------------------------------------------------*/
 function procurar({ termos = [], ordem = 'uteis', aceitando = false,
                     recentes = false, emergencia = '', pagina = 1, porPagina = 40,
-                    fresca = 0, envelhecida = 0 } = {}) {
+                    fresca = 0, envelhecida = 0, semDono = null } = {}) {
   const onde = ["estado = 'aprovado'"];
   const arg = [];
   if (emergencia) { onde.push('emergencia = ?'); arg.push(String(emergencia)); }
+  /* `null` é toda a gente, que é a lista normal. Só se separa quando alguém
+     pede — a página `/centros?semlista=1` — e nunca por omissão: esconder da
+     lista quem não usa a ferramenta é a versão silenciosa de castigar. */
+  if (semDono === true) onde.push('sem_dono = 1');
+  if (semDono === false) onde.push('sem_dono = 0');
 
   /* Todos os termos têm de bater. Com o texto já normalizado dos dois lados,
      um LIKE chega — e uma tabela pequena percorre-se mais depressa do que se
@@ -419,7 +439,16 @@ function procurar({ termos = [], ordem = 'uteis', aceitando = false,
      nome. O escalão escreve-se aqui em vez de se ordenar por `publicado`
      directamente porque dentro do mesmo escalão o que interessa é estar aberto,
      não ter publicado dez minutos antes. */
-  const escalao = `CASE WHEN publicado IS NULL THEN 3
+  /* Um centro sem dono nunca publica uma lista, porque não há quem a publique.
+     Deixá-lo cair no escalão 3, ao lado de quem tem coordenador e não publica
+     há semanas, seria castigá-lo por não usar a ferramenta — e numa emergência
+     esta lista não está a disputar utilizadores: quem tem cobertores no carro
+     quer a porta aberta mais perto, e se essa porta nunca ouviu falar do CAPEM
+     o problema é nosso. Fica no escalão 1, ao lado de uma lista de dois a seis
+     dias: diz menos do que a lista de hoje, e mais do que o silêncio de quem
+     devia estar a publicar. */
+  const escalao = `CASE WHEN sem_dono = 1 THEN 1
+                        WHEN publicado IS NULL THEN 3
                         WHEN publicado >= ? THEN 0
                         WHEN publicado >= ? THEN 1
                         ELSE 2 END`;
@@ -466,6 +495,18 @@ function parados(dias) {
                        AND COALESCE(publicado, decidido, criado) < ?
                      ORDER BY COALESCE(publicado, decidido, criado) ASC`).all(limite)
     .map(r => ({ ...r, dados: JSON.parse(r.dados) }));
+}
+
+/**
+ * Quantos centros estão no ar sem ninguém da casa por trás.
+ *
+ * Serve uma linha só, e importante: quem procura "cobertor" nunca vê estes
+ * centros, porque a coluna de busca é feita das necessidades e eles não têm
+ * nenhuma. Sem esta contagem, a procura responde como se eles não existissem.
+ */
+function contarSemDono() {
+  return db.prepare("SELECT COUNT(*) n FROM centros WHERE estado = 'aprovado' AND sem_dono = 1")
+    .get().n;
 }
 
 function contar() {
@@ -535,7 +576,8 @@ function apagarEmergencia(slug) {
       try { d = JSON.parse(c.dados); } catch { /* linha corrompida */ }
       d.emergencia = '';
       db.prepare(`UPDATE centros SET dados = ?, busca = ?, nome_ord = ?,
-                                     pausado = ?, emergencia = ? WHERE slug = ?`)
+                                     pausado = ?, emergencia = ?, sem_dono = ?
+                  WHERE slug = ?`)
         .run(JSON.stringify(d), ...derivadas(d), r.slug);
     });
     db.prepare('DELETE FROM emergencias WHERE slug = ?').run(slug);
@@ -612,14 +654,26 @@ function exportarPara(caminho) {
  * causa de uma correcção de morada seria a mentira que o resto do projecto
  * existe para evitar.
  */
-function definirVerificados(slug, campos) {
+function definirVerificados(slug, campos) { return guardarCampos(slug, campos); }
+
+/**
+ * Fundir campos no JSON de um centro, sem tocar em `publicado`.
+ *
+ * É o motor de `definirVerificados` e o mesmo que guarda o pedido de quem diz
+ * ser da casa de um centro sem dono. Uma função e não duas iguais com nomes
+ * diferentes — mas a regra é a de sempre: isto não é publicar uma lista, e
+ * fazer a página parecer fresca por causa de uma correcção nossa seria a
+ * mentira que o resto do projecto existe para evitar.
+ */
+function guardarCampos(slug, campos) {
   const r = db.prepare('SELECT dados FROM centros WHERE slug = ?').get(slug);
   if (!r) throw new Error('centro não existe: ' + slug);
   let d = {};
   try { d = JSON.parse(r.dados); } catch { /* linha corrompida: recomeça-se */ }
   const dados = { ...d, ...campos };
   db.prepare(`UPDATE centros SET dados = ?, busca = ?, nome_ord = ?,
-                                 pausado = ?, emergencia = ? WHERE slug = ?`)
+                                 pausado = ?, emergencia = ?, sem_dono = ?
+              WHERE slug = ?`)
     .run(JSON.stringify(dados), ...derivadas(dados), slug);
   return dados;
 }
@@ -629,6 +683,6 @@ module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
                    emergencias, emergenciasTodas, emergencia, criarEmergencia,
                    renomearEmergencia, activarEmergencia, apagarEmergencia,
                    exportarPara, lerAviso, escreverAviso, apagarAviso,
-                   definirVerificados, lerEstado,
+                   definirVerificados, guardarCampos, contarSemDono, lerEstado,
                    escreverEstado, definirDerivacao, reindexar,
                    novoCodigo, novoCodigoPara, garantirCodigo, codigoConfere, ESTADOS };

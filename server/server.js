@@ -90,7 +90,8 @@ const MENSAGENS = {
   'emergencia-fora': 'Emergência apagada. Os centros continuam no ar, sem agrupamento.',
   'teste-ok': 'Aviso de teste enviado. Se não chegou, o canal está mal configurado.',
   'teste-falhou': 'O aviso de teste falhou em pelo menos um canal — veja o log do servidor.',
-  'backup-falhou': 'Não deu para gerar a cópia. Veja o log do servidor.'
+  'backup-falhou': 'Não deu para gerar a cópia. Veja o log do servidor.',
+  encontrado: 'Centro acrescentado e no ar, sem código e sem lista. A página diz de onde vieram as informações.'
 };
 
 db.definirDerivacao(d => ({
@@ -102,7 +103,13 @@ db.definirDerivacao(d => ({
      funcionar. Foi exactamente o que aconteceu da primeira vez. É por isso que
      há um teste que aprova um centro com emergência e vai ler a coluna — uma
      falha silenciosa numa coluna derivada não se vê de outra maneira. */
-  emergencia: String((d && d.emergencia) || '')
+  emergencia: String((d && d.emergencia) || ''),
+  /* Mesma armadilha da linha acima, e a segunda vez que este ficheiro a arma:
+     esquecer isto não rebenta nada — a coluna fica a zero, o centro sem dono
+     cai no escalão de quem não publica há semanas, e a lista castiga-o em
+     silêncio por não usar a ferramenta. Há um teste que acrescenta um centro
+     e vai ler a coluna, e não o JSON, exactamente por isso. */
+  semDono: (d && d.origem) === 'encontrado'
 }));
 
 /* Falhar ao arrancar é melhor do que servir uma fila de aprovação aberta ao
@@ -126,7 +133,10 @@ const { MAX_Q } = require('./compartilhado');
    dois nomes já se confundiram uma vez na cabeça de quem escreveu isto; ficam
    comentados para não voltarem a confundir-se. */
 const LIMITES = { nome: 80, tipo: 60, endereco: 140, horario: 80, contato: 40,
-                  link: 140, motivoPausa: 140, emergencia: 60, perfil: 140 };
+                  link: 140, motivoPausa: 140, emergencia: 60, perfil: 140,
+                  /* De onde vieram as informações de um centro que nunca as
+                     deu. Vai para a página, à vista, com a data. */
+                  fonte: 200 };
 
 /**
  * Coordenadas coladas de um mapa.
@@ -203,11 +213,17 @@ function slugLivre(nome) {
 /* Trava simples por IP. Não é uma defesa a sério — é o suficiente para que um
    script aborrecido não encha a fila de aprovação enquanto ninguém olha. */
 const tentativas = new Map();
-function excedeu(ip, limite, janela) {
+/* A conta é por IP *e por porta*. Era só por IP, e isso queria dizer que as
+   rotas partilhavam o mesmo balde: cinco tentativas em /atualizar gastavam o
+   orçamento de /pedir, e um centro que tinha acabado de se enganar no código
+   deixava de conseguir pedir a sua página. Descoberto por um teste novo que
+   levou 429 numa rota em que ninguém tinha batido. */
+function excedeu(ip, limite, janela, porta = '') {
+  const chave = ip + '|' + porta;
   const agora = Date.now();
-  const t = (tentativas.get(ip) || []).filter(x => agora - x < janela);
+  const t = (tentativas.get(chave) || []).filter(x => agora - x < janela);
   t.push(agora);
-  tentativas.set(ip, t);
+  tentativas.set(chave, t);
   if (tentativas.size > 5000) tentativas.clear();
   return t.length > limite;
 }
@@ -466,6 +482,7 @@ async function encaminhar(req, res) {
       termos: B.termos(consulta.q), ordem: consulta.ordem,
       aceitando: consulta.aceitando, recentes: consulta.recentes,
       emergencia: consulta.emergencia,
+      semDono: consulta.semLista ? true : null,
       pagina: consulta.pagina, porPagina: consulta.porPagina,
       /* As fronteiras dos escalões, calculadas agora: até um dia é "de hoje",
          até sete ainda vale a pena mostrar sem alarme. */
@@ -474,7 +491,11 @@ async function encaminhar(req, res) {
     const centros = r.linhas.map(x => ({ ...x, url: urlDoCentro(x.slug, base) }));
     return responder(res, 200,
       P.paginaCentros({ centros, base, consulta, total: r.total, paginas: r.paginas,
-                        emergencias: db.emergencias() }),
+                        emergencias: db.emergencias(),
+                        /* Quantos ficaram de fora de uma procura por necessidade
+                           só por não terem quem publique uma. A página diz-o em
+                           voz alta em vez de os deixar invisíveis. */
+                        semDono: db.contarSemDono() }),
       'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=60' });
   }
   if (caminho === '/centro' && req.method === 'GET') {
@@ -486,7 +507,7 @@ async function encaminhar(req, res) {
 
   /* --- pedir uma página --- */
   if (caminho === '/pedir' && req.method === 'POST') {
-    if (excedeu(ip, 5, 3600e3)) return responder(res, 429, P.molde({
+    if (excedeu(ip, 5, 3600e3, 'pedir')) return responder(res, 429, P.molde({
       titulo: 'Pedidos demais',
       corpo: '<main class="aviso-pagina"><h1>Pedidos demais deste aparelho</h1><p>Tente daqui a uma hora.</p></main>'
     }));
@@ -535,7 +556,7 @@ async function encaminhar(req, res) {
     return responder(res, 200, P.paginaPedirCodigo({ slug: url.searchParams.get('c') || '' }));
   }
   if (caminho === '/pedir-codigo' && req.method === 'POST') {
-    if (excedeu(ip, 5, 3600e3)) {
+    if (excedeu(ip, 5, 3600e3, 'pedir-codigo')) {
       return responder(res, 429, P.paginaPedirCodigo({
         erro: 'Pedidos demais deste aparelho. Tente daqui a uma hora.' }));
     }
@@ -592,7 +613,7 @@ async function encaminhar(req, res) {
     /* Mais apertado do que publicar: aqui é onde alguém tentaria adivinhar um
        código à força. Vinte por hora chega para um coordenador que se engana
        algumas vezes e não chega para mais nada. */
-    if (excedeu(ip, 20, 3600e3)) {
+    if (excedeu(ip, 20, 3600e3, 'atualizar')) {
       return responder(res, 429, P.paginaAtualizarEntrada({
         erro: 'Tentativas demais deste aparelho. Espere uma hora.' }));
     }
@@ -713,7 +734,7 @@ async function encaminhar(req, res) {
    * centros de uma vez.
    */
   if (caminho === '/api/carregar' && req.method === 'POST') {
-    if (excedeu(ip, 60, 3600e3)) return json(res, 429, { erro: 'pedidos demais' });
+    if (excedeu(ip, 60, 3600e3, 'carregar')) return json(res, 429, { erro: 'pedidos demais' });
     let p;
     try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
     const real = db.resolver(texto(p.slug, 60));
@@ -736,7 +757,7 @@ async function encaminhar(req, res) {
   }
 
   if (caminho === '/api/publicar' && req.method === 'POST') {
-    if (excedeu(ip, 120, 3600e3)) return json(res, 429, { erro: 'envios demais' });
+    if (excedeu(ip, 120, 3600e3, 'publicar')) return json(res, 429, { erro: 'envios demais' });
     let p;
     try { p = JSON.parse(await corpo(req)); } catch (e) { return json(res, 400, { erro: 'json inválido' }); }
     const real = db.resolver(texto(p.slug, 60));
@@ -790,7 +811,15 @@ async function encaminhar(req, res) {
       aprovados: db.listar('aprovado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       encerrados: db.listar('encerrado').map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
       parados: db.parados(DIAS_PARADO).map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
-      erro: url.searchParams.get('erro'),
+      /* Quem disse ser da casa de um centro que nós acrescentámos. Vem antes de
+         tudo o resto na página: é a única fila em que alguém está à espera de
+         um telefonema nosso. */
+      reivindicados: db.listar('aprovado')
+        .filter(c => (c.dados || {}).reivindicacao)
+        .map(c => ({ ...c, url: urlDoCentro(c.slug, base) })),
+      erro: url.searchParams.get('erro') === 'encontrado'
+        ? 'Faltou o nome, o endereço ou a fonte. Os três são obrigatórios para um centro que não pediu a página.'
+        : url.searchParams.get('erro'),
       feito: MENSAGENS[url.searchParams.get('feito')] || '',
       saude: saudeDoSite(),
       avisoActivo: db.lerAviso(),
@@ -983,6 +1012,131 @@ async function encaminhar(req, res) {
       reemitido: true,
       voltar: '/admin?t=' + encodeURIComponent(ADMIN)
     }));
+  }
+
+  /* --- acrescentar um centro que nunca pediu página ---
+   *
+   * A lista tem mais valor no primeiro dia de uma cheia do que em qualquer
+   * outro, e no primeiro dia quase nenhum centro ouviu falar disto. Uma lista
+   * feita só de quem já nos conhece manda alguém com cobertores no carro passar
+   * à porta de um ginásio aberto para ir a outro mais longe.
+   *
+   * O que entra é o que se encontra numa fonte pública: nome, morada, telefone,
+   * horário, redes. O que NÃO entra é uma lista de necessidades — ninguém de lá
+   * disse o que precisa, e inventá-la seria pôr palavras na boca de quem não
+   * falou. A página diz de onde veio e quando, e oferece a quem for da casa
+   * assumi-la.
+   *
+   * Fica no ar já: não há fila para um centro que fomos nós a criar — a
+   * verificação é a fonte, e ela vai à vista na página em vez de ficar num
+   * campo interno.
+   */
+  if (caminho === '/admin/encontrado' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
+    const dados = limparDados({
+      nome: campos.get('nome'), tipo: campos.get('tipo'), endereco: campos.get('endereco'),
+      horario: campos.get('horario'), contato: campos.get('contato'),
+      fonte: campos.get('fonte'),
+      /* Sem necessidades e sem recusas. As quatro recusas são um conselho bom,
+         e mesmo assim não são nossas para dar em nome de uma casa que não
+         falou connosco. */
+      precisa: [], naoTraga: []
+    });
+    if (!dados.nome || !dados.endereco || !dados.fonte) {
+      return paraOndeIr(res, '/admin?erro=encontrado');
+    }
+    dados.origem = 'encontrado';
+    dados.fonteEm = Date.now();
+    const verificados = camposVerificados(campos);
+    Object.entries(verificados).forEach(([k, v]) => { if (v !== undefined) dados[k] = v; });
+    const pedido = fazerSlug(texto(campos.get('novo_slug'), 48), '');
+    let slug = pedido && !RESERVADOS.has(pedido) && !db.existe(pedido)
+      ? pedido : slugLivre(dados.nome);
+    db.criar(slug, dados);
+    db.decidir(slug, 'aprovado');
+    console.log(`[encontrado] ${slug} — ${dados.nome}`);
+    return paraOndeIr(res, '/admin?feito=encontrado');
+  }
+
+  /* --- sou deste centro ---
+   *
+   * O caminho de volta de uma página que criámos sem falar com ninguém. Não
+   * concede nada — pelo mesmo motivo que `/pedir-codigo` não concede: os nomes
+   * dos centros estão numa lista pública, e um formulário que entregasse a
+   * chave bastaria saber um nome para tomar conta de uma página.
+   *
+   * O que faz é pôr o pedido na fila e tocar o telefone de quem administra. A
+   * verificação é o telefonema. Sempre foi.
+   */
+  if (caminho === '/sou-daqui' && req.method === 'GET') {
+    const slug = db.resolver(texto(url.searchParams.get('c'), 60));
+    const centro = slug ? db.ler(slug) : null;
+    if (!centro || (centro.dados || {}).origem !== 'encontrado') {
+      return responder(res, 404, P.paginaNaoExiste());
+    }
+    return responder(res, 200, P.paginaSouDaqui({ centro }));
+  }
+
+  if (caminho === '/sou-daqui' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    const slug = db.resolver(texto(campos.get('slug'), 60));
+    const centro = slug ? db.ler(slug) : null;
+    if (!centro || (centro.dados || {}).origem !== 'encontrado') {
+      return responder(res, 404, P.paginaNaoExiste());
+    }
+    if (excedeu(ip, 5, 3600e3, 'sou-daqui')) {
+      return responder(res, 429, P.molde({
+        titulo: 'Pedidos demais',
+        corpo: '<main class="aviso-pagina"><h1>Pedidos demais deste aparelho</h1><p>Tente daqui a uma hora.</p></main>'
+      }));
+    }
+    const nome = texto(campos.get('nome'), 80);
+    const contato = texto(campos.get('contato'), 40);
+    if (!nome || !contato) {
+      return responder(res, 400, P.paginaSouDaqui({
+        centro, erro: 'Precisamos do nome e de um telefone para ligar.'
+      }));
+    }
+    db.guardarCampos(slug, {
+      reivindicacao: { nome, contato, papel: texto(campos.get('papel'), 60), em: Date.now() }
+    });
+    console.log(`[sou-daqui] ${slug} — ${nome}`);
+    A.avisar({
+      tipo: 'reivindicacao',
+      titulo: 'Alguém diz ser de um centro que nós acrescentámos',
+      corpo: [(centro.dados || {}).nome, '/' + slug, nome, contato,
+              texto(campos.get('papel'), 60)].filter(Boolean).join('\n'),
+      url: `${base}/admin?t=${encodeURIComponent(ADMIN)}`,
+      slug
+    });
+    return responder(res, 200, P.paginaSouDaquiRecebido({ centro, base }));
+  }
+
+  /* --- entregar a página a quem é da casa ---
+   *
+   * Depois do telefonema. Emite o código, apaga a marca de "encontrado" e o
+   * pedido: a partir daqui é um centro como os outros, com quem publica a lista
+   * e uma página que deixa de dizer que ninguém a confirmou.
+   */
+  if (caminho === '/admin/entregar' && req.method === 'POST') {
+    const campos = new URLSearchParams(await corpo(req));
+    if (!ehAdmin(req, campos.get('t') || undefined)) return responder(res, 404, P.paginaNaoExiste());
+    const slug = texto(campos.get('slug'), 60);
+    const centro = db.existe(slug) ? db.ler(slug) : null;
+    if (!centro) return paraOndeIr(res, '/admin');
+    db.guardarCampos(slug, {
+      origem: '', reivindicacao: null,
+      naoTraga: require('./compartilhado').RECUSAS
+    });
+    const codigo = db.garantirCodigo(slug) || db.novoCodigoPara(slug);
+    const d = centro.dados || {};
+    console.log(`[entregue] ${slug}`);
+    return responder(res, 200, P.paginaCodigo({
+      slug, codigo, base, url: urlDoCentro(slug, base),
+      nome: d.nome, contato: (d.reivindicacao || {}).contato || d.contato,
+      voltar: '/admin'
+    }), 'text/html; charset=utf-8', { 'X-Robots-Tag': 'noindex' });
   }
 
   if (caminho === '/admin/decidir' && req.method === 'POST') {

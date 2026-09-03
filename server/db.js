@@ -134,7 +134,28 @@ function abrir(arquivo) {
          valor aqui — é para proteger A MEDIÇÃO: registadas contra lidas é o
          único número que diz se isto valeu a pena, e não vale nada se contar
          toques anónimos ao lado de confirmações no local. */
-      grau      TEXT NOT NULL DEFAULT ''
+      grau      TEXT NOT NULL DEFAULT '',
+      /* ---------------------------------------------------------------------
+       * O RECADO. Texto livre, e por isso o campo mais perigoso da base.
+       *
+       * Esteve proibido de propósito. O raciocinio escrito era: um registo de
+       * sacola guarda conteudos, volumes, uma hora e um centro, nada sobre
+       * uma pessoa, portanto guardar para sempre e uma questao de espaco e nao
+       * de privacidade. Texto livre desfaz isso — "2 caixas de leite para a
+       * D. Maria do 3o andar" e onde um nome acaba por aterrar — e nesse dia a
+       * retencao passa a ser uma decisao tomada debaixo de pressao.
+       *
+       * Entra na mesma porque o buraco que tapa e real: o bit de "tem coisa
+       * fora da lista" diz que existe e nao diz o que e, e a resposta de hoje
+       * — escreva num papel e ponha dentro — obriga a abrir a sacola, que era
+       * exactamente o que o codigo servia para evitar.
+       *
+       * O preco paga-se aqui e agora, enquanto ninguem esta com pressa: o
+       * recado APAGA-SE SOZINHO (ver esquecerNotas). O resto da linha fica. E
+       * nunca entra no codigo de sete letras: o codigo tem de caber escrito a
+       * caneta numa sacola molhada e tem de descodificar-se sem rede.
+       * ------------------------------------------------------------------- */
+      nota      TEXT NOT NULL DEFAULT ''
     );
     CREATE INDEX IF NOT EXISTS idx_sacolas_centro ON sacolas(centro, recebida);
     CREATE INDEX IF NOT EXISTS idx_sacolas_criada ON sacolas(criada);
@@ -175,6 +196,10 @@ function abrir(arquivo) {
      reescreve `dados.emergencia` e a reindexação é que copia o resultado para
      a coluna. */
   migrarEmergencias();
+  /* Os recados que passaram dos trinta dias. No arranque, porque um servidor
+     que reinicia todos os dias nunca chegaria a chamar isto de outra maneira,
+     e porque uma base restaurada de uma copia antiga tem de chegar limpa. */
+  esquecerNotas();
   /* Refaz as colunas derivadas de tudo o que já lá estava. É uma passagem por
      uma tabela pequena, e é o que torna seguro mudar a regra de indexação sem
      obrigar centro nenhum a republicar para voltar a ser encontrável. */
@@ -236,6 +261,14 @@ function migrarEmergencias() {
  * o `reindexar()` do arranque.
  */
 function migrar() {
+  /* A tabela das sacolas e nova e ja nasceu quase inteira, mas uma base criada
+     entre 2 e 3 de Setembro nao tem a coluna do recado. Mesmo padrao das
+     outras: acrescentar se faltar, nunca reescrever. */
+  const temSac = new Set(db.prepare('PRAGMA table_info(sacolas)').all().map(c => c.name));
+  if (temSac.size && !temSac.has('nota')) {
+    db.exec("ALTER TABLE sacolas ADD COLUMN nota TEXT NOT NULL DEFAULT ''");
+  }
+
   const tem = new Set(db.prepare('PRAGMA table_info(centros)').all().map(c => c.name));
   const novas = {
     busca: "TEXT NOT NULL DEFAULT ''",
@@ -519,14 +552,14 @@ function procurar({ termos = [], ordem = 'uteis', aceitando = false,
  * sacolas existem, e faria adivinhar a seguinte. Há 20.856 por descrição, por
  * isso a colisão é rara e resolve-se tentando outra vez.
  */
-function criarSacola(descricao, fazerCodigo, tentativas = 12) {
-  const ins = db.prepare(`INSERT INTO sacolas (codigo, descricao, serie, criada)
-                          VALUES (?, ?, ?, ?)`);
+function criarSacola(descricao, fazerCodigo, nota = '', tentativas = 12) {
+  const ins = db.prepare(`INSERT INTO sacolas (codigo, descricao, serie, criada, nota)
+                          VALUES (?, ?, ?, ?, ?)`);
   for (let i = 0; i < tentativas; i++) {
     const serie = crypto.randomInt(0, 20856);
     const codigo = String(fazerCodigo(serie)).toUpperCase().replace(/[^A-Z0-9]/g, '');
     try {
-      ins.run(codigo, descricao, serie, Date.now());
+      ins.run(codigo, descricao, serie, Date.now(), String(nota || ''));
       return { codigo, serie };
     } catch (e) {
       /* PK ocupada: outra sacola igual apanhou esta série. Tenta outra. */
@@ -534,6 +567,33 @@ function criarSacola(descricao, fazerCodigo, tentativas = 12) {
     }
   }
   throw new Error('não foi possível emitir um código para esta sacola');
+}
+
+/* ---------------------------------------------------------------------------
+ * ESQUECER OS RECADOS.
+ *
+ * O unico campo de texto livre da base apaga-se ao fim de trinta dias. O resto
+ * da linha — conteudos, volumes, hora, centro, grau — fica, porque e disso que
+ * se faz a unica medicao que diz se esta fase valeu a pena: registadas contra
+ * lidas numa porta. Essa conta nao precisa de saber o que dizia o papel.
+ *
+ * Trinta dias porque e mais do que qualquer conferencia de entrada demora e
+ * muito menos do que "para sempre". O numero e discutivel; o que nao e
+ * discutivel e ele existir, e existir ANTES de haver recados guardados. Uma
+ * politica de retencao escrita depois de a base ja ter nomes la dentro escreve-
+ * se sempre pior.
+ *
+ * Corre no arranque e a cada registo. E uma linha de SQL contra um indice; a
+ * alternativa era um cron, que este projecto nao tem e nao vai ter por causa
+ * disto. Devolve quantas apagou, para os testes poderem ver.
+ * -------------------------------------------------------------------------*/
+const DIAS_DO_RECADO = 30;
+
+function esquecerNotas(dias = DIAS_DO_RECADO, agora = Date.now()) {
+  const limite = agora - dias * 86400e3;
+  const r = db.prepare("UPDATE sacolas SET nota = '' WHERE nota <> '' AND criada < ?")
+    .run(limite);
+  return r.changes || 0;
 }
 
 const chaveSacola = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -796,5 +856,6 @@ module.exports = { abrir, criar, ler, existe, resolver, renomear, publicar,
                    exportarPara, lerAviso, escreverAviso, apagarAviso,
                    definirVerificados, guardarCampos, contarSemDono, lerEstado,
                    criarSacola, lerSacola, receberSacola, sacolasDoCentro, contarSacolas,
+                   esquecerNotas, DIAS_DO_RECADO,
                    escreverEstado, definirDerivacao, reindexar,
                    novoCodigo, novoCodigoPara, garantirCodigo, codigoConfere, ESTADOS };

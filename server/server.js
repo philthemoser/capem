@@ -626,12 +626,24 @@ async function encaminhar(req, res) {
     const outros = campos.get('outros') === '1';
     const volumes = Math.max(1, Math.min(SAC.MAX_VOLUMES,
       parseInt(campos.get('volumes'), 10) || 1));
+    /* 120 caracteres. Chega para "2 caixas de leite longa vida" e nao chega
+       para uma historia com nomes lá dentro. O corte e no servidor e nao no
+       maxlength do campo, que qualquer pessoa contorna. */
+    const nota = texto(campos.get('nota'), 120);
     if (!ids.length && !outros) {
       return responder(res, 400, P.paginaDoar({
-        erro: 'Escolha ao menos um item, ou marque que tem coisa fora da lista.' }));
+        erro: 'Escolha ao menos um item, ou marque que tem coisa fora da lista.',
+        escolhidos: ids, volumes, outros }));
     }
     const descricao = SAC.descrever(ids, outros, volumes);
-    const sacola = db.criarSacola(descricao, serie => SAC.codificar(ids, outros, volumes, serie));
+    const sacola = db.criarSacola(descricao,
+      serie => SAC.codificar(ids, outros, volumes, serie), nota);
+    /* Os recados que passaram do prazo. Aqui e nao so no arranque, porque um
+       servidor que fique meses de pe nunca mais voltaria a limpar nada. */
+    db.esquecerNotas();
+    /* O recado NAO vai para o registo. Um log e a copia da base que nao tem
+       politica de retencao nenhuma, e escrever lá texto de uma pessoa desfazia
+       o apagar automatico sem ninguem dar por isso. */
     console.log(`[sacola] ${sacola.codigo} — ${ids.length} itens, ${volumes} volume(s)`);
     /* Os centros que leem códigos, para o doador saber onde a sacola é esperada.
        Nunca é uma condição: o código não fica preso a nenhum centro. */

@@ -1485,6 +1485,68 @@ const DIA = 86400000;
     ok('uma sacola sem nada dentro é recusada com jeito',
       r2.status === 400 && /ao menos um item/.test(await r2.text()));
 
+    /* ---------------------------------------------------------------------
+     * O RECADO.
+     *
+     * O unico campo de texto livre da base. Esteve proibido de proposito e
+     * entrou porque o bit de "tem coisa fora da lista" dizia que existe e nao
+     * dizia o que e — o que obrigava a abrir a sacola, exactamente o que o
+     * codigo servia para evitar.
+     *
+     * Estas asercoes sao o preco combinado. Se alguma cair, o campo deixou de
+     * ser o que foi aprovado: o corte no servidor, o apagar sozinho, e o
+     * recado nunca aparecer a partir de um codigo que ninguem registou.
+     * ------------------------------------------------------------------- */
+    r2 = await formN('/doar', { itens: ['limpeza'], volumes: '1', outros: '1',
+      nota: '2 caixas de leite longa vida' });
+    const codN = ((await r2.text()).match(/[A-Z2-9]{3}-[A-Z2-9]{4}/) || [])[0];
+    ok('o recado fica guardado no servidor',
+      S.db.lerSacola(codN).nota === '2 caixas de leite longa vida');
+    ok('e NAO vai dentro do codigo — sete letras, como sempre',
+      /^[A-Z2-9]{3}-[A-Z2-9]{4}$/.test(codN));
+    h2 = await (await formN('/balcao', { c: codN })).text();
+    ok('o voluntario le o recado na porta', h2.includes('2 caixas de leite longa vida'));
+    ok('e ja nao lhe mandam abrir a sacola a procura do papel',
+      !/papel dentro da sacola diz o quê/.test(h2));
+
+    /* O corte e no servidor. O maxlength do campo contorna-se com qualquer
+       ferramenta; o que protege a base e esta linha. */
+    r2 = await formN('/doar', { itens: ['agua'], volumes: '1', nota: 'x'.repeat(400) });
+    const codL = ((await r2.text()).match(/[A-Z2-9]{3}-[A-Z2-9]{4}/) || [])[0];
+    ok('um recado enorme e cortado aos 120 no servidor',
+      S.db.lerSacola(codL).nota.length === 120);
+
+    /* Um codigo descodifica-se sozinho; isso nao prova que exista. O recado
+       vive so no servidor, portanto um codigo inventado com a mesma descricao
+       nao pode fazer aparecer o recado de outra pessoa. */
+    const naoEmitido = SACOLA.codificar(['limpeza'], true, 1,
+      (SACOLA.descodificar(codN).serie + 1) % SACOLA.SERIAIS);
+    h2 = await (await formN('/balcao', { c: naoEmitido })).text();
+    ok('um codigo inventado nao mostra o recado de ninguem',
+      !h2.includes('2 caixas de leite longa vida'));
+
+    /* O apagar sozinho. Em vez de esperar um mes, adianta-se o relogio: a
+       funcao recebe o "agora" de fora justamente para isto ser testavel sem
+       mexer na tabela por baixo da API. */
+    ok('um recado de hoje nao e apagado',
+      S.db.esquecerNotas() === 0 && S.db.lerSacola(codN).nota !== '');
+    const apagados = S.db.esquecerNotas(S.db.DIAS_DO_RECADO, Date.now() + 31 * 86400e3);
+    ok('e apaga-se sozinho passados os trinta dias',
+      apagados >= 2 && S.db.lerSacola(codN).nota === '' && S.db.lerSacola(codL).nota === '');
+    const sobrou = S.db.lerSacola(codN);
+    ok('mas o resto da linha fica — e dela que se faz a medicao',
+      sobrou.descricao > 0 && sobrou.criada > 0 && sobrou.serie >= 0);
+    ok('e a porta deixa de mostrar o que ja nao existe',
+      !(await (await formN('/balcao', { c: codN })).text()).includes('leite longa vida'));
+
+    /* Volumes: passaram de uma caixa de numero para oito botoes. O valor
+       continua a chegar como texto e a ser cortado ao intervalo. */
+    r2 = await formN('/doar', { itens: ['agua'], volumes: '8' });
+    ok('oito volumes passam', /8 volumes/.test(await r2.text()));
+    r2 = await formN('/doar', { itens: ['agua'], volumes: '99' });
+    ok('noventa e nove volumes ficam em oito, nunca recusados',
+      /8 volumes/.test(await r2.text()));
+
     /* Duas sacolas embaladas exactamente da mesma maneira. */
     r2 = await formN('/doar', { itens: ['agua', 'alimento'], volumes: '2' });
     const cod2 = ((await r2.text()).match(/[A-Z2-9]{3}-[A-Z2-9]{4}/) || [])[0];

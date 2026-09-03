@@ -140,6 +140,15 @@ const LARGURA = 390;
     ['pedir página', '/novo'], ['atualizar', '/atualizar'],
     ['pedir código', '/pedir-codigo'], ['página do centro', '/canoas-ss'],
     ['fila', '/admin?t=' + encodeURIComponent(process.env.CAPEM_ADMIN)],
+    /* O /doar entrou nesta lista depois de o formulario do /atualizar ter sido
+       reaproveitado la. O formulario trazia a goteira escrita por dentro, para
+       viver numa pagina em faixas; numa pagina normal isso somou-se a goteira
+       do main e o texto de ajuda ficou a 40 px enquanto o titulo em cima dele
+       ficava a 20. Uma pagina nova que use um bloco antigo e exactamente o caso
+       que este teste existe para apanhar, e nao o apanhava porque a pagina nao
+       estava na lista. */
+    ['registrar sacola', '/doar'],
+    ['balcão', '/balcao'],
     ['lista aberta', null]
   ];
 
@@ -218,9 +227,24 @@ const LARGURA = 390;
            página pusesse um formulário dentro de um. Foi o que aconteceu quando
            a entrada do coordenador passou para dentro das portas do /centro.
            Sem nenhum campo solto, fica `null`, que este teste já tolera — as
-           medidas do h1 e do primeiro parágrafo continuam a guardar a porta. */
+           medidas do h1 e do primeiro parágrafo continuam a guardar a porta.
+
+           `.item` e `.vol` entraram na lista pelo mesmo motivo, quando o /doar
+           passou a ser medido: a caixa de um item vive dentro do rectângulo
+           tocável do item, afastada pela moldura e pelo padding dele, e isso é
+           igual em todas as páginas que tenham itens. Media 32 e não dizia
+           nada. */
         campo: L([...document.querySelectorAll('main input:not([type=hidden]),main textarea')]
-          .find(e => !e.closest('.porta, .pedido, .sacola, .achado')) || null)
+          .find(e => !e.closest('.porta, .pedido, .sacola, .achado, .item, .vol')) || null),
+        /* O texto de ajuda por baixo de um titulo. Media-se so o h1 e o
+           primeiro paragrafo, e ambos estavam certos na pagina em que a ajuda
+           estava 20 px mais para dentro do que o titulo dela. O paragrafo que
+           interessa e o que esta ao lado de um h2, no meio da pagina, e nao o
+           de entrada. Mesma regra do campo: os que vivem dentro de um cartao
+           estao afastados pela margem do cartao e nao dizem nada sobre a
+           goteira. */
+        ajuda: L([...document.querySelectorAll('main .ajuda')]
+          .find(e => !e.closest('.porta, .pedido, .sacola, .achado, .bloco-a')) || null)
       };
     }) });
   }
@@ -251,7 +275,7 @@ const LARGURA = 390;
     process.exit(1);
   }
 
-  const valores = medidas.flatMap(m => [m.h1, m.texto, m.campo].filter(v => v !== null));
+  const valores = medidas.flatMap(m => [m.h1, m.texto, m.campo, m.ajuda].filter(v => v !== null));
   const distintos = [...new Set(valores)];
   if (distintos.length === 1) {
     console.log(`PASS — as ${medidas.length} páginas afastam-se ${distintos[0]} px da beira, todas iguais;`
@@ -260,7 +284,8 @@ const LARGURA = 390;
   }
   console.log('FALHA — a goteira não é a mesma em todas as páginas:\n');
   medidas.forEach(m => console.log(
-    `  ${m.nome.padEnd(18)} h1:${String(m.h1).padStart(4)}  texto:${String(m.texto).padStart(4)}  campo:${String(m.campo).padStart(4)}`));
+    `  ${m.nome.padEnd(18)} h1:${String(m.h1).padStart(4)}  texto:${String(m.texto).padStart(4)}` +
+    `  campo:${String(m.campo).padStart(4)}  ajuda:${String(m.ajuda).padStart(4)}`));
   console.log(`\n  valores distintos: ${distintos.join(', ')}`);
   console.log('  Uma página nova escolhe entre os dois modelos do topo do CSS:');
   console.log('  com goteira (nada a fazer) ou main.faixas (cada faixa põe a sua).');

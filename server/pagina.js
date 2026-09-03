@@ -1196,9 +1196,16 @@ function paginaSouDaquiRecebido({ centro, base }) {
  * ========================================================================= */
 
 /** Os dezasseis itens, agrupados como no catálogo — sem os quatro que afogam. */
+/**
+ * A grelha de itens, agrupada por categoria.
+ *
+ * Vai dentro de `.grade-itens` para o CSS poder dizer "quando alguma coisa
+ * estiver escolhida AQUI DENTRO" sem apanhar os volumes nem o visto de fora da
+ * lista, que estao no mesmo formulario e tambem sao inputs marcados.
+ */
 function gradeDeItens(escolhidos) {
   const on = new Set(escolhidos || []);
-  return GRUPOS.map(g => {
+  return '<div class="grade-itens">' + GRUPOS.map(g => {
     const ids = g.ids.filter(id => SAC.ITENS.indexOf(id) >= 0);
     if (!ids.length) return '';
     return `<fieldset class="grupo">
@@ -1211,10 +1218,10 @@ function gradeDeItens(escolhidos) {
         </label>`).join('')}
       </div>
     </fieldset>`;
-  }).join('');
+  }).join('') + '</div>';
 }
 
-function paginaDoar({ erro, escolhidos, centro }) {
+function paginaDoar({ erro, escolhidos, centro, volumes, outros }) {
   const naoTraga = RECUSAS.map(id => `<li>${svgProibido(id)}<span>${esc(ROTULO_BR[id] || id)}</span></li>`).join('');
   return molde({
     aqui: '/centros',
@@ -1242,17 +1249,32 @@ function paginaDoar({ erro, escolhidos, centro }) {
     ${gradeDeItens(escolhidos)}
 
     <h2>Quantas sacolas iguais a esta?</h2>
-    <p class="ajuda">O mesmo código serve para todas as sacolas com o mesmo
-      conteúdo. Acima de oito volumes, ligue para o centro antes de sair: uma
-      carga que chega sem aviso ocupa a porta, o corredor e o pátio.</p>
-    <label class="campo" for="volumes">Volumes</label>
-    <input id="volumes" name="volumes" type="number" value="1" min="1" max="8" inputmode="numeric">
+    <p class="ajuda">O mesmo código serve para todas com o mesmo conteúdo.</p>
+    <fieldset class="volumes">
+      <legend class="sr-only">Quantos volumes</legend>
+      ${[1, 2, 3, 4, 5, 6, 7, 8].map(n => `<label class="vol">
+        <input type="radio" name="volumes" value="${n}"${
+          Number(volumes || 1) === n ? ' checked' : ''}><span>${n}</span></label>`).join('')}
+    </fieldset>
+    <p class="ajuda">Mais de oito? Ligue para o centro antes de sair. Uma carga
+      que chega sem aviso ocupa a porta, o corredor e o pátio.</p>
 
-    <label class="caixa"><input type="checkbox" name="outros" value="1">
-      <span>Tem alguma coisa que não está na lista</span></label>
-    <p class="ajuda">O código guarda que existe, não o quê — escreva num papel e
-      ponha dentro da sacola. Um código que levasse texto livre deixaria de caber
-      numa etiqueta escrita à mão.</p>
+    <h2>Tem alguma coisa fora da lista?</h2>
+    <div class="fora-da-lista">
+      <label class="caixa grande"><input type="checkbox" name="outros" value="1"${
+        outros ? ' checked' : ''}>
+        <span>Sim, vai mais alguma coisa dentro</span></label>
+      <div class="so-se-sim">
+        <label class="campo" for="nota">O que é</label>
+        <textarea id="nota" name="nota" rows="2" maxlength="120"
+          placeholder="ex.: 2 caixas de leite longa vida"></textarea>
+        <p class="ajuda">Isto fica no servidor e aparece ao voluntário quando ele
+          lê o código na porta — não vai dentro do código, que precisa caber
+          escrito à caneta. <b>Não escreva nomes nem telefones de ninguém</b>: é
+          apagado sozinho depois de trinta dias, e mesmo assim não é lugar
+          para isso.</p>
+      </div>
+    </div>
 
     <button class="btn btn-primario largo" type="submit">Registrar e gerar o código</button>
   </form>
@@ -1425,6 +1447,10 @@ function paginaBalcao({ codigo, erro }) {
 
 function paginaBalcaoSacola({ sacola, centros, erro }) {
   const d = sacola.decodificada;
+  /* So existe se a sacola foi mesmo registada. Um codigo descodifica-se sozinho
+     e nao prova nada; o recado vive no servidor e por isso nunca aparece a
+     partir de um codigo inventado. */
+  const nota = (sacola.linha && sacola.linha.nota) || '';
   const linhas = d.ids.map(id => `<div class="linha-item">${svgIcone(id)}
       <b>${esc(ROTULO_BR[id] || id)}</b></div>`).join('');
   const jaRecebida = sacola.linha && sacola.linha.recebida;
@@ -1450,8 +1476,13 @@ function paginaBalcaoSacola({ sacola, centros, erro }) {
         : 'não confirmada'}</p>
     ${linhas}
     ${d.outros ? `<div class="linha-item">${svgIcone('caixa')}
-      <b>Tem coisa fora da lista — o papel dentro da sacola diz o quê</b></div>` : ''}
+      <b>Tem coisa fora da lista${nota ? '' : ' — o papel dentro da sacola diz o quê'}</b></div>` : ''}
   </div>
+
+  ${nota ? `<div class="recado">
+    <p class="r-rot">Recado de quem embalou</p>
+    <p class="r-texto">${esc(nota)}</p>
+  </div>` : ''}
 
   ${!sacola.linha ? `<p class="idade velha">Este código não consta como registrado.
     Ou foi digitado errado, ou a sacola foi descrita sem internet. <b>Receba pelo
@@ -3065,9 +3096,27 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
 /* Mais específico do que ".btn.largo{width:100%}", que de outro modo ganha e
    soma 100% à margem de 20 px — o botão saía 20 px fora do ecrã e a página
    passava a deslizar de lado. */
-.form-atualizar > .btn.largo{margin:18px var(--goteira) 0;
-  width:calc(100% - var(--goteira) * 2);box-sizing:border-box}
-.form-atualizar .ajuda{padding:0 var(--goteira)}
+/* ---------------------------------------------------------------------------
+ * O RECUO DO FORMULARIO, e porque e uma variavel.
+ *
+ * Este formulario nasceu no /atualizar, que e uma pagina em faixas: o main nao
+ * tem goteira nenhuma e cada bloco poe a sua. Por isso a ajuda e o botao
+ * traziam a goteira por dentro, escrita a mao.
+ *
+ * Depois o mesmo formulario foi usado no /doar, que e uma pagina normal — o
+ * main JA da a goteira. As duas somaram-se: o titulo ficava a 20 px da beira e
+ * o texto por baixo dele a 40, desalinhados um do outro na mesma pagina. Foi
+ * visto num screenshot, como quase tudo isto.
+ *
+ * E a mesma armadilha da goteira, um andar abaixo, e leva a mesma solucao: o
+ * recuo e uma variavel que vale zero por omissao e so passa a valer a goteira
+ * dentro de um main.faixas. Esquecer-se da o resultado certo.
+ * -------------------------------------------------------------------------*/
+.form-atualizar{--recuo:0px}
+main.faixas .form-atualizar{--recuo:var(--goteira)}
+.form-atualizar > .btn.largo{margin:18px var(--recuo) 0;
+  width:calc(100% - var(--recuo) * 2);box-sizing:border-box}
+.form-atualizar .ajuda{padding:0 var(--recuo)}
 .bloco-a .ajuda{padding:0}
 .grupo{margin:0 0 14px;padding:0;border:0}
 .grupo legend{padding:0;font:700 11px/1 var(--fonte);text-transform:uppercase;
@@ -3092,6 +3141,78 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
   border-radius:0;box-sizing:border-box}
 .item:has(input:checked) .it-q{border-color:var(--tinta)}
 .recusas .it-nome{color:var(--proibido)}
+
+/* O recado, na porta. Recuado com um traco em vez de uma moldura: nao e um
+   aviso nem um estado do sistema, e uma pessoa a falar com outra. */
+.recado{margin:14px var(--goteira) 0;padding:12px 14px;background:var(--claro);
+  border-left:6px solid var(--tinta)}
+.r-rot{margin:0 0 4px;font:700 11px/1 var(--fonte);text-transform:uppercase;
+  letter-spacing:.14em;color:var(--texto-2)}
+.r-texto{margin:0;font:500 15.5px/1.45 var(--fonte);color:var(--tinta);
+  overflow-wrap:anywhere}
+
+/* ---------------------------------------------------------------------------
+ * UMA CATEGORIA POR SACOLA, dita pelo desenho e nao so pelo texto.
+ *
+ * Escolhido o primeiro item, as outras categorias recuam. E o que faz uma
+ * sacola ir direita para a prateleira em vez de ser aberta e espalhada no
+ * chao — e a frase que dizia isto estava la em cima e ninguem a lia.
+ *
+ * SUGESTAO, NUNCA TRANCA. As categorias recuadas continuam a receber toque e
+ * teclado. Quem misturou mesmo tem de conseguir registar; a alternativa e uma
+ * pessoa a chegar a porta com uma sacola que o sistema recusou descrever.
+ *
+ * Tudo isto e CSS. O :has() le o estado dos inputs sem uma linha de script, o
+ * que mantem a regra da casa — o JavaScript e acabamento, nunca mecanismo — e
+ * num browser velho que nao conheca o :has() nao acontece nada: ve-se a grelha
+ * inteira, que e exactamente o que se via ontem.
+ *
+ * As cores nao sao um opacity por cima de tudo: o nome do item continua a
+ * ter de se ler. --texto-3 sobre --claro da 4,85:1, acima dos 4,5 que a norma
+ * pede. O que esmorece a serio e a moldura, o fundo e o icone.
+ * -------------------------------------------------------------------------*/
+.grade-itens:has(.grupo input:checked) .grupo:not(:has(input:checked)) legend{
+  color:var(--texto-3)}
+.grade-itens:has(.grupo input:checked) .grupo:not(:has(input:checked)) .item{
+  border-color:var(--tenue);background:var(--claro)}
+.grade-itens:has(.grupo input:checked) .grupo:not(:has(input:checked)) .it-nome{
+  color:var(--texto-3)}
+.grade-itens:has(.grupo input:checked) .grupo:not(:has(input:checked)) .item svg{
+  opacity:.5}
+
+/* ---------------------------------------------------------------------------
+ * OS VOLUMES.
+ *
+ * Era um input[type=number]: uma caixa pequena com um "1" dentro, que ao pe de
+ * um titulo grande parecia um campo de formulario impresso e nao uma pergunta.
+ * Num telemovel obriga a abrir o teclado para escrever um algarismo entre um e
+ * oito, e os cursores de subir e descer tem 12 px.
+ *
+ * Sao oito botoes porque sao oito respostas possiveis. O radio esta escondido
+ * do olho e nao do teclado nem do leitor de ecra — clip e nao display:none,
+ * que o tirava da ordem de tabulacao.
+ * -------------------------------------------------------------------------*/
+.volumes{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0;padding:0;border:0}
+.vol{position:relative}
+.vol input{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.vol span{display:flex;align-items:center;justify-content:center;
+  min-width:52px;min-height:52px;padding:0 6px;cursor:pointer;
+  font:700 17px/1 var(--fonte);color:var(--tinta);
+  background:var(--papel);border:2px solid var(--fio)}
+.vol input:checked + span{border-color:var(--tinta);border-width:3px;
+  background:var(--tinta);color:var(--papel)}
+/* O foco tem de se ver: com o input escondido, quem anda de teclado nao tem
+   outra pista de onde esta. */
+.vol input:focus-visible + span{outline:3px solid var(--tinta);outline-offset:3px}
+
+/* O campo do recado so aparece depois de alguem dizer que ha alguma coisa fora
+   da lista. E display:none e nao uma opacidade: um campo invisivel que ainda
+   apanha o tabulador e das piores coisas que se faz a quem anda de teclado.
+   Sem :has() no browser, fica sempre a vista — que e o que se via ontem, e nao
+   um formulario partido. */
+.fora-da-lista .so-se-sim{display:none}
+.fora-da-lista:has(input[name=outros]:checked) .so-se-sim{display:block}
 .caixa.grande{min-height:52px;font:700 15px/1.25 var(--fonte)}
 textarea{width:100%;padding:12px;font:500 15px/1.45 var(--fonte);color:var(--tinta);
   background:var(--papel);border:2px solid var(--tinta);border-radius:0;

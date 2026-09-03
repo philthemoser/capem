@@ -72,6 +72,7 @@ const S = require(path.join(__dirname, '..', 'server', 'server.js'));
 
   const PAGINAS = [
     ['entrada', '/'],
+    ['sobre', '/sobre'],
     ['lista', '/centros'],
     ['lista com procura', '/centros?q=cobertor'],
     ['lista filtrada e ordenada', '/centros?aceitando=1&recentes=1&ordem=nome'],

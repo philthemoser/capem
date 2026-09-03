@@ -61,16 +61,22 @@ const DIA = 86400000;
      montar um centro. Um formulário aqui obrigava a primeira — que aparece às
      centenas — a passar por cima da segunda. */
   ok('mostra as duas portas', /href="\/centros"/.test(html) && /href="\/centro"/.test(html));
-  /* O menu tem as MESMAS duas portas e mais nenhuma. Chegou a ter três —
+  /* O menu tem as MESMAS duas portas, e o "sobre". Chegou a ter três tarefas —
      ajudar, atualizar, imprimir — e o problema não era o nome do meio: era
      misturar dois públicos na mesma fila, e pôr uma tarefa (imprimir) ao lado
      de quem a contém (o centro). Duas portas é também a forma que aguenta o
-     código do saco e o donativo de um lado, e receber sacos do outro. */
+     código do saco e o donativo de um lado, e receber sacos do outro.
+     O "sobre" entrou depois e não desfaz nada disto: não é uma tarefa nem um
+     público, é quem assina a página — e um coordenador que vai entregar a
+     página do centro dele tem de conseguir saber com quem está a falar.
+     Por isso a asserção passou a ser a LISTA EXACTA e não a contagem: assim
+     continua a cair no dia em que alguém acrescentar "Imprimir". */
   {
     const h = await (await get('/centros')).text();
     const links = (h.match(/<div class="nav-links">([\s\S]*?)<\/div>/) || [])[1] || '';
-    const quantos = (links.match(/<a /g) || []).length;
-    ok('o menu tem duas portas e mais nenhuma', quantos === 2, String(quantos));
+    const hrefs = [...links.matchAll(/href="([^"]+)"/g)].map(m => m[1]);
+    ok('o menu é as duas portas e o sobre, por esta ordem',
+      hrefs.join(' ') === '/centros /centro /sobre', hrefs.join(' '));
     ok('e são ajudar e o centro',
       /href="\/centros"/.test(links) && /href="\/centro"/.test(links), links.trim().slice(0, 120));
     ok('nada de tarefas soltas no menu',
@@ -1416,6 +1422,71 @@ const DIA = 86400000;
       at.includes('class="endereco"><a href="https://www.google.com/maps'));
   }
 
+
+  console.log('\na entrada, o mapa e o sobre');
+  {
+    const MAPA = require('../server/mapa.js');
+    const P = require('../server/pagina.js');
+
+    /* O mapa e desenhado aqui e nao vem de lado nenhum. Se um dia alguem
+       trocar isto por telhas, o rodape passa a mentir. */
+    ok('o mapa tem os 27 estados', MAPA.ESTADOS.length === 27);
+    ok('e projecta uma coordenada do Rio Grande do Sul para dentro da caixa',
+      !!MAPA.ponto(-29.92, -51.18));
+    ok('e devolve null para uma coordenada fora do Brasil',
+      MAPA.ponto(38.7, -9.1) === null);
+
+    let h = await (await get('/')).text();
+    /* A entrada nao tinha barra de topo. Passou a ter, e e o unico sitio de
+       onde o /sobre se alcanca em todas as paginas. */
+    ok('a entrada tem a barra do topo', h.includes('class="nav-topo"'));
+    ok('e a barra leva ao sobre', h.includes('href="/sobre"'));
+
+    /* Estas tres passam pela funcao e nao pelo servidor, de proposito: dependem
+       de QUANTOS centros existem, e a base desta suite ja traz os de outros
+       blocos. Um teste que dependa da ordem por que os blocos correm nao esta a
+       testar o mapa, esta a testar a suite. */
+    ok('sem nenhum centro localizado nao ha mapa — um Brasil vazio le-se como "nao ha ninguem"',
+      !P.paginaInicial({ contagem: {}, base: '', emergencias: [], centros: [] })
+        .includes('class="mapa"'));
+    const semCoords = [{ dados: { nome: 'A' } }, { dados: { nome: 'B' } }];
+    ok('e centros sem coordenadas nenhumas tambem nao dao mapa',
+      !P.paginaInicial({ contagem: {}, base: '', emergencias: [], centros: semCoords })
+        .includes('class="mapa"'));
+    const misto = P.paginaInicial({ contagem: {}, base: '', emergencias: [],
+      centros: [{ dados: { nome: 'A', coords: [-29.92, -51.18] } }].concat(semCoords) });
+    ok('e com uns localizados e outros nao, a legenda conta os dois numeros',
+      /1 centro no mapa · 2 ainda sem localização/.test(misto),
+      (misto.match(/mapa-legenda">([^<]*)/) || [])[1]);
+
+    const slugM = 'centro-do-mapa';
+    S.db.criar(slugM, { nome: 'Centro do Mapa', tipo: 'Ponto de arrecadação',
+      endereco: 'R. Qualquer, 1 — Canoas/RS', contato: '(51) 99000-0000',
+      horario: '8h às 18h', precisa: ['agua'], naoTraga: ['roupa-usada'],
+      coords: [-29.92, -51.18] });
+    S.db.decidir(slugM, 'aprovado');
+    S.db.publicar(slugM, S.db.ler(slugM).dados);
+
+    h = await (await get('/')).text();
+    ok('com um centro localizado, o mapa aparece', h.includes('class="mapa"'));
+    ok('e desenha um ponto', /<circle cx="\d/.test(h));
+    ok('e o mapa inteiro e um link para a lista, e nao vinte alvos de 6 px',
+      h.includes('class="mapa-link" href="/centros"'));
+
+    /* O sobre. Sem endereco de contacto no ambiente, nao inventa nenhum. */
+    let r = await get('/sobre');
+    h = await r.text();
+    ok('o sobre responde', r.status === 200, String(r.status));
+    ok('e diz quem faz', h.includes('Philipp Moser'));
+    ok('e diz o que a ferramenta nao faz', /Não é estoque/.test(h));
+    ok('e sem CAPEM_CONTATO nao inventa um e-mail', !/mailto:/.test(h));
+    ok('mandando antes para o GitHub', h.includes('github.com/philthemoser/capem/issues'));
+
+    P.definirContacto('contato@exemplo.org');
+    h = await (await get('/sobre')).text();
+    ok('com CAPEM_CONTATO, o endereço aparece', h.includes('mailto:contato@exemplo.org'));
+    P.definirContacto('');
+  }
 
   console.log('\nsacolas registradas em casa');
   {

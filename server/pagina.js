@@ -17,6 +17,7 @@ const { linkWhatsApp } = require('./avisos');
 const B = require('./busca');
 const SAC = require('./sacola');
 const QR = require('./qr');
+const MAPA = require('./mapa');
 
 const esc = s => String(s == null ? '' : s)
   .replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -236,7 +237,8 @@ const svgElo = () => '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="fal
  * -------------------------------------------------------------------------*/
 const DESTINOS = [
   ['/centros', 'Quero ajudar'],
-  ['/centro', 'Meu centro']
+  ['/centro', 'Meu centro'],
+  ['/sobre', 'Sobre']
 ];
 
 function nav(aqui, migalhas) {
@@ -517,7 +519,62 @@ function paginaNaoExiste() {
  * entrada obrigava a primeira a passar por cima da segunda para chegar ao que
  * queria, e é a primeira que aparece às centenas.
  * -------------------------------------------------------------------------*/
-function paginaInicial({ contagem, base, emergencias }) {
+/* ---------------------------------------------------------------------------
+ * O MAPA DA ENTRADA
+ *
+ * Um SVG desenhado no servidor. Sem telhas, sem biblioteca, sem uma linha de
+ * script — e as tres coisas sao a mesma decisao. Um mapa de telhas
+ * (OpenStreetMap, Mapbox, Google) manda o IP de cada visitante para um servidor
+ * de terceiros, e o rodape de todas as paginas desta casa diz que nada sobre
+ * quem visita e recolhido. Um mapa que desmentisse essa frase custava mais do
+ * que vale.
+ *
+ * E FINALIZACAO, NAO MECANISMO. O que responde "onde e que posso ir" e a lista
+ * do /centros, com morada, telefone e rota. Isto e a forma do problema a
+ * primeira vista: quantos pontos ha e onde. Por isso o mapa inteiro e UM link
+ * para a lista, e nao vinte alvos de seis pixeis que ninguem acerta com o
+ * polegar.
+ *
+ * E DIZ O QUE NAO SABE. Um centro sem coordenadas nao tem ponto — foram
+ * coladas a mao na aprovacao e nem todos as tem. Um mapa com quatro pontos ao
+ * lado de uma lista de nove parece um mapa que perdeu cinco centros. A legenda
+ * conta os dois numeros: e a mesma regra da idade da lista, um andar acima.
+ * -------------------------------------------------------------------------*/
+function mapaDosCentros(centros) {
+  const pontos = [];
+  let semPonto = 0;
+  (centros || []).forEach(c => {
+    const co = coordenadasValidas((c.dados || {}).coords);
+    const p = co && MAPA.ponto(co[0], co[1]);
+    if (p) pontos.push(p); else semPonto++;
+  });
+  /* Sem um unico ponto nao ha mapa. Um Brasil vazio na pagina de entrada nao
+     diz "ainda nao ha coordenadas", diz "nao ha ninguem" — que e falso e e
+     exactamente o tipo de silencio que este projecto existe para nao ter. */
+  if (!pontos.length) return '';
+
+  const n = pontos.length;
+  const legenda = `${n} ${n === 1 ? 'centro' : 'centros'} no mapa` +
+    (semPonto ? ` · ${semPonto} ainda sem localização, ${semPonto === 1 ? 'está' : 'estão'} na lista` : '');
+
+  /* A caixa leva uma margem de 18 unidades. Sem ela, um centro no Recife — que
+     esta praticamente em cima do ponto mais a leste do pais — ficava com meio
+     circulo cortado pela beira do SVG. */
+  return `
+  <section class="mapa-bloco">
+    <a class="mapa-link" href="/centros">
+      <svg class="mapa" viewBox="-18 -18 ${MAPA.CAIXA.largura + 36} ${MAPA.CAIXA.altura + 36}"
+        role="img" aria-label="Mapa do Brasil com ${esc(legenda)}. Toque para abrir a lista.">
+        <g class="m-estados">${MAPA.ESTADOS.map(([, , d]) => `<path d="${d}"/>`).join('')}</g>
+        <g class="m-pontos">${pontos.map(([x, y]) =>
+          `<circle cx="${x}" cy="${y}" r="13"/>`).join('')}</g>
+      </svg>
+      <p class="mapa-legenda">${esc(legenda)}</p>
+    </a>
+  </section>`;
+}
+
+function paginaInicial({ contagem, base, emergencias, centros }) {
   const emgs = emergencias || [];
 
   /* Enquanto houver uma resposta só, isto não aparece — e não aparecer é o
@@ -533,7 +590,11 @@ function paginaInicial({ contagem, base, emergencias }) {
   </section>` : '';
 
   return molde({
-    aqui: false,
+    /* A entrada tinha `aqui: false` — sem barra nenhuma — porque as duas portas
+       grandes ja diziam o que a barra diz. Passou a ter: a barra e o unico
+       sitio onde o /sobre existe em todas as paginas, e uma pagina de entrada
+       sem cabecalho e a unica do sitio que parece outro sitio. */
+    aqui: '/',
     titulo: 'CAPEM — centros de apoio',
     descricao: 'Veja o que os centros de apoio precisam hoje, ou peça a página do seu centro.',
     corpo: `
@@ -569,10 +630,125 @@ function paginaInicial({ contagem, base, emergencias }) {
     </a>
   </div>
 
+  ${mapaDosCentros(centros)}
+
   <footer class="pe">
     <p class="creditos">Nada aqui coleta dados de quem é atendido — só o endereço,
-      o horário e o telefone de um prédio.
-      <a href="https://github.com/philthemoser/capem">O código é aberto.</a></p>
+      o horário e o telefone de um prédio. <a href="/sobre">Sobre o CAPEM</a> ·
+      <a href="https://github.com/philthemoser/capem">o código é aberto</a>.</p>
+  </footer>
+</main>`
+  });
+}
+
+/* ---------------------------------------------------------------------------
+ * SOBRE
+ *
+ * A pagina que responde "quem sao voces" antes de alguem entregar a pagina do
+ * seu centro a um site que nunca viu. Por isso e curta, tem um nome de pessoa,
+ * e diz o que a ferramenta NAO faz — que e a parte que costuma faltar e a que
+ * decide se um coordenador confia.
+ *
+ * O ENDERECO DE CONTACTO VEM DE FORA (CAPEM_CONTATO). Enquanto nao houver um,
+ * a pagina nao inventa nenhum: diz que o caminho e o GitHub. Um endereco falso
+ * numa pagina publica e pior do que nao ter — quem escrever para la fica a
+ * pensar que ficou a espera de resposta.
+ * -------------------------------------------------------------------------*/
+let contactoDoProjecto = '';
+const definirContacto = e => { contactoDoProjecto = String(e || '').trim(); };
+
+function paginaSobre({ contagem, emergencias }) {
+  const c = contagem || {};
+  const noAr = c.aprovado || 0;
+  const emgs = (emergencias || []).length;
+  const email = contactoDoProjecto;
+
+  return molde({
+    aqui: '/sobre',
+    titulo: 'Sobre o CAPEM',
+    descricao: 'O que é o CAPEM, quem faz, o que a ferramenta não faz, e como falar com a gente.',
+    corpo: `
+<main class="sobre">
+  <header>
+    <p class="tipo">CAPEM · ferramenta livre</p>
+    <h1>O que é isto</h1>
+    <p class="entrada">Quando uma emergência acontece, igrejas, escolas e ginásios
+      viram pontos de arrecadação de um dia para o outro. Eles recebem o que as
+      pessoas têm — e o que falta continua faltando, enquanto o pátio enche de
+      coisa que ninguém pediu. Em 2024, no Rio Grande do Sul, roupa usada foi
+      cerca de 70% de tudo que chegou.</p>
+    <p class="entrada">O CAPEM dá a cada centro uma página com uma coisa só: a
+      lista do que precisa <b>hoje</b>, e o que já não cabe. Quem quer ajudar vê
+      antes de sair de casa. Um voluntário na porta lê um código escrito na
+      sacola e sabe o que tem dentro sem abrir.</p>
+  </header>
+
+  <section class="bloco-s">
+    <h2>Como funciona</h2>
+    <ol class="passos">
+      <li><b>O centro pede uma página.</b> A gente liga para conferir que o lugar
+        existe e que a pessoa é de lá. É um telefonema — não tem outra
+        verificação, e não vale a pena fingir que tem.</li>
+      <li><b>O centro recebe um código</b> e atualiza a lista pelo celular, em
+        vinte segundos, quantas vezes quiser por dia.</li>
+      <li><b>A página diz a idade da própria lista.</b> Uma lista de três semanas
+        aparece dizendo que é de três semanas. Uma página nunca parece velha
+        sozinha, e é essa a mentira perigosa aqui.</li>
+      <li><b>O material impresso sai dos mesmos dados</b> — cartaz de porta,
+        etiquetas de caixa, panfletos. Sem quantidades no papel: "200 cobertores"
+        impresso às 8h está errado ao meio-dia.</li>
+    </ol>
+  </section>
+
+  <section class="bloco-s">
+    <h2>O que isto não faz</h2>
+    <ul class="nao-faz">
+      <li><b>Não é estoque.</b> Estoque dá a entender o que está na prateleira, e
+        as coisas saem. Um coordenador que confie num número desses e peça
+        contra ele fica pior do que estava. Planilha continua sendo planilha.</li>
+      <li><b>Não recebe dinheiro</b> e não intermedeia doação nenhuma. Cada
+        organização tem os dados dela no site e nas redes.</li>
+      <li><b>Não guarda nada sobre quem é atendido.</b> Nem sobre quem visita: a
+        ordenação por distância acontece dentro do celular de quem procura, e
+        essa localização não chega ao servidor. O mapa da entrada é um desenho
+        feito aqui, não um mapa de terceiros que veria o IP de quem abre a
+        página.</li>
+      <li><b>Não é de nenhuma prefeitura nem de nenhuma organização</b>, e não
+        cobra nada de ninguém.</li>
+      <li><b>Não compete com quem não usa.</b> Um centro que nunca ouviu falar da
+        gente pode aparecer na lista com endereço, telefone e horário, porque
+        quem procura ajuda não tem nada a ver com isso.</li>
+    </ul>
+  </section>
+
+  <section class="bloco-s">
+    <h2>Quem faz</h2>
+    <p>O CAPEM é feito por <b>Philipp Moser</b>. É um projeto pequeno e aberto:
+      o código inteiro está no GitHub, com a explicação de cada decisão, e
+      qualquer pessoa pode rodar a própria cópia.</p>
+    <p>Se você coordena um centro e a ferramenta atrapalhou em vez de ajudar,
+      isso é a coisa mais útil que a gente pode receber. Diga onde travou.</p>
+    ${email
+      ? `<p class="contato-s"><a class="btn" href="mailto:${esc(email)}">${esc(email)}</a></p>`
+      : `<p class="contato-s"><a class="btn" href="https://github.com/philthemoser/capem/issues"
+           target="_blank" rel="noopener">Falar pelo GitHub</a></p>
+         <p class="ajuda">Um endereço de e-mail do projeto entra aqui assim que
+           existir. Enquanto não existe, esta página não inventa nenhum: escrever
+           para um endereço que ninguém lê é pior do que não ter para onde
+           escrever.</p>`}
+  </section>
+
+  <section class="bloco-s">
+    <h2>Estado hoje</h2>
+    <p>${noAr} ${noAr === 1 ? 'centro' : 'centros'} no ar${
+      emgs > 1 ? `, em ${emgs} respostas em curso` : ''}.
+      <a href="/centros">Ver a lista</a>.</p>
+  </section>
+
+  <footer class="pe">
+    <p class="creditos"><a href="https://github.com/philthemoser/capem">Código aberto no GitHub.</a>
+      O desenho do mapa vem de dados públicos do IBGE, pelo projeto
+      click_that_hood (licença MIT).</p>
   </footer>
 </main>`
   });
@@ -3142,6 +3318,51 @@ main.faixas .form-atualizar{--recuo:var(--goteira)}
 .item:has(input:checked) .it-q{border-color:var(--tinta)}
 .recusas .it-nome{color:var(--proibido)}
 
+/* ---------------------------------------------------------------------------
+ * O MAPA DA ENTRADA
+ *
+ * Mono, como o resto: o pais e um contorno fino e os pontos sao tinta cheia.
+ * Cada ponto leva um anel de papel a toda a volta para se ver por cima da
+ * linha de uma fronteira; sem ele, um centro em cima de um limite de estado
+ * desaparecia dentro do traco.
+ *
+ * A cor ficou de fora de proposito. Nesta paleta o vermelho ja quer dizer "nao
+ * traga" em todas as paginas, e pontos vermelhos num mapa de emergencia liam-se
+ * como perigo naquele sitio. Mono e o canonico; a cor e uma camada.
+ * -------------------------------------------------------------------------*/
+.mapa-bloco{margin:34px 0 8px;padding-top:22px;border-top:4px solid var(--tinta)}
+.mapa-link{display:block;text-decoration:none}
+.mapa{width:100%;height:auto;max-height:62vh;display:block}
+/* Preenchidos, e nao so contornados. Com fundo de papel o pais era um emaranhado
+   de linhas finas e os pontos flutuavam por cima de nada; com massa, ve-se a
+   forma de longe e os pontos passam a estar DENTRO de alguma coisa. */
+.m-estados path{fill:var(--claro);stroke:var(--fio);stroke-width:2.5;
+  stroke-linejoin:round}
+.m-pontos circle{fill:var(--tinta);stroke:var(--papel);stroke-width:5}
+.mapa-legenda{margin:10px 0 0;font:700 13px/1.4 var(--fonte);
+  text-transform:uppercase;letter-spacing:.08em;color:var(--texto-2)}
+/* O mapa inteiro e um botao. Se levanta, tem de levantar como os outros. */
+@media (hover:hover){
+  .mapa-link:hover .m-estados path{stroke:var(--tinta)}
+  .mapa-link:hover .mapa-legenda{color:var(--tinta)}
+}
+
+/* --- sobre --- */
+.sobre .bloco-s{margin:30px 0 0;padding-top:20px;border-top:4px solid var(--tinta)}
+.sobre .bloco-s h2{margin:0 0 10px;font-size:clamp(20px,5vw,26px)}
+.sobre p{margin:0 0 12px;font:500 15.5px/1.6 var(--fonte);color:var(--texto-2)}
+.sobre p b,.sobre li b{color:var(--tinta)}
+.sobre .passos,.sobre .nao-faz{margin:0;padding-left:22px}
+.sobre .passos li,.sobre .nao-faz li{margin:0 0 10px;
+  font:500 15.5px/1.6 var(--fonte);color:var(--texto-2)}
+.sobre .nao-faz{list-style:none;padding-left:0}
+.sobre .nao-faz li{padding-left:26px;position:relative}
+/* Um tracinho em vez de um ponto: a lista e do que NAO se faz, e o sinal de
+   menos diz isso sem uma palavra a mais. */
+.sobre .nao-faz li::before{content:'';position:absolute;left:0;top:11px;
+  width:15px;height:3px;background:var(--tinta)}
+.contato-s{margin:16px 0 0}
+
 /* O recado, na porta. Recuado com um traco em vez de uma moldura: nao e um
    aviso nem um estado do sistema, e uma pessoa a falar com outra. */
 .recado{margin:14px var(--goteira) 0;padding:12px 14px;background:var(--claro);
@@ -3456,6 +3677,7 @@ module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaAtualizarEntrada, paginaAtualizar, paginaGerir, textoCodigo,
                    paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
                    paginaSouDaqui, paginaSouDaquiRecebido,
+                   paginaSobre, definirContacto,
                    paginaDoar, paginaSacolaCriada, paginaMinhasSacolas,
                    paginaBalcao, paginaBalcaoSacola, paginaBalcaoRecebida,
                    paginaEncerrado, paginaConfirmarEncerrar,

@@ -57,6 +57,10 @@ const RAIZ = path.join(__dirname, '..');
 /* O aviso do topo do site chega ao desenhador por injecção, e não por um
    require: `pagina.js` desenha páginas e não sabe onde mora o estado. */
 P.definirAviso(() => db.lerAviso());
+/* O endereco de contacto do projecto. Vazio ate alguem o pôr no ambiente, e
+   vazio faz a pagina do "sobre" mandar as pessoas para o GitHub em vez de
+   inventar um endereco que ninguem le. */
+P.definirContacto(process.env.CAPEM_CONTATO || '');
 
 /* ---------------------------------------------------------------------------
  * O que a ferramenta não sabia dizer sobre si própria.
@@ -573,7 +577,18 @@ async function encaminhar(req, res) {
   /* --- entrada --- */
   if (caminho === '/' && req.method === 'GET') {
     return responder(res, 200, P.paginaInicial({
-      contagem: db.contar(), base, emergencias: db.emergencias() }));
+      contagem: db.contar(), base, emergencias: db.emergencias(),
+      /* Os centros no ar, so para o mapa desenhar os pontos. E a mesma leitura
+         que a lista faz; a esta escala nao vale a pena uma consulta so com
+         coordenadas, e no dia em que valer e uma linha em db.js. */
+      centros: db.listar('aprovado') }));
+  }
+
+  /* --- sobre --- */
+  if (caminho === '/sobre' && req.method === 'GET') {
+    return responder(res, 200, P.paginaSobre({
+      contagem: db.contar(), emergencias: db.emergencias()
+    }), 'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=900' });
   }
   if (caminho === '/centros' && req.method === 'GET') {
     const consulta = B.lerConsulta(url.searchParams);

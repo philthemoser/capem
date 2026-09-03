@@ -143,6 +143,56 @@ const LARGURA = 390;
     ['lista aberta', null]
   ];
 
+  /* ---------------------------------------------------------------------------
+   * A SOMBRA QUE ENCOSTA AO VIZINHO.
+   *
+   * Um botão tem 2 px de moldura e 5 px de sombra da mesma tinta; uma porta tem
+   * 3 e 5. Em baixo são sete ou oito pixels de preto seguidos. Se o espaço até
+   * ao objecto seguinte for menor do que isso, o olho junta as duas coisas numa
+   * barra e a sombra deixa de pertencer ao seu próprio botão — foi o que se viu
+   * nas portas do /centro com 14 px de intervalo, e nos dois botões de "como
+   * chegar" com 10 px.
+   *
+   * Isto não se vê a olhar para uma página: cada uma está certa em relação a si
+   * própria, e o intervalo foi escolhido antes de existir sombra. Vê-se a medir
+   * o papel que sobra DEPOIS de descontar a sombra, que é o que esta função faz
+   * — nas duas direcções, porque em ecrã largo as coisas ficam lado a lado e a
+   * sombra vai para a direita.
+   *
+   * O mínimo é 12 px de papel. Não é um número sagrado: é mais do que a barra
+   * preta tem de altura, e foi o que resolveu os dois casos reais.
+   * -------------------------------------------------------------------------*/
+  const PAPEL_MINIMO = 12;
+  /* Corre dentro do browser, por isso recebe o mínimo em vez de o fechar: o que
+     Playwright leva para lá é o texto da função, sem o que estava à volta. */
+  function vizinhosApertados(minimo) {
+    const sombra = e => {
+      const m = getComputedStyle(e).boxShadow.match(/(-?\d+(?:\.\d+)?)px (-?\d+(?:\.\d+)?)px/);
+      return m ? { x: +m[1], y: +m[2] } : null;
+    };
+    const alvos = [...document.querySelectorAll('.btn,.porta')].filter(e => e.offsetParent !== null);
+    const queixas = [];
+    for (const a of alvos) {
+      const s = sombra(a);
+      if (!s || (!s.x && !s.y)) continue;          /* sem sombra, sem problema */
+      const ra = a.getBoundingClientRect();
+      for (const c of alvos) {
+        if (c === a) continue;
+        const rc = c.getBoundingClientRect();
+        const cruzaX = Math.max(ra.left, rc.left) < Math.min(ra.right, rc.right);
+        const cruzaY = Math.max(ra.top, rc.top) < Math.min(ra.bottom, rc.bottom);
+        const nome = (t, papel) => `${t} ${Math.round(papel)} px de papel · ` +
+          `${a.className.trim()} → ${c.className.trim()}`;
+        if (rc.top >= ra.bottom - 1 && cruzaX && rc.top - ra.bottom - s.y < minimo)
+          queixas.push(nome('por baixo:', rc.top - ra.bottom - s.y));
+        if (rc.left >= ra.right - 1 && cruzaY && rc.left - ra.right - s.x < minimo)
+          queixas.push(nome('à direita:', rc.left - ra.right - s.x));
+      }
+    }
+    return queixas;
+  }
+
+  const apertados = [];
   const medidas = [];
   for (const [nome, u] of PAGINAS) {
     if (u) {
@@ -153,6 +203,8 @@ const LARGURA = 390;
       await page.fill('#codigo', codigo);
       await Promise.all([page.waitForLoadState('load'), page.click('button[type=submit]')]);
     }
+    apertados.push(...(await page.evaluate(vizinhosApertados, PAPEL_MINIMO))
+      .map(t => `  ${LARGURA} px · ${nome}: ${t}`));
     medidas.push({ nome, ...await page.evaluate(() => {
       const L = e => (e ? Math.round(e.getBoundingClientRect().left) : null);
       return {
@@ -172,14 +224,38 @@ const LARGURA = 390;
       };
     }) });
   }
+  /* Segunda passagem, num ecrã largo. Metade destes pares só existe aí: o
+     "como chegar" e o "ligar" ficam lado a lado a partir dos 520 px, e a sombra
+     passa a ir contra o vizinho da direita em vez de contra o de baixo. Num
+     telemóvel estão empilhados e o problema não aparece. */
+  const LARGA = 900;
+  const larga = await browser.newPage({ viewport: { width: LARGA, height: 1200 } });
+  for (const [nome, u] of PAGINAS) {
+    if (!u) continue;                     /* a lista aberta precisa de entrar, e a
+                                             medida do vizinho não depende dela */
+    await larga.goto(base + u, { waitUntil: 'load' });
+    apertados.push(...(await larga.evaluate(vizinhosApertados, PAPEL_MINIMO))
+      .map(t => `  ${LARGA} px · ${nome}: ${t}`));
+  }
+  await larga.close();
+
   await browser.close();
   servidor.close();
   try { fs.unlinkSync(ficheiro); } catch { /* já não existe */ }
 
+  if (apertados.length) {
+    console.log('FALHA — uma sombra encosta ao objecto seguinte.\n');
+    [...new Set(apertados)].forEach(l => console.log(l));
+    console.log(`\n  Menos de ${PAPEL_MINIMO} px de papel entre a ponta da sombra e o vizinho.`);
+    console.log('  Aumente o intervalo do contentor — a sombra ocupa 5 px do que lá estava.');
+    process.exit(1);
+  }
+
   const valores = medidas.flatMap(m => [m.h1, m.texto, m.campo].filter(v => v !== null));
   const distintos = [...new Set(valores)];
   if (distintos.length === 1) {
-    console.log(`PASS — as ${medidas.length} páginas afastam-se ${distintos[0]} px da beira, todas iguais`);
+    console.log(`PASS — as ${medidas.length} páginas afastam-se ${distintos[0]} px da beira, todas iguais;`
+      + ' nenhuma sombra encosta ao vizinho');
     process.exit(0);
   }
   console.log('FALHA — a goteira não é a mesma em todas as páginas:\n');

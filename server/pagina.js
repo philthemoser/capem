@@ -2653,6 +2653,17 @@ const CSS = `
   /* A goteira: a distância entre o texto e a beira do ecrã. Um valor só, em
      vez dos seis 20px espalhados que havia — e que uma página não tinha. */
   --goteira:20px;
+  /* O VÃO: o espaço entre duas coisas levantadas.
+     Um botão são 2 px de moldura mais 5 px de sombra, uma porta 3 mais 5 — em
+     baixo e à direita ficam sete ou oito pixels de tinta seguida. Se o espaço
+     até ao vizinho for menor do que isso, o olho junta a sombra à moldura
+     seguinte e ela deixa de pertencer ao seu próprio botão: foi o que se viu
+     nas portas do /centro e nos botões de "como chegar". 22 px deixam 17 de
+     papel contra 8 de tinta, e a sombra volta a ser sombra.
+     Está aqui em vez de estar em cada contentor porque a conta é uma só, e
+     porque o dia em que a sombra mudar de tamanho isto tem de mudar com ela.
+     Há um teste na goteira que mede o papel que sobra, em duas larguras. */
+  --vao:22px;
   --fonte:Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif;
   --preta:'Archivo Black',Archivo,'Helvetica Neue',Helvetica,Arial,sans-serif;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -2752,7 +2763,9 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 /* --- chegar e ligar ---
    Duas coisas que alguém faz de pé, na rua, com uma mão. Lado a lado no
    telemóvel largo e empilhados no estreito, sempre com 52 px de altura. */
-.ir{display:grid;gap:10px;padding:0 var(--goteira) 4px}
+/* 10 px não chegavam depois de os botões ganharem sombra: 5 iam para a sombra
+   do primeiro e sobravam 5 de papel até ao segundo. Ver --vao. */
+.ir{display:grid;gap:var(--vao);padding:0 var(--goteira) 4px}
 @media(min-width:520px){.ir{grid-template-columns:1fr 1fr}}
 .btn-ir{display:flex;align-items:center;justify-content:center;gap:10px;
   min-height:52px;margin:0;font-weight:800;text-align:center}
@@ -2791,10 +2804,12 @@ section h2 svg{width:clamp(28px,7vw,40px);height:clamp(28px,7vw,40px);flex:none}
 .na-editar .campo{margin-top:8px}
 .na-editar input{width:100%}
 
-.duas-portas{display:grid;gap:14px;margin:8px 0 28px}
+/* O intervalo é o vão, e não um número escolhido aqui: estas tinham 14 px, a
+   sombra comia 5 e sobravam 9 de papel — menos papel do que tinta. Ver --vao. */
+.duas-portas{display:grid;gap:var(--vao);margin:8px 0 30px}
 /* Chamava-se "duas portas" e passaram a ser três quando a actualização diária
    ganhou a sua. auto-fit em vez de dois fixos, para não ficar uma órfã. */
-@media(min-width:640px){.duas-portas{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}}
+@media(min-width:640px){.duas-portas{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}}
 .porta{display:flex;flex-direction:column;gap:8px;padding:22px 20px;
   border:3px solid var(--tinta);text-decoration:none;background:var(--papel)}
 .porta:hover{background:var(--claro)}
@@ -3105,7 +3120,12 @@ textarea{width:100%;padding:12px;font:500 15px/1.45 var(--fonte);color:var(--tin
 .bloco-admin .entrada{margin-bottom:12px}
 .bloco-admin form{margin:0 0 4px}
 .bloco-admin form.em-linha{display:inline-block;margin:8px 8px 0 0}
-.atalhos{display:flex;flex-wrap:wrap;gap:8px}
+/* Seis atalhos numa linha que quebra. Tinham 8 px, e a sombra de cada um
+   encostava ao seguinte — de lado e, quando quebra, também por baixo. É a
+   página de um administrador e podia ficar assim sem ninguém se queixar; fica
+   com o vão pela mesma razão que as outras, para não haver um sítio onde a
+   regra não vale. */
+.atalhos{display:flex;flex-wrap:wrap;gap:var(--vao)}
 .atalhos .btn{margin:0}
 h2.risco{margin-top:8px;padding-top:16px;border-top:4px solid var(--tinta)}
 .fio{border:0;border-top:1px solid var(--tenue);margin:14px 0}
@@ -3272,7 +3292,10 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 .pedido .meta.velha,.pedido .meta.nunca{color:var(--proibido);font-weight:700}
 .btn-wa{background:#25D366;border-color:#0f7a3a;color:var(--tinta);font-weight:800}
 .conta-n{font:600 12px/1 var(--mono);padding:3px 6px;background:var(--proibido);color:#fff}
-.pedido .botoes{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+/* Aprovar e recusar. Aqui o vão faz mais do que arrumar a sombra: são os dois
+   botões da aplicação cujo engano custa mais, e ficavam a 5 px de papel um do
+   outro. */
+.pedido .botoes{display:flex;gap:var(--vao);margin-top:12px;flex-wrap:wrap}
 .pedido .botoes .btn{text-decoration:none;display:flex;align-items:center;justify-content:center}
 .pedido .btn{flex:1;margin-top:0;text-align:center}
 /* O endereço que ainda não abre, na página de pedido recebido: mesmo lugar de

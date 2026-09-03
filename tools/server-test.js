@@ -538,7 +538,7 @@ const DIA = 86400000;
   r = await formN('/atualizar', { slug: slugFinal, codigo, publicar: '1',
     precisa: ['cobertor', 'fralda'], 'q-cobertor': '20 caixas', 'q-fralda': '',
     livres: 'Ração para cães | 5 kg\nCarregador de telemóvel',
-    naoTraga: ['roupa-usada'], horario: '9h às 17h' });
+    naoTraga: ['roupa-usada'] });
   html = await r.text();
   ok('publicar daqui funciona', r.status === 200 && /Publicado\./.test(html));
   const dep = S.db.ler(slugFinal).dados;
@@ -552,7 +552,26 @@ const DIA = 86400000;
     dep.precisa.filter(x => x && x.texto).length === 2, JSON.stringify(dep.precisa));
   ok('e a quantidade depois da barra também',
     dep.precisa.some(x => x && x.texto === 'Ração para cães' && x.q === '5 kg'));
-  ok('o horário muda', dep.horario === '9h às 17h', dep.horario);
+  /* O horário mudou de página: vive em /atualizar/gerir, com as sacolas e o
+     encerramento — as coisas que se mexem uma vez e não todos os dias. E
+     publicar a lista de hoje NÃO lhe pode tocar, senão um formulário que não
+     tem o campo apagava o horário de quem só queria publicar cobertores. */
+  const horarioAntes = dep.horario;
+  r = await formN('/atualizar/gerir', { slug: slugFinal, codigo, horario: '9h às 17h' });
+  ok('configurar o centro responde', r.status === 200, String(r.status));
+  ok('e o horário muda lá', S.db.ler(slugFinal).dados.horario === '9h às 17h',
+    S.db.ler(slugFinal).dados.horario);
+  ok('mas o horário NÃO aparece no formulário da lista de hoje',
+    !/name="horario"/.test(html));
+  r = await formN('/atualizar', { slug: slugFinal, codigo, publicar: '1',
+    precisa: ['cobertor'], livres: '' });
+  ok('e publicar a lista não apaga o horário que foi guardado lá',
+    S.db.ler(slugFinal).dados.horario === '9h às 17h',
+    `${horarioAntes} → ${S.db.ler(slugFinal).dados.horario}`);
+  /* Guardar um ajuste não é publicar uma lista: a idade da página é da lista. */
+  const pubAntes = S.db.ler(slugFinal).publicado;
+  await formN('/atualizar/gerir', { slug: slugFinal, codigo, horario: '9h às 17h' });
+  ok('e configurar não republica', S.db.ler(slugFinal).publicado === pubAntes);
   ok('mas o nome verificado continua intacto', dep.nome === 'Paróquia São Sebastião', dep.nome);
   ok('e o telefone verificado também', dep.contato === '(51) 99612-0044', dep.contato);
 
@@ -783,7 +802,12 @@ const DIA = 86400000;
     S.db.publicar('vai-fechar', S.db.ler('vai-fechar').dados);
 
     html = await (await formN('/atualizar', { slug: 'vai-fechar', codigo: cod }, '198.51.100.4')).text();
-    ok('a lista aberta oferece encerrar', /name="encerrar" value="pedir"/.test(html));
+    ok('a lista aberta leva a configurar o centro', /\/atualizar\/gerir/.test(html));
+    /* Encerrar mudou para o segundo nível: é uma decisão que se toma uma vez, e
+       ao lado da lista de hoje ficava a um toque de distância de quem só queria
+       publicar cobertores. */
+    html = await (await formN('/atualizar/gerir', { slug: 'vai-fechar', codigo: cod }, '198.51.100.4')).text();
+    ok('configurar oferece encerrar', /name="encerrar" value="pedir"/.test(html));
     /* A pausa e o encerramento parecem-se o suficiente para se trocarem, e
        trocá-los custa a um centro real ficar invisível numa manhã. */
     ok('e explica a diferença para a pausa', /Se for só por hoje/.test(html));

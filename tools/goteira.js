@@ -42,6 +42,56 @@ function crasesNoCss() {
   return linhas;
 }
 
+/* ---------------------------------------------------------------------------
+ * A ORDEM DO :hover E DO :active.
+ *
+ * `.btn:hover` e `.btn:active` têm a mesma especificidade e, com rato, acertam
+ * os dois no mesmo elemento durante uma pressão — quem carrega está também por
+ * cima. Ganha a última que estiver escrita na folha. Com o :active escrito
+ * primeiro, carregar não mexia nada: o botão só se levantava ao passar o rato,
+ * e a animação parecia estar no sítio errado. É a velha ordem LVHA.
+ *
+ * Porque é que isto precisa de um teste em vez de um comentário: num telemóvel
+ * não há :hover, portanto quem escreve a regra ao telemóvel vê a pressão a
+ * funcionar e não vê erro nenhum. O erro só existe para quem tem rato, que é
+ * quase sempre outra pessoa. Um browser também não ajuda aqui — a folha está
+ * certa em relação a si própria; o que está errado é a ordem.
+ *
+ * A regra: qualquer regra de :hover que mexa no `transform` tem de vir ANTES
+ * da regra de :active do mesmo elemento. A excepção escrita é `:hover:not(
+ * :active)`, que já diz explicitamente que não se aplica durante a pressão e
+ * por isso pode vir depois — é assim que o bloco do prefers-reduced-motion
+ * apaga o levantar sem apagar o carregar.
+ * -------------------------------------------------------------------------*/
+function ordemDoPressionar() {
+  /* Os comentários saem primeiro. Sem isto, o selector apanhado é o comentário
+     que está por cima dele mais o selector, e nenhuma regra é reconhecida — o
+     teste passava sempre, que é a única maneira de um teste destes ser pior do
+     que não existir. */
+  const fonte = fs.readFileSync(path.join(__dirname, '..', 'server', 'pagina.js'), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+  /* Cada regra: o selector e o corpo entre chavetas. As regras dentro de um
+     @media entram na mesma, porque o corpo delas não tem chavetas e é o
+     interior que casa primeiro. */
+  const regras = [...fonte.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(m => ({ sel: m[1].trim().replace(/\s+/g, ' '), corpo: m[2], em: m.index }));
+  const queixas = [];
+  for (const alvo of ['.btn', '.porta']) {
+    const doAlvo = s => s.split(',').some(p => p.trim().startsWith(alvo + ':'));
+
+    const activo = regras.find(r => doAlvo(r.sel) && /:active/.test(r.sel) && /transform:/.test(r.corpo));
+    if (!activo) { queixas.push(`  ${alvo}: não há regra :active com transform — o botão não desce ao ser carregado.`); continue; }
+
+    regras.filter(r => doAlvo(r.sel) && /:hover/.test(r.sel) && !/:hover:not\(:active\)/.test(r.sel))
+      .filter(r => /transform:/.test(r.corpo) && r.em > activo.em)
+      .forEach(r => queixas.push(
+        `  ${alvo}: "${r.sel}" mexe no transform e está escrita DEPOIS de "${activo.sel}".\n` +
+        '     Com rato, ganha esta, e a pressão fica invisível. Mova-a para cima\n' +
+        '     do :active, ou escreva-a como :hover:not(:active).'));
+  }
+  return queixas;
+}
+
 
 /* Antes de `require`, e não dentro do teste: se houver uma crase, `pagina.js`
    nem chega a compilar, e um teste que não arranca não explica nada. */
@@ -52,6 +102,12 @@ function crasesNoCss() {
     console.log('Fecha o template literal e o servidor deixa de arrancar.');
     console.log('Escreva o selector sem crases:\n');
     mas.forEach(l => console.log(l));
+    process.exit(1);
+  }
+  const ordem = ordemDoPressionar();
+  if (ordem.length) {
+    console.log('FALHA — o :hover está a tapar o :active.\n');
+    ordem.forEach(l => console.log(l));
     process.exit(1);
   }
 }
@@ -102,7 +158,17 @@ const LARGURA = 390;
       return {
         h1: L(document.querySelector('main h1')),
         texto: L(document.querySelector('main p')),
-        campo: L(document.querySelector('main input:not([type=hidden]),main textarea'))
+        /* O primeiro campo que NÃO está dentro de um cartão.
+           A goteira é a distância da beira do ecrã ao conteúdo da PÁGINA. Um
+           campo dentro de um cartão está afastado pela margem do cartão, e isso
+           é igual em todos os cartões de todas as páginas — medi-lo aqui não
+           dizia nada sobre a goteira e dizia 43 em vez de 20 assim que uma
+           página pusesse um formulário dentro de um. Foi o que aconteceu quando
+           a entrada do coordenador passou para dentro das portas do /centro.
+           Sem nenhum campo solto, fica `null`, que este teste já tolera — as
+           medidas do h1 e do primeiro parágrafo continuam a guardar a porta. */
+        campo: L([...document.querySelectorAll('main input:not([type=hidden]),main textarea')]
+          .find(e => !e.closest('.porta, .pedido, .sacola, .achado')) || null)
       };
     }) });
   }

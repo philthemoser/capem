@@ -766,7 +766,14 @@ async function encaminhar(req, res) {
   }
 
   if (caminho === '/centro' && req.method === 'GET') {
-    return responder(res, 200, P.paginaCentroEntrada({ base }));
+    /* Com sessão aberta não se pede o código outra vez — mostra-se quem está
+       dentro e a porta para a lista. */
+    const daSessao = centroDaSessao(req);
+    const cs = daSessao ? db.ler(daSessao) : null;
+    return responder(res, 200, P.paginaCentroEntrada({
+      base,
+      sessao: cs && cs.estado === 'aprovado' ? ((cs.dados || {}).nome || cs.slug) : ''
+    }));
   }
   if (caminho === '/novo' && req.method === 'GET') {
     return responder(res, 200, P.paginaNovo({}));
@@ -891,6 +898,49 @@ async function encaminhar(req, res) {
   if (caminho === '/atualizar/sair') {
     return paraOndeIr(res, '/atualizar', { 'Set-Cookie': cookieCentro(req, '', 0) });
   }
+  /* --- configurar o centro: o segundo nível ---
+   *
+   * A lista de hoje faz-se todos os dias; o horário, as sacolas e o encerramento
+   * fazem-se uma vez. Estavam na mesma página, e isso fazia a coisa diária
+   * parecer uma configuração. Entrar continua a dar na lista — isto é uma porta
+   * a partir dela, e não um passo antes dela.
+   *
+   * Guardar aqui NÃO republica: a idade da página é a da lista do centro, e não
+   * a de um ajuste de horário. Mesma regra que /admin/verificados.
+   */
+  if ((caminho === '/atualizar/gerir') && (req.method === 'GET' || req.method === 'POST')) {
+    const campos = req.method === 'POST'
+      ? new URLSearchParams(await corpo(req)) : new URLSearchParams();
+    const daSessao = centroDaSessao(req);
+    const pedido = daSessao || texto(campos.get('slug'), 60).toLowerCase().replace(/^.*\//, '');
+    const real = db.resolver(pedido);
+    const centro = real ? db.ler(real) : null;
+    const entrou = !!(centro && daSessao === centro.slug);
+    if (!centro || centro.estado !== 'aprovado'
+        || !(entrou || db.codigoConfere(texto(campos.get('codigo'), 20), centro.codigo_hash))) {
+      return responder(res, 403, P.paginaAtualizarEntrada({
+        erro: 'Entre com o endereço e o código do seu centro.' }));
+    }
+
+    let feito = false;
+    if (req.method === 'POST') {
+      const dados = {
+        ...centro.dados,
+        horario: texto(campos.get('horario'), LIMITES.horario),
+        sacolas: campos.get('sacolas') === '1'
+      };
+      /* guardarCampos e não publicar: isto não é a lista do dia. */
+      centro.dados = db.guardarCampos(centro.slug, {
+        horario: dados.horario, sacolas: dados.sacolas });
+      console.log(`[configurado] ${centro.slug}`);
+      feito = true;
+    }
+    const cab = entrou ? {} : { 'Set-Cookie': abrirSessaoCentro(req, centro.slug) };
+    return responder(res, 200, P.paginaGerir({
+      centro, url: urlDoCentro(centro.slug, base), feito
+    }), 'text/html; charset=utf-8', { ...cab, 'X-Robots-Tag': 'noindex' });
+  }
+
   if (caminho === '/atualizar' && req.method === 'POST') {
     /* Mais apertado do que publicar: aqui é onde alguém tentaria adivinhar um
        código à força. Vinte por hora chega para um coordenador que se engana
@@ -991,16 +1041,14 @@ async function encaminhar(req, res) {
         ...centro.dados,
         precisa: [...precisa, ...livres],
         naoTraga: campos.getAll('naoTraga').slice(0, 12).map(x => texto(x, 40)),
-        horario: texto(campos.get('horario'), LIMITES.horario) || centro.dados.horario,
         pausado: campos.get('pausado') === '1',
         motivoPausa: texto(campos.get('motivoPausa'), LIMITES.motivoPausa)
       };
-      /* Ler códigos de sacola é opcional, e desligado por omissão. Um centro que
-         não quer digitar códigos na porta não pode ter a sua página a prometer a
-         um doador que alguém vai. */
-      dados.sacolas = campos.get('sacolas') === '1';
       const limpo = limparDados(dados);
-      limpo.sacolas = !!dados.sacolas;
+      /* O horário e a opção das sacolas vivem em /atualizar/gerir e não neste
+         formulário; publicar não lhes pode tocar, senão publicar a lista de hoje
+         apagava um horário que ninguém tinha aberto. */
+      delete limpo.horario;
       db.publicar(centro.slug, { ...centro.dados, ...limpo });
       console.log(`[publicado] ${centro.slug} — ${limpo.precisa.length} itens${limpo.pausado ? ' (pausado)' : ''} (via /atualizar)`);
       feito = true;

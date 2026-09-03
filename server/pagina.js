@@ -1697,44 +1697,18 @@ function paginaAtualizar({ centro, url, erro, feito, sessao }) {
         arrecadado no país.</p>
     </section>
 
-    <section class="bloco-a">
-      <h2>Sacolas com código</h2>
-      <label class="caixa"><input type="checkbox" name="sacolas" value="1"${d.sacolas ? ' checked' : ''}>
-        <span>Aceitamos sacolas registradas em casa</span></label>
-      <p class="ajuda">Quem doa descreve a sacola antes de sair de casa e escreve um
-        código nela; na porta, um voluntário lê o código e vê o que tem dentro sem
-        abrir a sacola. Não precisa de código de centro nem de cadastro. Marque só
-        se alguém aí vai fazer isso — senão a página promete a um doador uma coisa
-        que ninguém faz.</p>
-      <p class="ajuda"><a href="/balcao" target="_blank" rel="noopener">Abrir o balcão
-        de leitura</a> — é essa a página que fica no celular de quem está na porta.
-        É pública: pode mandar o endereço para qualquer voluntário.</p>
-
-      <h2>Horário</h2>
-      <label class="sr-only" for="horario">Horário</label>
-      <input id="horario" name="horario" type="text" value="${esc(d.horario || '')}"
-        placeholder="Todos os dias, 8h às 20h" maxlength="80" autocomplete="off">
-    </section>
-
     <button class="btn btn-primario largo" type="submit">Publicar a lista de hoje</button>
     <p class="ajuda">Depois de publicar, mande o link no grupo — é por aí que a
       lista chega mais longe, e um link nunca fica velho como uma imagem.</p>
   </form>
 
-  <section class="bloco-a encerrar">
-    <h2>O centro fechou de vez?</h2>
-    <p class="ajuda">Se for só por hoje ou por uns dias, use <b>não estamos
-      recebendo</b> lá em cima — é reversível e mantém o centro na lista.</p>
-    <p class="ajuda">Encerrar é para quando o ponto acabou. A página sai da
-      lista e passa a dizer que fechou, para ninguém aparecer com coisas à
-      porta. O endereço continua respondendo, porque há cartazes impressos.</p>
-    <form method="post" action="/atualizar">
-      <input type="hidden" name="slug" value="${esc(centro.slug)}">
-      ${centro.codigoDado ? `<input type="hidden" name="codigo" value="${esc(centro.codigoDado)}">` : ''}
-      <input type="hidden" name="encerrar" value="pedir">
-      <button class="btn btn-recusar" type="submit">Encerrar o centro</button>
-    </form>
-  </section>
+  <!-- O que não se faz todos os dias mudou de página. Horário, sacolas e
+       encerrar viviam no fim desta, e cada um deles é uma decisão que se toma
+       uma vez — misturados com a lista de hoje, faziam a coisa diária parecer
+       longa. Ver paginaGerir. -->
+  <p><a class="btn largo" href="/atualizar/gerir">Configurar o centro</a></p>
+  <p class="ajuda">Horário, sacolas com código, e encerrar o centro. Coisas que
+    se mexem uma vez, não todos os dias.</p>
 
   <footer class="pe">
     <p><b>O nome, o endereço e o telefone não mudam aqui.</b> Foram conferidos
@@ -1757,7 +1731,7 @@ function paginaAtualizar({ centro, url, erro, feito, sessao }) {
  * entrada — tinha de saber escrever /kit de cor. Um coordenador que perdeu o
  * caminho para a sua própria ferramenta não a usa.
  * -------------------------------------------------------------------------*/
-function paginaCentroEntrada({ base }) {
+function paginaCentroEntrada({ base, sessao, erro, slug }) {
   return molde({
     aqui: '/centro',
     titulo: 'Meu centro — CAPEM',
@@ -1766,42 +1740,164 @@ function paginaCentroEntrada({ base }) {
 <main class="portas">
   <header>
     <h1>Meu centro</h1>
-    <p class="entrada">Tudo que um ponto de arrecadação precisa. A lista de
-      hoje é a que se faz todos os dias — as outras, uma vez só.</p>
-    <p class="entrada">Um cartaz impresso diz o que o centro precisava no dia em
-      que saiu da impressora. Por isso o QR de todas as peças aponta para sua
-      página: o papel fica na porta e a lista continua sendo a de hoje.</p>
+    <p class="entrada">O papel fica na porta; a lista continua sendo a de hoje.
+      É para isso que o QR de todas as peças aponta para sua página.</p>
   </header>
 
   <div class="duas-portas">
-    <!-- Primeiro de propósito. É o que se faz TODOS OS DIAS; o kit é o que se
-         faz uma vez. A ordem da página tem de ser a ordem da vida real. -->
-    <a class="porta" href="/atualizar">
-      ${svgIcone('relogio')}
-      <span class="porta-t">Atualizar a lista</span>
-      <span class="porta-d">Trinta segundos, com seu código. O que precisam hoje,
-        o que já não precisam, e se pararam de receber. É isto que impede o papel
-        colado na porta de ficar velho.</span>
-    </a>
+    <!-- O material impresso vem primeiro porque é a única coisa aqui que NÃO
+         precisa de código nenhum. Abrir a página com um formulário fazia dela
+         uma página de entrada, e ela também é a porta de quem ainda não entrou
+         em lado nenhum. -->
     <a class="porta" href="/kit">
       ${svgIcone('cartaz')}
       <span class="porta-t">Material impresso</span>
-      <span class="porta-d">Quinze peças a partir dos mesmos dados — cartaz de porta,
-        etiquetas de caixa, panfletos, crachás. Com seu código, se preenche
-        sozinho.</span>
+      <span class="porta-d">Quinze peças a partir dos mesmos dados — cartaz de
+        porta, etiquetas de caixa, panfletos, crachás. Não precisa de código.</span>
     </a>
+
+    <!-- A entrada em vez de um botão para a entrada. Um clique a menos por dia é
+         o menor dos ganhos: o maior é que quem não tem o código deixa de o
+         descobrir na página seguinte — vê os campos, vê que não os consegue
+         preencher, e as duas saídas estão logo por baixo. -->
+    <section class="porta porta-entrar">
+      ${svgIcone('relogio')}
+      <span class="porta-t">Entrar no meu centro</span>
+      ${sessao ? `
+      <span class="porta-d">Você já entrou como <b>${esc(sessao)}</b> neste aparelho.</span>
+      <a class="btn btn-primario largo" href="/atualizar">Continuar</a>
+      <p class="ajuda"><a href="/atualizar/sair">Sair</a></p>` : `
+      <span class="porta-d">Atualizar a lista de hoje, mudar o horário, imprimir
+        com os dados já preenchidos.</span>
+      ${erro ? `<p class="erro-form" role="alert">${esc(erro)}</p>` : ''}
+      <form method="post" action="/atualizar">
+        <label class="campo" for="slug">Endereço da sua página</label>
+        <input id="slug" name="slug" type="text" value="${esc(slug || '')}"
+          placeholder="canoas-ss" autocomplete="off" spellcheck="false"
+          inputmode="url" maxlength="60" required aria-describedby="aj-slug">
+        <p class="ajuda ao-escrever" id="aj-slug">Só o nome basta — a parte depois
+          da barra. Está no rodapé de todas as peças que imprimiu.</p>
+
+        <label class="campo" for="codigo">Código</label>
+        <input id="codigo" name="codigo" type="text" placeholder="ABCD-2345"
+          autocomplete="off" spellcheck="false" maxlength="20" required
+          aria-describedby="aj-codigo">
+        <p class="ajuda ao-escrever" id="aj-codigo">Oito letras e números. Não há
+          O, nem I, nem S — se parecer um desses, é zero, um ou cinco.</p>
+
+        <button class="btn btn-primario largo" type="submit">Entrar</button>
+      </form>`}
+    </section>
+
     <a class="porta" href="/novo">
       ${svgIcone('pino')}
       <span class="porta-t">Pedir minha página</span>
       <span class="porta-d">Ainda não tem endereço na internet? Peça um. A gente
-        confere os dados e liga — o código do centro chega depois, por WhatsApp.</span>
+        confere os dados e liga — o código chega depois, por WhatsApp.</span>
     </a>
   </div>
+<script>
+/* Finalização, nunca mecanismo: sem isto as duas ajudas ficam à vista e o
+   formulário funciona igual — texto a mais é melhor do que ajuda nenhuma. O que
+   o script faz é escondê-las até alguém tocar no campo a que pertencem. Quem usa
+   leitor de ecrã ouve-as sempre, pelo aria-describedby. */
+(function () {
+  [['slug', 'aj-slug'], ['codigo', 'aj-codigo']].forEach(function (par) {
+    var campo = document.getElementById(par[0]), ajuda = document.getElementById(par[1]);
+    if (!campo || !ajuda) return;
+    ajuda.hidden = true;
+    var mostrar = function () { ajuda.hidden = false; };
+    campo.addEventListener('focus', mostrar);
+    campo.addEventListener('input', mostrar);
+  });
+})();
+</script>
 
   <footer class="pe">
     <p><b>Perdeu o código?</b> Não há como o recuperar — só emitir outro.
       <a href="/pedir-codigo">Peça um código novo aqui</a>; não crie uma página
       nova, senão ficam duas do mesmo centro e os cartazes apontam para a errada.</p>
+  </footer>
+</main>`
+  });
+}
+
+/**
+ * Configurar o centro — o segundo nível.
+ *
+ * A lista de hoje faz-se todos os dias; o horário, a leitura de sacolas e o
+ * encerramento fazem-se uma vez. Estavam na mesma página, e isso fazia a coisa
+ * diária parecer uma configuração. Entrar continua a dar na lista, que é o que
+ * se veio fazer — isto é uma porta a partir dela, e não um passo antes dela.
+ */
+function paginaGerir({ centro, url, feito, erro }) {
+  const d = centro.dados || {};
+  return molde({
+    aqui: '/centro',
+    migalhas: [['Meu centro', '/centro'], ['Atualizar a lista', '/atualizar'],
+               ['Configurar']],
+    titulo: `Configurar — ${d.nome || centro.slug}`,
+    corpo: `
+<main class="atualizar faixas">
+  <header class="topo-c">
+    <h1>${esc(d.nome || centro.slug)}</h1>
+    <p class="endereco">Configurar o centro</p>
+  </header>
+
+  ${feito ? `<p class="feito">Guardado.</p>` : ''}
+  ${erro ? `<p class="erro-form" role="alert">${esc(erro)}</p>` : ''}
+
+  <form method="post" action="/atualizar/gerir" class="form-atualizar">
+    <input type="hidden" name="slug" value="${esc(centro.slug)}">
+    ${centro.codigoDado ? `<input type="hidden" name="codigo" value="${esc(centro.codigoDado)}">` : ''}
+
+    <section class="bloco-a">
+      <h2>Horário</h2>
+      <label class="sr-only" for="horario">Horário</label>
+      <input id="horario" name="horario" type="text" value="${esc(d.horario || '')}"
+        placeholder="Todos os dias, 8h às 20h" maxlength="80" autocomplete="off">
+    </section>
+
+    <section class="bloco-a">
+      <h2>Sacolas com código</h2>
+      <label class="caixa"><input type="checkbox" name="sacolas" value="1"${d.sacolas ? ' checked' : ''}>
+        <span>Aceitamos sacolas registradas em casa</span></label>
+      <p class="ajuda">Quem doa descreve a sacola antes de sair de casa e escreve
+        um código nela; na porta, um voluntário lê o código e vê o que tem dentro
+        sem abrir. Marque só se alguém aí vai fazer isso — senão sua página promete
+        a um doador uma coisa que ninguém faz.</p>
+      <p class="ajuda"><a href="/balcao" target="_blank" rel="noopener">Abrir o
+        balcão de leitura</a>. É pública: mande o endereço para qualquer
+        voluntário.</p>
+    </section>
+
+    <button class="btn btn-primario largo" type="submit">Guardar</button>
+    <p class="ajuda">Guardar aqui não republica a lista. A idade da página é da
+      lista do centro, não destes ajustes.</p>
+  </form>
+
+  <section class="bloco-a encerrar">
+    <h2>O centro fechou de vez?</h2>
+    <p class="ajuda">Se for só por hoje ou por uns dias, use <b>não estamos
+      recebendo</b> na lista — é reversível e mantém o centro na lista.</p>
+    <p class="ajuda">Encerrar é para quando o ponto acabou. A página sai da lista
+      e passa a dizer que fechou, para ninguém aparecer com coisas à porta. O
+      endereço continua respondendo, porque há cartazes impressos.</p>
+    <form method="post" action="/atualizar">
+      <input type="hidden" name="slug" value="${esc(centro.slug)}">
+      ${centro.codigoDado ? `<input type="hidden" name="codigo" value="${esc(centro.codigoDado)}">` : ''}
+      <input type="hidden" name="encerrar" value="pedir">
+      <button class="btn btn-recusar" type="submit">Encerrar o centro</button>
+    </form>
+  </section>
+
+  <footer class="pe">
+    <p><b>O nome, o endereço e o telefone não mudam aqui.</b> Foram conferidos à
+      mão quando o centro foi aprovado. Se estiverem errados, fale com quem
+      aprovou.</p>
+    <p><a href="/atualizar">Voltar para a lista</a> ·
+      <a href="${esc(url)}">Ver minha página</a> ·
+      <a href="/kit?slug=${encodeURIComponent(centro.slug)}">Imprimir material</a></p>
   </footer>
 </main>`
   });
@@ -2874,6 +2970,28 @@ input[type=search]{flex:1;min-width:0;padding:13px 14px;font:500 16px/1.3 var(--
   border-left:6px solid var(--tinta);font:500 13.5px/1.55 var(--fonte);color:var(--texto-2)}
 .nota-sem-lista a{color:var(--tinta)}
 
+/* A entrada do coordenador, dentro da grelha das portas para as três lerem-se
+   como um conjunto. Numa primeira versão era uma caixa com outra moldura e outra
+   cor, e parecia vinda de outra página. */
+/* As portas levantam-se pelo mesmo motivo que os botões: carregam-se. A que
+   tem o formulário dentro não — ali o que se carrega é o botão. */
+.porta{box-shadow:5px 5px 0 var(--tinta);
+  transition:transform 140ms cubic-bezier(.2,.8,.3,1),
+             box-shadow 140ms cubic-bezier(.2,.8,.3,1)}
+@media (hover:hover){
+  .porta:hover{transform:translate(-1px,-1px);box-shadow:6px 6px 0 var(--tinta)}
+}
+.porta:active{transition-duration:0ms;
+  transform:translate(3px,3px);box-shadow:2px 2px 0 var(--tinta)}
+
+.porta-entrar{cursor:default;box-shadow:none}
+.porta-entrar:active{transform:none}
+.porta-entrar form{margin:10px 0 0}
+.porta-entrar .campo{margin-top:12px}
+.porta-entrar .btn{margin-top:14px}
+.porta-entrar .ajuda{margin:6px 0 0}
+.porta-entrar p:last-child{margin-bottom:0}
+
 /* --- a barra de sessão ---
    O preço de trocar o campo escondido por um cookie é que "fechar o separador"
    deixou de ser sair. Isto repõe-no: diz em que centro se está e tem a porta à
@@ -3038,12 +3156,89 @@ input[type=text],select{width:100%;padding:12px;font:500 16px/1.3 var(--fonte);
   color:var(--tinta);background:var(--papel);border:2px solid var(--tinta);border-radius:0}
 input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{
   outline:3px solid var(--proibido);outline-offset:2px}
-.btn{display:inline-block;margin-top:18px;padding:14px 18px;
+/* ---------------------------------------------------------------------------
+ * TRÊS ALTURAS, E É ASSIM QUE SE SABE O QUE SE TOCA
+ *
+ * Havia um problema real: um botão, um campo de texto e um cartão eram o mesmo
+ * objecto — fundo branco, traço de 2 px, cantos vivos. Só o texto em
+ * maiúsculas os separava, e isso não chega a quem abre a página pela primeira
+ * vez num ginásio.
+ *
+ * Agora a altura diz a função, e diz sem cor nenhuma:
+ *
+ *   LEVANTADO  (sombra sólida em baixo e à direita) — carrega-se. Botões e as
+ *              portas do /centro. Ao carregar, desce e a sombra encolhe: o
+ *              objecto move-se debaixo do dedo.
+ *   RASO       (só traço) — lê-se ou escreve-se. Campos, cartões, listas.
+ *   AFUNDADO   (sombra por dentro) — já está carregado. Os itens escolhidos na
+ *              grelha de marcas.
+ *
+ * POR QUE SOMBRA E NÃO COR. A cor aqui já quer dizer coisas: vermelho é
+ * proibição, verde é aberto, âmbar é a lista a envelhecer. Um azul de "acção"
+ * seria vocabulário novo a competir com esse. E a sombra sobrevive à
+ * fotocópia, ao daltonismo e ao ecrã ao sol — que é a mesma exigência que as
+ * 29 marcas já cumprem.
+ *
+ * A sombra é sólida, sem desfoque: é o mesmo idioma dos traços grossos e dos
+ * cantos vivos do resto. Um degradé aqui seria outro projecto.
+ * -------------------------------------------------------------------------*/
+.btn{display:inline-block;margin-top:18px;margin-bottom:5px;padding:14px 18px;
   font:700 13.5px/1 var(--fonte);text-transform:uppercase;letter-spacing:.05em;
   background:var(--papel);color:var(--tinta);border:2px solid var(--tinta);
-  cursor:pointer;text-decoration:none}
-.btn-primario{background:var(--tinta);color:var(--papel)}
-.btn-recusar{border-color:var(--proibido);color:var(--proibido)}
+  cursor:pointer;text-decoration:none;
+  box-shadow:5px 5px 0 var(--tinta)}
+/* Desce e a sombra encolhe.
+ *
+ * DEPRESSA A ENTRAR, DEVAGAR A SAIR. A descida é instantânea — o :active
+ * põe a duração a zero — porque qualquer atraso entre o dedo e o movimento se
+ * lê como telemóvel lento, e muitos destes são. A subida é que é animada, 140
+ * ms, e é ela que faz o objecto parecer ter peso em vez de piscar.
+ *
+ * Só transform e box-shadow, que o browser anima sem voltar a desenhar a
+ * página. Uma animação que obrigue a recalcular o layout num telemóvel de 2017
+ * é pior do que nenhuma. */
+.btn{transition:transform 140ms cubic-bezier(.2,.8,.3,1),
+                box-shadow 140ms cubic-bezier(.2,.8,.3,1)}
+/* Só onde há rato. Num ecrã de toque o :hover cola-se depois do toque e o
+   botão ficava levantado a mais até se tocar noutro sítio. */
+@media (hover:hover){
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:6px 6px 0 var(--tinta)}
+  .btn-primario:hover{box-shadow:6px 6px 0 var(--fio)}
+  .btn-recusar:hover{box-shadow:6px 6px 0 var(--proibido)}
+}
+/* O :active VEM DEPOIS DO :hover, e a ordem é a coisa toda.
+ *
+ * Com rato, quem carrega está também por cima: as duas regras acertam no mesmo
+ * elemento com a mesma especificidade, e ganha a última que estiver escrita.
+ * Com o :active em cima, carregar não fazia nada — o botão só se mexia ao
+ * passar o rato, e a animação parecia estar no sítio errado. Foi exactamente
+ * assim que apareceu.
+ *
+ * É a velha ordem LVHA: link, visited, hover, active. Há um teste que compara
+ * as posições das duas regras na folha, porque num telemóvel isto não se vê:
+ * sem rato não há :hover, e o erro fica invisível para quem o escreveu. */
+.btn:active{transition-duration:0ms;
+  transform:translate(3px,3px);box-shadow:2px 2px 0 var(--tinta)}
+.btn-primario:active{box-shadow:2px 2px 0 var(--fio)}
+.btn-recusar:active{box-shadow:2px 2px 0 var(--proibido)}
+/* O botão cheio precisa de uma sombra que se veja contra a própria tinta. */
+.btn-primario{background:var(--tinta);color:var(--papel);box-shadow:5px 5px 0 var(--fio)}
+.btn-recusar{border-color:var(--proibido);color:var(--proibido);
+  box-shadow:5px 5px 0 var(--proibido)}
+/* Um botão desligado não se levanta: não há nada para carregar. */
+.btn[disabled],.btn.morto{box-shadow:none;transform:none}
+/* Quem pediu menos movimento fica com o estado, sem o percurso: continua a ver
+   que carregou, e nada se move a caminho disso. */
+@media (prefers-reduced-motion:reduce){
+  .btn,.porta{transition:none}
+  /* O :not(:active) não é enfeite. Esta regra está escrita DEPOIS do :active e,
+     sem a guarda, apagava-lhe o transform enquanto o dedo estivesse em baixo —
+     com rato, quem carrega está também por cima, e a igualdade de
+     especificidade dá a vitória à última escrita. O botão ficava quieto e só a
+     sombra encolhia: parecia descolado da própria sombra. Com a guarda diz o
+     que se queria dizer — não levantes ao passar, mas deixa carregar. */
+  .btn:hover:not(:active),.porta:hover:not(:active){transform:none}
+}
 /* O bloco de guardar o código, logo a seguir à caixa que o mostra: é o momento
    em que a pessoa ainda o tem no ecrã, e o único em que o pode mandar. */
 /* O que vai acontecer a seguir, dito antes de se carregar no botão: haverá um
@@ -3114,7 +3309,7 @@ code{font:600 14px/1.5 var(--mono);word-break:break-all}
 
 module.exports = { molde, paginaCentro, paginaPendente, paginaNaoExiste,
                    paginaInicial, paginaCentros, paginaCentroEntrada, paginaNovo,
-                   paginaAtualizarEntrada, paginaAtualizar, textoCodigo,
+                   paginaAtualizarEntrada, paginaAtualizar, paginaGerir, textoCodigo,
                    paginaPedirCodigo, paginaPedidoRecebido, textoAprovado,
                    paginaSouDaqui, paginaSouDaquiRecebido,
                    paginaDoar, paginaSacolaCriada, paginaMinhasSacolas,
